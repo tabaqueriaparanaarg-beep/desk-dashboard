@@ -6,12 +6,35 @@
   var state = {
     ranking: [],
     logos: {},
+    earnings: [],
+    rsWeekly: null,
     kind: "",
     flags: { above_ema200: false, rs_gt_70: false },
     search: "",
     autoTimer: null,
     loading: false,
+    ready: false,
+    loadError: "",
+    fichaSym: null,
+    listScroll: 0,
+    baseTitle: "",
   };
+
+  var PILLAR_SPEC = [
+    { key: "tendencia", label: "Tendencia", max: 25 },
+    { key: "fuerza_rs", label: "Fuerza RS", max: 30 },
+    { key: "contraccion", label: "Contracción", max: 30 },
+    { key: "setup", label: "Setup", max: 15 },
+  ];
+
+  var SCORE_PENALTY = {
+    extendido_vs_ema200: 5,
+    posible_distribucion: 4,
+    atr_elevado: 3,
+  };
+
+  var RS_CAPTION_FALLBACK =
+    "RS Score semanal: percentil 0–100 de (retorno del ticker − retorno de SPY) en ~126 sesiones (6 meses; si no alcanza, 63 sesiones), recalculado al último cierre de cada una de las últimas 16 semanas ISO. No incluye el bonus de aceleración del pilar Fuerza RS. El último punto es el RS Score del ranking.";
 
   function fmtPct(n) {
     if (n == null || Number.isNaN(n)) return "—";
@@ -62,16 +85,25 @@
     return s.slice(0, s.length > 3 ? 2 : Math.min(2, s.length)) || "?";
   }
 
-  function logoHtml(sym, src) {
+  function logoHtml(sym, src, size) {
+    var px = size || 20;
     var ini = escapeHtml(tickerInitials(sym));
+    var lg = px > 24 ? " dd-tlogo-lg" : "";
     if (!src) {
-      return '<span class="dd-tlogo dd-tlogo-fallback" aria-hidden="true">' + ini + "</span>";
+      return '<span class="dd-tlogo dd-tlogo-fallback' + lg + '" aria-hidden="true">' + ini + "</span>";
     }
     return (
-      '<span class="dd-tlogo" aria-hidden="true" data-initials="' + ini + '">' +
-      '<img src="' + escapeHtml(src) + '" alt="" loading="lazy" decoding="async" width="20" height="20" />' +
+      '<span class="dd-tlogo' + lg + '" aria-hidden="true" data-initials="' + ini + '">' +
+      '<img src="' + escapeHtml(src) + '" alt="" loading="lazy" decoding="async" width="' + px + '" height="' + px + '" />' +
       "</span>"
     );
+  }
+
+  function markRowLink(tr, symbol) {
+    if (!symbol) return;
+    tr.tabIndex = 0;
+    tr.setAttribute("role", "link");
+    tr.setAttribute("aria-label", "Ver ficha de " + symbol);
   }
 
   /** Ticker con logo a la izquierda. cls = clase del texto (dd-ticker / dd-earn-sym). */
@@ -245,6 +277,7 @@
     block.rows.forEach(function (r) {
       var tr = document.createElement("tr");
       tr.setAttribute("data-symbol", r.symbol || "");
+      markRowLink(tr, r.symbol);
       tr.innerHTML =
         '<td class="dd-col-rank" data-col="rank">' + escapeHtml(r.rank != null ? r.rank : "") + "</td>" +
         '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") + "</td>" +
@@ -343,6 +376,7 @@
       tr.setAttribute("data-symbol", r.symbol || "");
       tr.setAttribute("data-score", r.desk_score != null ? r.desk_score : "");
       tr.setAttribute("data-kind", r.kind || "");
+      markRowLink(tr, r.symbol);
 
       var dist = r.dist_ema200_pct;
       var cells = [
@@ -405,6 +439,8 @@
   }
 
   function fail(msg) {
+    state.ready = true;
+    state.loadError = msg;
     setText("generated-at", "Error");
     var strip = document.getElementById("earnings-strip");
     if (strip) {
@@ -414,6 +450,7 @@
       p.textContent = msg;
       strip.appendChild(p);
     }
+    renderRoute();
   }
 
   function markUiRefreshOk() {
@@ -439,12 +476,18 @@
   function applyData(data) {
     state.ranking = data.ranking || [];
     state.logos = data.logos || {};
+    state.earnings = data.earnings || [];
+    state.rsWeekly = data.rs_weekly || null;
+    state.ready = true;
+    state.loadError = "";
     renderKpis(data);
     renderTop10(data.top10_return);
     renderEarnings(data.earnings);
     applyFilters();
     renderNotes(data.notes);
-    document.title = "Desk Dashboard — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
+    state.baseTitle = "Desk Dashboard — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
+    document.title = state.baseTitle;
+    renderRoute();
   }
 
   function loadData(opts) {
@@ -543,6 +586,519 @@
     });
   }
 
+  function fmtEsNum(n, digits) {
+    var v = Number(n);
+    if (Number.isNaN(v)) return "—";
+    var neg = v < 0;
+    var fixed = Math.abs(v).toFixed(digits);
+    var parts = fixed.split(".");
+    var intp = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    var s = digits > 0 ? intp + "," + parts[1] : intp;
+    return (neg ? "−" : "") + s;
+  }
+
+  function fmtEsSmart(n, maxDigits) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Number(n);
+    var digits = Math.abs(v - Math.round(v)) < 0.001 ? 0 : maxDigits;
+    return fmtEsNum(v, digits);
+  }
+
+  function fmtPrice(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Number(n);
+    var digits = Math.abs(v - Math.round(v)) < 0.001 ? 0 : 2;
+    return "$" + fmtEsNum(v, digits);
+  }
+
+  function fmtEsSignedPct(n, digits) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Number(n);
+    var d = digits == null ? 2 : digits;
+    var body = fmtEsNum(Math.abs(v), d);
+    if (v > 0) return "+" + body + "%";
+    if (v < 0) return "−" + body + "%";
+    return body + "%";
+  }
+
+  function fmtDayMonth(iso) {
+    var s = String(iso || "");
+    if (s.length < 10) return s;
+    return s.slice(8, 10) + "/" + s.slice(5, 7);
+  }
+
+  function parseTickerHash() {
+    var raw = (location.hash || "").replace(/^#/, "");
+    var h = raw;
+    try {
+      h = decodeURIComponent(raw);
+    } catch (e) {
+      h = raw;
+    }
+    var m = /^\/t\/([A-Za-z0-9._-]+)$/.exec(h);
+    return m ? m[1].toUpperCase() : null;
+  }
+
+  function rowBySymbol(sym) {
+    var want = String(sym || "").toUpperCase();
+    for (var i = 0; i < state.ranking.length; i++) {
+      if (String(state.ranking[i].symbol || "").toUpperCase() === want) return state.ranking[i];
+    }
+    return null;
+  }
+
+  function pillarRows(row) {
+    var src = row.pillar_points || {};
+    var raw = row.pillars || {};
+    return PILLAR_SPEC.map(function (spec) {
+      var item = src[spec.key] || {};
+      var max = item.max != null ? Number(item.max) : spec.max;
+      var points = item.points != null ? Number(item.points) : null;
+      if ((points == null || Number.isNaN(points)) && raw[spec.key] != null) {
+        points = Math.round(Number(raw[spec.key]) * (max / 100) * 10) / 10;
+      }
+      if (points != null && Number.isNaN(points)) points = null;
+      return { key: spec.key, label: spec.label, points: points, max: max };
+    });
+  }
+
+  function earningsFor(sym) {
+    var want = String(sym || "").toUpperCase();
+    var list = (state.earnings || []).filter(function (e) {
+      return String(e.symbol || "").toUpperCase() === want;
+    });
+    if (!list.length) return null;
+    list.sort(function (a, b) {
+      return String(a.date || "").localeCompare(String(b.date || ""));
+    });
+    var now = new Date();
+    var iso =
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0");
+    var upcoming = list.filter(function (e) {
+      return String(e.date || "") >= iso;
+    });
+    var pick = upcoming[0] || list[list.length - 1];
+    return { row: pick, upcoming: String(pick.date || "") >= iso };
+  }
+
+  function gateText(row) {
+    if (row.trend_gate) return row.trend_gate;
+    if (row.ema200 == null && row.dist_ema200_pct == null) return "Sin EMA200";
+    var price = row.above_ema200 ? "Precio > EMA200" : "Precio < EMA200";
+    if (row.ema200_slope_up == null) return price;
+    return price + (row.ema200_slope_up ? " con pendiente +" : " con pendiente -");
+  }
+
+  function gateMark(row) {
+    var text = gateText(row);
+    if (text === "Sin EMA200") return { cls: "is-warn", ch: "–" };
+    if (row.above_ema200 && row.ema200_slope_up === true) return { cls: "is-ok", ch: "✓" };
+    if (row.above_ema200) return { cls: "is-warn", ch: "–" };
+    return { cls: "is-bad", ch: "!" };
+  }
+
+  function gaugeHtml(score) {
+    var r = 46;
+    var circ = 2 * Math.PI * r;
+    var pct = score == null || Number.isNaN(Number(score)) ? 0 : Math.max(0, Math.min(100, Number(score)));
+    var dash = (pct / 100) * circ;
+    var label = score == null || Number.isNaN(Number(score)) ? "—" : fmtEsSmart(score, 1);
+    return (
+      '<div class="dd-gauge">' +
+      '<svg viewBox="0 0 120 120" aria-hidden="true">' +
+      '<circle class="dd-gauge-track" cx="60" cy="60" r="' + r + '" />' +
+      '<circle class="dd-gauge-value-ring" cx="60" cy="60" r="' + r + '" stroke-dasharray="' +
+      dash.toFixed(2) + " " + circ.toFixed(2) + '" />' +
+      "</svg>" +
+      '<div class="dd-gauge-num">' + escapeHtml(label) + "</div>" +
+      "</div>"
+    );
+  }
+
+  function pillarsHtml(row) {
+    return pillarRows(row)
+      .map(function (p) {
+        var width = 0;
+        if (p.points != null && p.max) width = Math.max(0, Math.min(100, (p.points / p.max) * 100));
+        var pts =
+          p.points == null ? "—" : fmtEsSmart(p.points, 1) + "/" + fmtEsSmart(p.max, 1);
+        return (
+          '<div class="dd-pillar">' +
+          '<span class="dd-pillar-name">' + escapeHtml(p.label) + "</span>" +
+          '<span class="dd-pillar-track"><span class="dd-pillar-fill" data-pillar="' +
+          escapeHtml(p.key) +
+          '" style="width:' + width.toFixed(1) + '%"></span></span>' +
+          '<span class="dd-pillar-pts">' + escapeHtml(pts) + "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+  }
+
+  function penaltyFootnote(flags) {
+    var bits = (flags || []).filter(function (f) {
+      return SCORE_PENALTY[f];
+    });
+    if (!bits.length) return "";
+    var text = bits
+      .map(function (f) {
+        return (FLAG_LABELS[f] || f) + " −" + SCORE_PENALTY[f];
+      })
+      .join(", ");
+    return (
+      '<p class="dd-ficha-note">El Desk Score resta estas penalizaciones después de sumar los pilares: ' +
+      escapeHtml(text) +
+      ".</p>"
+    );
+  }
+
+  function rsChartSvg(values, dates) {
+    var nums = (values || []).map(function (v) {
+      if (v == null || v === "") return null;
+      var n = Number(v);
+      return Number.isNaN(n) ? null : n;
+    });
+    var valid = nums.filter(function (v) {
+      return v != null;
+    });
+    if (valid.length < 2) {
+      return '<p class="dd-ficha-empty">Sin serie semanal todavía. Se calcula al correr build.py.</p>';
+    }
+    var w = 360;
+    var h = 168;
+    var padL = 32;
+    var padR = 12;
+    var padT = 16;
+    var padB = 26;
+    var innerW = w - padL - padR;
+    var innerH = h - padT - padB;
+    function xAt(i) {
+      if (nums.length <= 1) return padL;
+      return padL + (i / (nums.length - 1)) * innerW;
+    }
+    function yAt(v) {
+      var c = Math.max(0, Math.min(100, v));
+      return padT + (1 - c / 100) * innerH;
+    }
+    var segments = [];
+    var cur = [];
+    nums.forEach(function (v, i) {
+      if (v == null) {
+        if (cur.length) segments.push(cur);
+        cur = [];
+      } else {
+        cur.push(i);
+      }
+    });
+    if (cur.length) segments.push(cur);
+    var up = valid[valid.length - 1] >= valid[0];
+    var stroke = up ? "#34D399" : "#F87171";
+    var paths = segments
+      .map(function (seg) {
+        var line = seg
+          .map(function (i, k) {
+            return (k ? "L" : "M") + xAt(i).toFixed(1) + "," + yAt(nums[i]).toFixed(1);
+          })
+          .join("");
+        var area = "";
+        if (seg.length >= 2) {
+          var base = (padT + innerH).toFixed(1);
+          area =
+            line +
+            "L" + xAt(seg[seg.length - 1]).toFixed(1) + "," + base +
+            "L" + xAt(seg[0]).toFixed(1) + "," + base + "Z";
+        }
+        var lastI = seg[seg.length - 1];
+        var dot = "";
+        if (lastI === nums.length - 1) {
+          dot =
+            '<circle cx="' + xAt(lastI).toFixed(1) + '" cy="' + yAt(nums[lastI]).toFixed(1) +
+            '" r="4" fill="' + stroke + '" />';
+        }
+        return (
+          (area ? '<path d="' + area + '" fill="url(#ddRsFill)" stroke="none"/>' : "") +
+          '<path d="' + line + '" fill="none" stroke="' + stroke +
+          '" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>' +
+          dot
+        );
+      })
+      .join("");
+    function tickLabel(i) {
+      var d = dates && dates[i];
+      return d ? fmtDayMonth(d) : "";
+    }
+    var tickIdx = [0];
+    if (nums.length > 2) tickIdx.push(Math.floor((nums.length - 1) / 2));
+    if (tickIdx[tickIdx.length - 1] !== nums.length - 1) tickIdx.push(nums.length - 1);
+    var ticks = tickIdx
+      .map(function (i) {
+        var anchor = i === 0 ? "start" : i === nums.length - 1 ? "end" : "middle";
+        return (
+          '<text x="' + xAt(i).toFixed(1) + '" y="' + (h - 6) + '" text-anchor="' + anchor +
+          '" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">' +
+          escapeHtml(tickLabel(i)) + "</text>"
+        );
+      })
+      .join("");
+    var y50 = yAt(50);
+    var grid =
+      '<line x1="' + padL + '" y1="' + y50.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + y50.toFixed(1) +
+      '" stroke="rgba(255,255,255,0.14)" stroke-dasharray="3 4"/>' +
+      '<text x="' + (padL - 6) + '" y="' + (yAt(100) + 4).toFixed(1) +
+      '" text-anchor="end" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">100</text>' +
+      '<text x="' + (padL - 6) + '" y="' + (y50 + 3).toFixed(1) +
+      '" text-anchor="end" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">50</text>' +
+      '<text x="' + (padL - 6) + '" y="' + yAt(0).toFixed(1) +
+      '" text-anchor="end" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">0</text>';
+    var aria =
+      "RS Score semanal. Inicio " + fmtEsSmart(valid[0], 1) + ", fin " + fmtEsSmart(valid[valid.length - 1], 1) + ".";
+    return (
+      '<svg class="dd-rs-chart" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="' + escapeHtml(aria) + '">' +
+      '<defs><linearGradient id="ddRsFill" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + stroke + '" stop-opacity="0.38"/>' +
+      '<stop offset="100%" stop-color="' + stroke + '" stop-opacity="0"/>' +
+      "</linearGradient></defs>" +
+      grid + paths + ticks +
+      "</svg>"
+    );
+  }
+
+  function fichaBackButton() {
+    return (
+      '<button type="button" id="ficha-back" class="dd-ficha-back" aria-label="Volver al ranking">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+      '<polyline points="15 18 9 12 15 6"/></svg></button>'
+    );
+  }
+
+  function renderFicha(sym) {
+    var root = document.getElementById("ficha");
+    if (!root) return;
+    if (!state.ready) {
+      root.innerHTML =
+        '<div class="dd-ficha-top">' + fichaBackButton() +
+        '<p class="dd-ficha-empty">Cargando…</p></div>';
+      return;
+    }
+    var row = rowBySymbol(sym);
+    if (!row) {
+      var msg = state.loadError || ("No hay ficha para " + sym + " en este ranking.");
+      root.innerHTML =
+        '<div class="dd-ficha-top">' + fichaBackButton() + "</div>" +
+        '<p class="dd-ficha-empty">' + escapeHtml(msg) + "</p>";
+      document.title = sym + " · Desk Dashboard";
+      return;
+    }
+    var total = state.ranking.length;
+    var rank =
+      row.rank != null && total
+        ? "#" + row.rank + " de " + total
+        : row.rank != null
+          ? "#" + row.rank
+          : "";
+    var subBits = [];
+    if (row.name) subBits.push(row.name);
+    if (row.sector) subBits.push(row.sector);
+    var changeCls = distClass(row.change_pct);
+    var mark = gateMark(row);
+    var dist = row.dist_ema200_pct;
+    var slopeBits = [];
+    if (row.ema200 != null) slopeBits.push("EMA200 " + fmtPrice(row.ema200));
+    if (row.ema200_slope_pct != null) {
+      slopeBits.push("pendiente " + fmtEsSignedPct(row.ema200_slope_pct, 2) + " en ~5 sesiones");
+    }
+    var range = row.range_52w;
+    var rangeBlock;
+    if (!range || range.low == null || range.high == null) {
+      rangeBlock = '<p class="dd-ficha-empty">Sin rango de 52 semanas. Se calcula al correr build.py.</p>';
+    } else {
+      var pos = range.position_pct == null ? 0 : Math.max(0, Math.min(100, Number(range.position_pct)));
+      var cap =
+        range.sessions >= 252
+          ? "Mínimo y máximo de las últimas 252 sesiones (~52 semanas)."
+          : "Mínimo y máximo de las últimas " + range.sessions + " sesiones disponibles.";
+      rangeBlock =
+        '<div class="dd-range-head"><span>Posición en el rango de 52 semanas</span><strong>' +
+        escapeHtml(range.position_pct == null ? "—" : fmtEsSmart(range.position_pct, 1) + "%") +
+        "</strong></div>" +
+        '<div class="dd-range-track" aria-hidden="true"><span class="dd-range-knob" style="left:' +
+        pos.toFixed(1) + '%"></span></div>' +
+        '<div class="dd-range-scale"><span>' + escapeHtml(fmtPrice(range.low)) + " mín.</span><span>" +
+        escapeHtml(fmtPrice(range.high)) + " máx.</span></div>" +
+        '<p class="dd-ficha-note">' + escapeHtml(cap) + "</p>";
+    }
+    var flags = row.flags || [];
+    var penaltyBlock;
+    if (!flags.length) {
+      penaltyBlock =
+        '<div class="dd-ficha-row"><span class="dd-ficha-mark is-ok" aria-hidden="true">✓</span>' +
+        '<span class="dd-ficha-row-text">Sin penalizaciones activas</span></div>';
+    } else {
+      penaltyBlock = '<div class="dd-ficha-flags">' + formatFlags(flags) + "</div>";
+    }
+    var entroBlock = "";
+    if (row.entro && row.entro.label) {
+      entroBlock =
+        '<section class="dd-ficha-card" aria-label="Entró al Top 10">' +
+        '<h2 class="dd-ficha-kicker">Entró al Top 10</h2>' +
+        '<p class="dd-ficha-entro">' + escapeHtml(row.entro.label) + "</p>" +
+        (row.entro.censored
+          ? '<p class="dd-ficha-note">La racha cubre toda la ventana reconstruida.</p>'
+          : "") +
+        "</section>";
+    }
+    var earn = earningsFor(row.symbol);
+    var earnBlock = "";
+    if (earn) {
+      var e = earn.row;
+      var when = fmtDayMonth(e.date);
+      var hour = e.hour ? " · " + e.hour : "";
+      earnBlock =
+        '<section class="dd-ficha-card" aria-label="Resultados">' +
+        '<h2 class="dd-ficha-kicker">' + (earn.upcoming ? "Próximos resultados" : "Resultados") + "</h2>" +
+        '<p class="dd-ficha-entro">' + escapeHtml((when || "—") + hour) + "</p>" +
+        "</section>";
+    }
+    var weeks =
+      (row.rs_weekly && row.rs_weekly.length) ||
+      (state.rsWeekly && state.rsWeekly.weeks) ||
+      16;
+    var caption = (state.rsWeekly && state.rsWeekly.definition) || RS_CAPTION_FALLBACK;
+    var dates = (state.rsWeekly && state.rsWeekly.dates) || [];
+    root.innerHTML =
+      '<header class="dd-ficha-top">' +
+      fichaBackButton() +
+      '<div class="dd-ficha-ident">' +
+      '<div class="dd-ficha-ident-row">' +
+      logoHtml(row.symbol, logoFor(row), 42) +
+      '<h1 class="dd-ficha-ticker">' + escapeHtml(row.symbol) + "</h1>" +
+      (rank ? '<span class="dd-ficha-rank">' + escapeHtml(rank) + "</span>" : "") +
+      "</div>" +
+      (subBits.length ? '<p class="dd-ficha-sub">' + escapeHtml(subBits.join(" · ")) + "</p>" : "") +
+      "</div>" +
+      '<div class="dd-ficha-quote">' +
+      '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
+      '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
+      "</div></header>" +
+      '<section class="dd-ficha-card" aria-label="Desk Score">' +
+      '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
+      '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
+      '<div class="dd-pillars">' + pillarsHtml(row) + "</div></div>" +
+      penaltyFootnote(flags) +
+      "</section>" +
+      '<section class="dd-ficha-card" aria-label="Rango de 52 semanas">' + rangeBlock + "</section>" +
+      '<section class="dd-ficha-card" aria-label="Gate de tendencia">' +
+      '<h2 class="dd-ficha-kicker">Gate de tendencia</h2>' +
+      '<div class="dd-ficha-row">' +
+      '<span class="dd-ficha-mark ' + mark.cls + '" aria-hidden="true">' + mark.ch + "</span>" +
+      '<span class="dd-ficha-row-text">' + escapeHtml(gateText(row)) + "</span>" +
+      '<span class="dd-ficha-row-val ' + distClass(dist) + '">' +
+      escapeHtml(dist == null ? "—" : fmtEsSignedPct(dist, 2)) + "</span></div>" +
+      (slopeBits.length ? '<p class="dd-ficha-note">' + escapeHtml(slopeBits.join(" · ")) + "</p>" : "") +
+      "</section>" +
+      '<section class="dd-ficha-card" aria-label="Penalizaciones">' +
+      '<h2 class="dd-ficha-kicker">Penalizaciones</h2>' + penaltyBlock + "</section>" +
+      entroBlock +
+      earnBlock +
+      '<section class="dd-ficha-card" aria-label="Evolución del RS Score">' +
+      '<h2 class="dd-ficha-kicker">Evolución del RS Score · últimas ' + weeks + " semanas</h2>" +
+      rsChartSvg(row.rs_weekly, dates) +
+      '<p class="dd-ficha-note">' + escapeHtml(caption) + "</p>" +
+      "</section>" +
+      '<p class="dd-ficha-disclaimer"><strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.</p>';
+    document.title = row.symbol + " · Desk Dashboard";
+  }
+
+  function renderRoute() {
+    var sym = parseTickerHash();
+    var ficha = document.getElementById("ficha");
+    if (!sym) {
+      var was = document.body.classList.contains("is-ficha");
+      document.body.classList.remove("is-ficha");
+      if (ficha) {
+        ficha.hidden = true;
+        ficha.innerHTML = "";
+      }
+      if (state.baseTitle) document.title = state.baseTitle;
+      if (was) window.scrollTo(0, state.listScroll || 0);
+      state.fichaSym = null;
+      return;
+    }
+    var entering = state.fichaSym !== sym || !document.body.classList.contains("is-ficha");
+    if (entering && !document.body.classList.contains("is-ficha")) {
+      state.listScroll = window.scrollY || 0;
+    }
+    state.fichaSym = sym;
+    document.body.classList.add("is-ficha");
+    if (ficha) ficha.hidden = false;
+    renderFicha(sym);
+    if (entering) {
+      window.scrollTo(0, 0);
+      var back = document.getElementById("ficha-back");
+      if (back) back.focus();
+    }
+  }
+
+  function goBack() {
+    var hash = location.hash;
+    if (!hash) return;
+    if (window.history.length > 1) {
+      history.back();
+      window.setTimeout(function () {
+        if (location.hash === hash) location.hash = "";
+      }, 80);
+    } else {
+      location.hash = "";
+    }
+  }
+
+  function openTicker(sym) {
+    if (!sym) return;
+    location.hash = "#/t/" + encodeURIComponent(sym);
+  }
+
+  function bindRowOpen(id) {
+    var body = document.getElementById(id);
+    if (!body) return;
+    body.addEventListener("click", function (ev) {
+      var tr = ev.target.closest("tr[data-symbol]");
+      if (!tr || !body.contains(tr)) return;
+      var sym = tr.getAttribute("data-symbol");
+      if (sym) openTicker(sym);
+    });
+    body.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      var tr = ev.target.closest("tr[data-symbol]");
+      if (!tr || ev.target !== tr) return;
+      ev.preventDefault();
+      var sym = tr.getAttribute("data-symbol");
+      if (sym) openTicker(sym);
+    });
+  }
+
+  function bindFichaNav() {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    bindRowOpen("ranking-body");
+    bindRowOpen("top10-body");
+    var ficha = document.getElementById("ficha");
+    if (ficha) {
+      ficha.addEventListener("click", function (ev) {
+        if (ev.target.closest("#ficha-back")) {
+          ev.preventDefault();
+          goBack();
+        }
+      });
+    }
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && parseTickerHash()) goBack();
+    });
+    window.addEventListener("hashchange", renderRoute);
+  }
+
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
     window.addEventListener("load", function () {
@@ -556,5 +1112,7 @@
   registerServiceWorker();
   bindFilters();
   bindRefresh();
+  bindFichaNav();
+  renderRoute();
   loadData({ silent: false }).then(startAuto);
 })();

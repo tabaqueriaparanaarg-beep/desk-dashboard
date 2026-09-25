@@ -70,6 +70,9 @@ Símbolos sin barras suficientes se omiten y quedan en `failures`.
 | **Setup (~15%)** | Cercanía a EMA200/SMA50 + dry-up + RSI neutro |
 | **Vol rel** | Volumen último día / media 20 sesiones |
 | **Dist EMA200** | `(close / EMA200 − 1) × 100` |
+| **Puntos de pilar (ficha)** | score 0–100 del pilar × peso: Tendencia /25, Fuerza RS /30, Contracción /30, Setup /15 (antes de penalizaciones) |
+| **Rango 52 semanas** | mín/máx de high-low en las últimas 252 sesiones; posición % = (cierre − mín) / (máx − mín) |
+| **RS semanal (ficha)** | mismo percentil de RS Score, recalculado al último cierre de cada una de las últimas 16 semanas ISO. El último punto es el RS Score publicado |
 
 Flags opcionales (penalty suave): `extendido_vs_ema200`, `atr_elevado`, `posible_distribucion`, `rsi_sobrecompra` / `rsi_sobreventa`.
 
@@ -120,6 +123,20 @@ Si la racha cubre las 30 sesiones, no se vio el inicio: `antes del DD/MM · >30 
 **Aproximación:** el Desk Score no usa earnings ni ningún otro dato de Finnhub (sólo precio, volumen y SPY). La reconstrucción histórica es la misma fórmula que el ranking del día; no hay pilar “congelado”. Si más adelante un pilar dependiera de un dato puntual no histórico, habría que dejarlo fijo en la ventana.
 
 El resultado queda en `ranking[].entro`, `top10_return.rows[].entro` y el bloque `top10_entry` (`label`, `date`, `sessions`, `censored`, `lookback_sessions`). Fuera del Top 10 actual, `entro` es `null`.
+
+### Ficha del ticker
+
+Al tocar una fila del ranking o del Top 10 se abre `#/t/TICKER` (el botón atrás y el retroceso del navegador vuelven al ranking). La ficha usa datos que `build.py` ya calcula:
+
+- **Desk Score** en un gauge, y los cuatro pilares en puntos reales (Tendencia 25, Fuerza RS 30, Contracción 30, Setup 15). Es el mismo score 0–100 × peso, antes de las penalizaciones suaves (−5 extendido, −4 distribución, −3 ATR alto).
+- **Rango de 52 semanas**: mínimo, máximo y posición % del cierre sobre las últimas 252 sesiones (o las que haya).
+- **Gate de tendencia**: precio frente a la EMA200 y si la EMA200 sube o baja contra su valor de ~5 sesiones atrás, con la distancia en %.
+- **Penalizaciones**: los mismos `flags`. Si no hay, «Sin penalizaciones activas».
+- **Entró**: la racha del Top 10, si el ticker está adentro.
+- **Resultados**: fecha (y BMO/AMC) si el ticker está en `earnings` de la semana.
+- **Evolución del RS Score**: ver la definición abajo. Fechas compartidas en `rs_weekly.dates`; cada fila trae `rs_weekly` (16 números como mucho).
+
+**Definición del RS semanal.** En cada uno de los últimos 16 cierres semanales (última sesión de cada semana ISO del calendario de SPY, incluida la semana en curso) se recalcula el mismo relativo que el RS Score: retorno del ticker menos retorno de SPY en ~126 sesiones (fallback 63). Ese valor se convierte en percentil 0–100 dentro de los símbolos que tienen barra ese día. No es el pilar Fuerza RS: ese pilar suma un bonus de aceleración a 1 mes. El último punto de la serie es el RS Score publicado en la columna RS, para que el gráfico cierre en el mismo número. El texto completo viaja en `datos.json` → `rs_weekly.definition` y en `formulas.rs_weekly`.
 
 ### Logos de empresas
 

@@ -434,6 +434,36 @@ def clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, x))
 
 
+# Pesos del Desk Score. En la ficha se muestran como puntos sobre el máximo
+# (pilar 0–100 × peso): Tendencia 25, Fuerza RS 30, Contracción 30, Setup 15.
+PILLAR_WEIGHTS = {
+    "tendencia": 0.25,
+    "fuerza_rs": 0.30,
+    "contraccion": 0.30,
+    "setup": 0.15,
+}
+PILLAR_MAX_POINTS = {k: int(round(w * 100)) for k, w in PILLAR_WEIGHTS.items()}
+
+# Rango de 52 semanas ≈ 252 sesiones. La serie de Alpaca trae ~250–280 barras.
+RANGE_52W_SESSIONS = 252
+
+# RS Score al último cierre de cada semana ISO (incluye la semana en curso).
+RS_WEEKLY_WEEKS = 16
+RS_LOOKBACK_6M = 126
+RS_LOOKBACK_3M = 63
+RS_LOOKBACK_1M = 21
+RS_WEEKLY_DEFINITION = (
+    "RS Score semanal: percentil 0–100 de (retorno del ticker − retorno de SPY) "
+    "en ~126 sesiones (6 meses; si no alcanza, 63 sesiones / 3 meses), "
+    "recalculado al último cierre de cada una de las últimas 16 semanas ISO "
+    "(la semana en curso entra con su último cierre). "
+    "El percentil se toma entre los símbolos del universo que tienen barra ese día "
+    "y retorno relativo válido. No incluye el bonus de aceleración del pilar Fuerza RS. "
+    "El último punto es el RS Score publicado en el ranking, para que el gráfico "
+    "cierre en el mismo número que la columna RS."
+)
+
+
 def safe_round(x: float | None, n: int = 2) -> float | None:
     if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
         return None
@@ -555,7 +585,99 @@ def score_setup(
 
 def desk_score(tend: float, fuerza: float, contr: float, setup: float) -> float:
     """Weights: Tendencia 25, Fuerza RS 30, Contracción 30, Setup 15."""
-    return clamp(tend * 0.25 + fuerza * 0.30 + contr * 0.30 + setup * 0.15)
+    return clamp(
+        tend * PILLAR_WEIGHTS["tendencia"]
+        + fuerza * PILLAR_WEIGHTS["fuerza_rs"]
+        + contr * PILLAR_WEIGHTS["contraccion"]
+        + setup * PILLAR_WEIGHTS["setup"]
+    )
+
+
+def pillar_points_block(tend: float, fuerza: float, contr: float, setup: float) -> dict[str, dict]:
+    """Puntos de cada pilar (0–máximo) a partir del score 0–100, antes de penalizaciones."""
+    raw = {
+        "tendencia": tend,
+        "fuerza_rs": fuerza,
+        "contraccion": contr,
+        "setup": setup,
+    }
+    out: dict[str, dict] = {}
+    for key, value in raw.items():
+        weight = PILLAR_WEIGHTS[key]
+        out[key] = {
+            "points": safe_round(value * weight, 1),
+            "max": PILLAR_MAX_POINTS[key],
+        }
+    return out
+
+
+def trend_gate_label(relation: str | None, slope_up: bool | None) -> str:
+    """Texto del gate de tendencia. `relation`: above | below | equal | None."""
+    if relation == "above":
+        price = "Precio > EMA200"
+    elif relation == "below":
+        price = "Precio < EMA200"
+    elif relation == "equal":
+        price = "Precio = EMA200"
+    else:
+        return "Sin EMA200"
+    if slope_up is None:
+        return price
+    return price + (" con pendiente +" if slope_up else " con pendiente -")
+
+
+def range_52w(highs: list[float], lows: list[float], close: float) -> dict[str, Any]:
+    """Mínimo, máximo y posición % del cierre en las últimas 252 sesiones (o las que haya)."""
+    n = min(RANGE_52W_SESSIONS, len(highs), len(lows))
+    if n <= 0:
+        return {"low": None, "high": None, "position_pct": None, "sessions": 0}
+    window_h = highs[-n:]
+    window_l = lows[-n:]
+    lo = min(window_l)
+    hi = max(window_h)
+    if hi > lo:
+        pos = clamp((close - lo) / (hi - lo) * 100.0, 0.0, 100.0)
+    else:
+        pos = 100.0
+    return {
+        "low": safe_round(lo, 2),
+        "high": safe_round(hi, 2),
+        "position_pct": safe_round(pos, 1),
+        "sessions": n,
+    }
+
+
+def relative_performance(
+    closes: list[float], spy_closes: list[float]
+) -> tuple[float | None, str | None, float | None]:
+    """(rel_perf en pp, horizonte '6m'|'3m'|None, rs_accel).
+
+    rel_perf = retorno del ticker − retorno de SPY en 126 sesiones (fallback 63).
+    rs_accel = relativo de 21 sesiones − (rel_perf / meses del horizonte).
+    """
+    perf_6m = pct_change(closes, RS_LOOKBACK_6M)
+    spy_6m = pct_change(spy_closes, RS_LOOKBACK_6M) if len(spy_closes) > RS_LOOKBACK_6M else None
+    perf_3m = pct_change(closes, RS_LOOKBACK_3M)
+    spy_3m = pct_change(spy_closes, RS_LOOKBACK_3M) if len(spy_closes) > RS_LOOKBACK_3M else None
+    perf_1m = pct_change(closes, RS_LOOKBACK_1M)
+    spy_1m = pct_change(spy_closes, RS_LOOKBACK_1M) if len(spy_closes) > RS_LOOKBACK_1M else None
+
+    if perf_6m is not None and spy_6m is not None:
+        rel_perf: float | None = perf_6m - spy_6m
+        horizon: str | None = "6m"
+    elif perf_3m is not None and spy_3m is not None:
+        rel_perf = perf_3m - spy_3m
+        horizon = "3m"
+    else:
+        rel_perf = None
+        horizon = None
+
+    rs_accel = None
+    if perf_1m is not None and spy_1m is not None and rel_perf is not None:
+        rel_1m = perf_1m - spy_1m
+        months = 6 if horizon == "6m" else 3
+        rs_accel = rel_1m - rel_perf / months
+    return rel_perf, horizon, rs_accel
 
 
 def penalty_flags(
@@ -679,36 +801,26 @@ def compute_symbol(
     rv20 = realized_vol(closes, 20)
     rv60 = realized_vol(closes, 60)
 
-    # Relative strength vs SPY: ratio of 126d (~6m) performance vs SPY, then percentile later
-    look_6m = 126
-    look_3m = 63
-    look_1m = 21
-    perf_6m = pct_change(closes, look_6m)
-    spy_6m = pct_change(spy_closes, look_6m) if len(spy_closes) > look_6m else None
-    perf_3m = pct_change(closes, look_3m)
-    spy_3m = pct_change(spy_closes, look_3m) if len(spy_closes) > look_3m else None
-    perf_1m = pct_change(closes, look_1m)
-    spy_1m = pct_change(spy_closes, look_1m) if len(spy_closes) > look_1m else None
+    # Relative strength vs SPY: 126d (~6m) performance vs SPY, percentile later.
+    rel_perf, horizon, rs_accel = relative_performance(closes, spy_closes)
 
-    # Relative performance (pp): stock return - SPY return over 6m (fallback 3m)
-    if perf_6m is not None and spy_6m is not None:
-        rel_perf = perf_6m - spy_6m
-        horizon = "6m"
-    elif perf_3m is not None and spy_3m is not None:
-        rel_perf = perf_3m - spy_3m
-        horizon = "3m"
+    change_pct = None
+    if len(closes) >= 2 and closes[-2]:
+        change_pct = (close / closes[-2] - 1.0) * 100.0
+
+    if ema200_v is None:
+        relation = None
+    elif close > ema200_v:
+        relation = "above"
+    elif close < ema200_v:
+        relation = "below"
     else:
-        rel_perf = None
-        horizon = None
-
-    # Acceleration: 1m relative minus average of prior relative (approx using 3m/3)
-    rs_accel = None
-    if perf_1m is not None and spy_1m is not None and rel_perf is not None:
-        rel_1m = perf_1m - spy_1m
-        # compare 1m rel vs (rel_perf / months)
-        months = 6 if horizon == "6m" else 3
-        expected_1m = rel_perf / months
-        rs_accel = rel_1m - expected_1m
+        relation = "equal"
+    slope_up = None
+    slope_pct = None
+    if ema200_v and ema200_prev:
+        slope_up = ema200_v > ema200_prev
+        slope_pct = (ema200_v / ema200_prev - 1.0) * 100.0
 
     tend = score_tendencia(close, sma50_v, ema200_v, sma50_prev, ema200_prev)
     # fuerza uses placeholder RS; filled after percentile
@@ -722,9 +834,14 @@ def compute_symbol(
         "kind": meta.get("kind"),
         "sector": meta.get("sector"),
         "close": safe_round(close, 2),
+        "change_pct": safe_round(change_pct, 2),
         "asof": dates[-1],
         "bars": len(bars),
         "ema200": safe_round(ema200_v, 2),
+        "ema200_slope_up": slope_up,
+        "ema200_slope_pct": safe_round(slope_pct, 2),
+        "trend_gate": trend_gate_label(relation, slope_up),
+        "range_52w": range_52w(highs, lows, close),
         "sma50": safe_round(sma50_v, 2),
         "sma10": safe_round(sma10_v, 2),
         "rsi14": safe_round(rsi_v, 1),
@@ -779,6 +896,7 @@ def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
         r["rs_score"] = safe_round(rs, 1)
         fuerza = score_fuerza_rs(rs, r["_rs_accel"])
         r["pillars"]["fuerza_rs"] = safe_round(fuerza, 1)
+        r["pillar_points"] = pillar_points_block(r["_tend"], fuerza, r["_contr"], r["_setup"])
         ds = desk_score(r["_tend"], fuerza, r["_contr"], r["_setup"])
         # Soft penalty for flags
         if "extendido_vs_ema200" in r["flags"]:
@@ -807,6 +925,101 @@ TOP10_ENTRY_NOTE = (
     "así que no hace falta aproximarlos ni dejarlos fijos. "
     "Si la racha cubre toda la ventana: «antes del DD/MM · >N ruedas»."
 )
+
+
+def has_exact_session(bars: list[dict], session: str) -> bool:
+    """True si alguna barra cae exactamente en la sesión YYYY-MM-DD. Serie ascendente."""
+    lo, hi = 0, len(bars)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        d = bar_session_date(bars[mid])
+        if d < session:
+            lo = mid + 1
+        elif d > session:
+            hi = mid
+        else:
+            return True
+    return False
+
+
+def weekly_close_dates(dates: list[str], weeks: int = RS_WEEKLY_WEEKS) -> list[str]:
+    """Última sesión de cada semana ISO, las `weeks` más recientes (incluye la semana en curso)."""
+    if weeks < 1:
+        return []
+    last_of: dict[tuple[int, int], str] = {}
+    order: list[tuple[int, int]] = []
+    for d in dates:
+        if len(d) < 10:
+            continue
+        try:
+            y, m, day = int(d[0:4]), int(d[5:7]), int(d[8:10])
+            iso = date(y, m, day).isocalendar()
+        except ValueError:
+            continue
+        key = (int(iso[0]), int(iso[1]))
+        if key not in last_of:
+            order.append(key)
+        last_of[key] = d
+    return [last_of[k] for k in order[-weeks:]]
+
+
+def compute_rs_weekly(
+    all_bars: dict[str, list[dict]], weeks: int = RS_WEEKLY_WEEKS
+) -> dict[str, Any]:
+    """RS Score (percentil de rel_perf vs SPY) en cada cierre semanal.
+
+    `by_symbol[sym]` alinea con `dates` (None si ese día no hay barra o no hay rel_perf).
+    El último punto publicado lo pisa `attach_rs_weekly` con el RS Score del ranking.
+    """
+    spy = all_bars.get("SPY") or []
+    dates = weekly_close_dates(session_dates_from_bars(spy), weeks)
+    by: dict[str, list[float | None]] = {sym: [None] * len(dates) for sym in all_bars}
+    for i, d in enumerate(dates):
+        if not has_exact_session(spy, d):
+            continue
+        spy_closes = [float(b["c"]) for b in bars_through(spy, d) if b.get("c") is not None]
+        rels: dict[str, float] = {}
+        for sym, bars in all_bars.items():
+            if not has_exact_session(bars, d):
+                continue
+            closes = [float(b["c"]) for b in bars_through(bars, d) if b.get("c") is not None]
+            rel, _horizon, _accel = relative_performance(closes, spy_closes)
+            if rel is not None:
+                rels[sym] = rel
+        universe = list(rels.values())
+        for sym, rel in rels.items():
+            by[sym][i] = safe_round(percentile_rank(universe, rel), 1)
+    return {
+        "weeks": len(dates),
+        "dates": dates,
+        "definition": RS_WEEKLY_DEFINITION,
+        "by_symbol": by,
+    }
+
+
+def attach_rs_weekly(rows: list[dict], block: dict) -> None:
+    """Copia la serie semanal a cada fila. El último punto es el RS Score publicado."""
+    dates = block.get("dates") or []
+    by = block.get("by_symbol") or {}
+    n = len(dates)
+    for r in rows or []:
+        seq = list(by.get(r.get("symbol")) or [None] * n)
+        if len(seq) < n:
+            seq.extend([None] * (n - len(seq)))
+        seq = seq[:n]
+        if seq and r.get("rs_score") is not None:
+            seq[-1] = r["rs_score"]
+        r["rs_weekly"] = seq
+
+
+def rs_weekly_public(block: dict | None) -> dict[str, Any]:
+    """Bloque de datos.json: fechas compartidas + definición. Las series van en cada fila."""
+    block = block or {}
+    return {
+        "weeks": block.get("weeks") or 0,
+        "dates": list(block.get("dates") or []),
+        "definition": block.get("definition") or RS_WEEKLY_DEFINITION,
+    }
 
 
 def session_return_pct(closes: list[float], sessions: int = WINDOW_SESSIONS) -> float | None:
@@ -1150,6 +1363,13 @@ def main() -> None:
 
     # RS Score (percentil en el universo) + Desk Score + rank
     apply_cross_section_scores(rows)
+    rs_weekly = compute_rs_weekly(all_bars, RS_WEEKLY_WEEKS)
+    attach_rs_weekly(rows, rs_weekly)
+    rs_dates = rs_weekly.get("dates") or []
+    if rs_dates:
+        notes.append(
+            f"RS semanal: {len(rs_dates)} cierres ({rs_dates[0]} → {rs_dates[-1]})."
+        )
 
     # KPIs (universe excl. pure benchmarks optional — include all scored)
     n = len(rows)
@@ -1250,6 +1470,7 @@ def main() -> None:
         "regime_stub": regime_obj,  # alias back-compat
         "top10_return": top10_return,
         "top10_entry": top10_entry,
+        "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
         "failures": failures,
@@ -1266,6 +1487,11 @@ def main() -> None:
             "regime": rule,
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
             "top10_entry": TOP10_ENTRY_NOTE,
+            "pillar_points": "Puntos del pilar = score 0–100 × peso (Tendencia 0.25, Fuerza RS 0.30, Contracción 0.30, Setup 0.15), antes de las penalizaciones suaves del Desk Score",
+            "range_52w": f"Mínimo y máximo de high/low en las últimas {RANGE_52W_SESSIONS} sesiones (o las disponibles). position_pct = (close − mín) / (máx − mín) × 100",
+            "change_pct": "(close / close anterior − 1) × 100",
+            "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
+            "rs_weekly": RS_WEEKLY_DEFINITION,
         },
         "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
     }
