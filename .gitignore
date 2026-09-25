@@ -1,0 +1,17 @@
+# Entorno local
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secretos / keys (nunca commitear)
+.env
+.env.*
+.finnhub_env
+*_env
+
+# Build de GitHub Pages
+_site/
+
+# SO / editores
+.DS_Store

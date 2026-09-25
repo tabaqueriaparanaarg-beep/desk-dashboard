@@ -1,0 +1,71 @@
+name: Update data & deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Lunes a viernes 21:30 UTC = 18:30 Buenos Aires (UTC-3),
+    # después del cierre del mercado de EE.UU. (16:00 ET = 20:00 UTC en horario de verano).
+    # Nota: GitHub puede demorar unos minutos los cron programados.
+    - cron: "30 21 * * 1-5"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un solo deploy a la vez; no cancelar uno en curso.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build datos.json (Alpaca + Finnhub)
+        # Si falla (API caída, keys faltantes), se publica el datos.json existente del repo.
+        continue-on-error: true
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: python build.py
+
+      - name: Assemble _site (solo archivos del sitio)
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp index.html app.js styles.css sw.js manifest.webmanifest datos.json _site/
+          cp -r assets _site/assets
+          touch _site/.nojekyll
+          ls -la _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
