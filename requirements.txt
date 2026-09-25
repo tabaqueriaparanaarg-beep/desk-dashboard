@@ -1,0 +1,2 @@
+# Desk Dashboard usa solo biblioteca estándar de Python 3.
+# Opcional: requests>=2.31.0

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Desk Dashboard — CEO X</title>
+  <link rel="icon" href="assets/favicon.ico?v=7" sizes="any" />
+  <link rel="icon" href="assets/favicon-32.png?v=7" type="image/png" sizes="32x32" />
+  <link rel="icon" href="assets/favicon-16.png?v=7" type="image/png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=7" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0D0D0D" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Desk" />
+  <meta name="application-name" content="Desk Dashboard" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=16" />
+</head>
+<body data-app="desk-dashboard">
+  <header class="dd-header" data-section="header">
+    <div class="dd-brand">
+      <img class="dd-logo" src="assets/logo.svg?v=7" alt="Desk Dashboard" width="44" height="40" />
+      <div class="dd-brand-text">
+        <h1 class="dd-title">Desk Dashboard</h1>
+        <p class="dd-subtitle">CEO X · métricas técnicas internas</p>
+      </div>
+    </div>
+    <div class="dd-header-actions">
+      <div class="dd-meta" data-field="generated_at">
+        <span class="dd-label">Actualizado</span>
+        <time id="generated-at" class="dd-value">—</time>
+        <span id="refresh-status" class="dd-refresh-status">Auto cada 5 min</span>
+        <span id="last-ui-refresh" class="dd-last-ui-refresh" hidden></span>
+      </div>
+      <button type="button" id="btn-refresh" class="dd-btn-refresh" aria-label="Actualizar datos">
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <main class="dd-main">
+    <section class="dd-kpis" data-section="kpis" aria-label="KPIs del universo">
+      <article class="dd-kpi-card" data-kpi="activos">
+        <h2 class="dd-kpi-label">Activos</h2>
+        <p class="dd-kpi-value" id="kpi-activos">—</p>
+      </article>
+      <article class="dd-kpi-card" data-kpi="above_ema200">
+        <h2 class="dd-kpi-label">Sobre EMA200</h2>
+        <p class="dd-kpi-value" id="kpi-ema200">—</p>
+        <p class="dd-kpi-sub" id="kpi-ema200-pct"></p>
+      </article>
+      <article class="dd-kpi-card" data-kpi="above_sma50">
+        <h2 class="dd-kpi-label">Sobre SMA50</h2>
+        <p class="dd-kpi-value" id="kpi-sma50">—</p>
+        <p class="dd-kpi-sub" id="kpi-sma50-pct"></p>
+      </article>
+      <article class="dd-kpi-card" data-kpi="rs_gt_70">
+        <h2 class="dd-kpi-label">RS &gt; 70</h2>
+        <p class="dd-kpi-value" id="kpi-rs70">—</p>
+        <p class="dd-kpi-sub" id="kpi-rs70-pct"></p>
+      </article>
+      <article class="dd-kpi-card" data-kpi="volumen_inusual">
+        <h2 class="dd-kpi-label">Vol. inusual (&gt;50%)</h2>
+        <p class="dd-kpi-value" id="kpi-vol">—</p>
+        <p class="dd-kpi-sub" id="kpi-vol-pct"></p>
+      </article>
+      <article class="dd-kpi-card" data-kpi="regime" id="kpi-regime-card">
+        <h2 class="dd-kpi-label">Régimen</h2>
+        <p class="dd-kpi-value" id="kpi-regime">—</p>
+        <p class="dd-kpi-sub" id="kpi-regime-sub"></p>
+      </article>
+    </section>
+
+
+    <section class="dd-top10 dd-panel" data-section="top10-return" aria-label="Retorno Top 10 del Desk Score">
+      <div class="dd-top10-head">
+        <h2 class="dd-section-title">Retorno Top 10 del Desk Score</h2>
+        <p class="dd-top10-subtitle" id="top10-subtitle">Retorno últimas 10 ruedas</p>
+      </div>
+      <div class="dd-top10-summary" id="top10-summary" aria-label="Resumen de retornos">
+        <article class="dd-top10-card" data-kpi="avg_top10">
+          <h3 class="dd-kpi-label">Retorno medio Top 10</h3>
+          <p class="dd-kpi-value" id="top10-avg">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="spy_window">
+          <h3 class="dd-kpi-label">SPY (misma ventana)</h3>
+          <p class="dd-kpi-value" id="top10-spy">—</p>
+        </article>
+      </div>
+      <div class="dd-table-wrap dd-top10-table-wrap">
+        <table class="dd-table dd-top10-table" id="top10-table">
+          <thead>
+            <tr>
+              <th scope="col" class="dd-col-rank">#</th>
+              <th scope="col" class="dd-col-ticker">Ticker</th>
+              <th scope="col">Evolución</th>
+              <th scope="col">Score</th>
+              <th scope="col">Retorno</th>
+            </tr>
+          </thead>
+          <tbody id="top10-body">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="dd-earnings dd-panel" data-section="earnings" aria-label="Calendario de resultados">
+      <h2 class="dd-section-title">Earnings (semana actual)</h2>
+      <div id="earnings-strip" class="dd-earnings-strip" data-role="earnings-strip">
+        <p class="dd-empty">Cargando…</p>
+      </div>
+    </section>
+
+    <section class="dd-ranking dd-panel" data-section="ranking" aria-label="Ranking Desk Score">
+      <h2 class="dd-section-title">Ranking Desk Score</h2>
+      <div class="dd-filters" id="ranking-filters" role="toolbar" aria-label="Filtros de ranking">
+        <div class="dd-filter-group" data-filter="kind" role="group" aria-label="Tipo">
+          <button type="button" class="dd-chip is-active" data-kind="">Todos</button>
+          <button type="button" class="dd-chip" data-kind="us">US</button>
+          <button type="button" class="dd-chip" data-kind="cedear_proxy">CEDEAR proxy</button>
+          <button type="button" class="dd-chip" data-kind="etf">ETF</button>
+        </div>
+        <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
+          <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
+          <button type="button" class="dd-chip dd-chip-toggle" data-flag="rs_gt_70" aria-pressed="false">RS &gt; 70</button>
+        </div>
+        <div class="dd-filter-search">
+          <label class="dd-sr-only" for="filter-search">Buscar ticker</label>
+          <input type="search" id="filter-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
+        </div>
+        <p class="dd-filter-count" id="filter-count" aria-live="polite">Mostrando —</p>
+      </div>
+      <div class="dd-table-wrap">
+        <table class="dd-table" id="ranking-table">
+          <thead>
+            <tr>
+              <th scope="col" class="dd-sticky-col dd-col-rank">#</th>
+              <th scope="col" class="dd-sticky-col dd-col-ticker">Ticker</th>
+              <th scope="col">Score</th>
+              <th scope="col">Flags</th>
+              <th scope="col">Tendencia</th>
+              <th scope="col">RS</th>
+              <th scope="col">Contracción</th>
+              <th scope="col">Setup</th>
+              <th scope="col">Dist EMA200</th>
+              <th scope="col">Vol rel</th>
+              <th scope="col">kind</th>
+            </tr>
+          </thead>
+          <tbody id="ranking-body">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="dd-notes dd-panel" data-section="notes" aria-label="Notas">
+      <h2 class="dd-section-title">Notas</h2>
+      <p class="dd-tip" id="data-refresh-tip">
+        Tip: el botón Actualizar / auto cada 5 min solo recarga <code>datos.json</code>.
+        Para datos frescos del mercado, ejecutá <code>python3 build.py</code> (o cron).
+      </p>
+      <ul id="notes-list" class="dd-notes-list"></ul>
+    </section>
+  </main>
+
+  <footer class="dd-footer" data-section="footer">
+    <p class="dd-disclaimer">
+      <strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.
+      Uso interno / educativo. Desk Dashboard · CEO X.
+    </p>
+  </footer>
+
+  <script src="app.js?v=11" defer></script>
+</body>
+</html>
