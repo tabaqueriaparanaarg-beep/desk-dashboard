@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="stylesheet" href="styles.css?v=19" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -81,6 +81,7 @@
       <div class="dd-top10-head">
         <h2 class="dd-section-title">Retorno Top 10 del Desk Score</h2>
         <p class="dd-top10-subtitle" id="top10-subtitle">Retorno últimas 10 ruedas</p>
+        <p class="dd-section-sub">Tocá una fila para abrir la ficha.</p>
       </div>
       <div class="dd-top10-summary" id="top10-summary" aria-label="Resumen de retornos">
         <article class="dd-top10-card" data-kpi="avg_top10">
@@ -119,6 +120,7 @@
 
     <section class="dd-ranking dd-panel" data-section="ranking" aria-label="Ranking Desk Score">
       <h2 class="dd-section-title">Ranking Desk Score</h2>
+      <p class="dd-section-sub">Tocá una fila para abrir la ficha.</p>
       <div class="dd-filters" id="ranking-filters" role="toolbar" aria-label="Filtros de ranking">
         <div class="dd-filter-group" data-filter="kind" role="group" aria-label="Tipo">
           <button type="button" class="dd-chip is-active" data-kind="">Todos</button>
@@ -177,6 +179,8 @@
     </p>
   </footer>
 
-  <script src="app.js?v=12" defer></script>
+  <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
+
+  <script src="app.js?v=13" defer></script>
 </body>
 </html>
