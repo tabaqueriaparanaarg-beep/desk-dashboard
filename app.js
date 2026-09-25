@@ -166,6 +166,34 @@
     );
   }
 
+  function entroHtml(entro) {
+    if (!entro || !entro.label) {
+      return '<span class="dd-entro dd-entro-empty">—</span>';
+    }
+    var parts = String(entro.label).split(" · ");
+    var dateLine = parts[0] || "";
+    var sessLine = parts.slice(1).join(" · ");
+    return (
+      '<span class="dd-entro" title="' + escapeHtml(entro.label) + '">' +
+      '<span class="dd-entro-date">' + escapeHtml(dateLine) + "</span>" +
+      (sessLine
+        ? '<span class="dd-entro-sessions">' + escapeHtml(sessLine) + "</span>"
+        : "") +
+      "</span>"
+    );
+  }
+
+  function entroInline(entro) {
+    if (!entro || !entro.label) {
+      return '<span class="dd-entro-inline dd-entro-empty">—</span>';
+    }
+    return (
+      '<span class="dd-entro-inline" title="' + escapeHtml(entro.label) + '">' +
+      escapeHtml(entro.label) +
+      "</span>"
+    );
+  }
+
   function returnBarHtml(pct) {
     if (pct == null || Number.isNaN(pct)) {
       return '<span class="dd-ret-empty">—</span>';
@@ -195,7 +223,7 @@
       if (spyEl) spyEl.textContent = "—";
       body.innerHTML = "";
       var tr = document.createElement("tr");
-      tr.innerHTML = '<td colspan="5" class="dd-empty">Sin datos de retorno Top 10. Ejecutá patch_top10_return.py o build.py.</td>';
+      tr.innerHTML = '<td colspan="6" class="dd-empty">Sin datos de retorno Top 10. Ejecutá patch_top10_return.py o build.py.</td>';
       body.appendChild(tr);
       if (section) section.setAttribute("data-ready", "0");
       return;
@@ -220,6 +248,7 @@
       tr.innerHTML =
         '<td class="dd-col-rank" data-col="rank">' + escapeHtml(r.rank != null ? r.rank : "") + "</td>" +
         '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") + "</td>" +
+        '<td data-col="entro" class="dd-col-entro">' + entroHtml(r.entro) + "</td>" +
         '<td data-col="spark" class="dd-col-spark">' + sparklineSvg(r.spark) + "</td>" +
         '<td data-col="score"><span class="dd-score' +
         scoreTierClass(r.desk_score) +
@@ -320,6 +349,7 @@
         r.rank != null ? r.rank : "",
         tickerWithLogo(r, "dd-ticker"),
         '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>",
+        entroInline(r.entro),
         formatFlags(r.flags),
         fmtNum(p.tendencia, 1),
         fmtNum(r.rs_score, 1),
@@ -342,14 +372,15 @@
           td.className = "dd-sticky-col dd-col-ticker";
         }
         if (i === 2) td.setAttribute("data-col", "score");
-        if (i === 3) td.setAttribute("data-col", "flags");
-        if (i === 4) td.setAttribute("data-col", "tendencia");
-        if (i === 5) td.setAttribute("data-col", "rs");
-        if (i === 6) td.setAttribute("data-col", "contraccion");
-        if (i === 7) td.setAttribute("data-col", "setup");
-        if (i === 8) td.setAttribute("data-col", "dist_ema200");
-        if (i === 9) td.setAttribute("data-col", "vol_rel");
-        if (i === 10) td.setAttribute("data-col", "kind");
+        if (i === 3) td.setAttribute("data-col", "entro");
+        if (i === 4) td.setAttribute("data-col", "flags");
+        if (i === 5) td.setAttribute("data-col", "tendencia");
+        if (i === 6) td.setAttribute("data-col", "rs");
+        if (i === 7) td.setAttribute("data-col", "contraccion");
+        if (i === 8) td.setAttribute("data-col", "setup");
+        if (i === 9) td.setAttribute("data-col", "dist_ema200");
+        if (i === 10) td.setAttribute("data-col", "vol_rel");
+        if (i === 11) td.setAttribute("data-col", "kind");
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
