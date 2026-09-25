@@ -3,6 +3,9 @@
 One-shot: compute top10_return for current datos.json ranking (Top 10 + SPY)
 without a full-universe rebuild. Patches datos.json in place.
 
+The «Entró» streak needs the long bar history (EMA200), so this script does not
+recompute it — it copies `ranking[].entro` onto the refreshed Top 10 rows.
+
 Usage:
   cd /workspace/desk-dashboard && python3 patch_top10_return.py
 """
@@ -78,6 +81,8 @@ def main() -> None:
         raise SystemExit("SPY sin barras suficientes para la ventana de 10 ruedas")
 
     top10 = b.compute_top10_return(ranking, all_bars, b.WINDOW_SESSIONS)
+    # La racha «Entró» sale del build completo (hace falta ~EMA200). Acá sólo se conserva.
+    b.copy_entro_from_ranking(ranking, top10)
     data["top10_return"] = top10
     formulas = data.setdefault("formulas", {})
     formulas["top10_return"] = (
@@ -103,7 +108,8 @@ def main() -> None:
     for r in top10.get("rows") or []:
         print(
             f"  #{r['rank']} {r['symbol']:6} score={r.get('desk_score')} "
-            f"ret={r.get('return_pct')}% spark_n={len(r.get('spark') or [])}"
+            f"ret={r.get('return_pct')}% entro={(r.get('entro') or {}).get('label') or '—'} "
+            f"spark_n={len(r.get('spark') or [])}"
         )
 
 

@@ -765,8 +765,48 @@ def percentile_rank(values: list[float], x: float) -> float:
     return (below + 0.5 * equal) / len(values) * 100.0
 
 
+def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
+    """Percentil de RS, pilar Fuerza, penalizaciones suaves, Desk Score, orden y rank.
+
+    Misma fórmula que el ranking publicado. Mutates each row (drops keys `_`).
+    """
+    rels = [r["_rel_perf_raw"] for r in rows if r["_rel_perf_raw"] is not None]
+    for r in rows:
+        if r["_rel_perf_raw"] is None:
+            rs = 50.0
+        else:
+            rs = percentile_rank(rels, r["_rel_perf_raw"])
+        r["rs_score"] = safe_round(rs, 1)
+        fuerza = score_fuerza_rs(rs, r["_rs_accel"])
+        r["pillars"]["fuerza_rs"] = safe_round(fuerza, 1)
+        ds = desk_score(r["_tend"], fuerza, r["_contr"], r["_setup"])
+        # Soft penalty for flags
+        if "extendido_vs_ema200" in r["flags"]:
+            ds = clamp(ds - 5)
+        if "posible_distribucion" in r["flags"]:
+            ds = clamp(ds - 4)
+        if "atr_elevado" in r["flags"]:
+            ds = clamp(ds - 3)
+        r["desk_score"] = safe_round(ds, 1)
+        for k in list(r.keys()):
+            if k.startswith("_"):
+                del r[k]
+    rows.sort(key=lambda x: (-(x["desk_score"] or 0), x["symbol"]))
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    return rows
+
 
 WINDOW_SESSIONS = 10
+# Sesiones hacia atrás para fechar la racha actual en el Top 10 (sin estado persistido).
+ENTRY_LOOKBACK_SESSIONS = 30
+TOP10_ENTRY_NOTE = (
+    "Racha actual en el Top 10: Desk Score recomputado al cierre de cada una de las "
+    f"últimas {ENTRY_LOOKBACK_SESSIONS} sesiones, truncando las barras de Alpaca ya descargadas "
+    "(sin llamadas extra a la API). Earnings, logos y el resto de Finnhub no entran en el score, "
+    "así que no hace falta aproximarlos ni dejarlos fijos. "
+    "Si la racha cubre toda la ventana: «antes del DD/MM · >N ruedas»."
+)
 
 
 def session_return_pct(closes: list[float], sessions: int = WINDOW_SESSIONS) -> float | None:
@@ -849,6 +889,199 @@ def compute_top10_return(
     }
 
 
+def bar_session_date(bar: dict) -> str:
+    """Fecha de sesión YYYY-MM-DD a partir del timestamp de Alpaca (`t`)."""
+    return str(bar.get("t") or "")[:10]
+
+
+def session_dates_from_bars(bars: list[dict]) -> list[str]:
+    dates: list[str] = []
+    seen: set[str] = set()
+    for b in bars:
+        d = bar_session_date(b)
+        if len(d) == 10 and d[4] == "-" and d not in seen:
+            seen.add(d)
+            dates.append(d)
+    return dates
+
+
+def bars_through(bars: list[dict], session: str) -> list[dict]:
+    """Barras con fecha de sesión <= `session`. La serie viene ordenada ascendente."""
+    if not bars or not session:
+        return []
+    last = bar_session_date(bars[-1])
+    if len(last) == 10 and last <= session:
+        return bars
+    lo, hi = 0, len(bars)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if bar_session_date(bars[mid]) <= session:
+            lo = mid + 1
+        else:
+            hi = mid
+    return bars[:lo]
+
+
+def _ddmm(iso_date: str) -> str:
+    if len(iso_date) >= 10 and iso_date[4] == "-" and iso_date[7] == "-":
+        return f"{iso_date[8:10]}/{iso_date[5:7]}"
+    return iso_date
+
+
+def format_entro(
+    entry_date: str | None,
+    sessions: int,
+    censored: bool,
+    bound_date: str,
+    lookback: int,
+) -> dict[str, Any]:
+    """«DD/MM · N ruedas», o «antes del DD/MM · >N ruedas» si la racha tapa toda la ventana."""
+    if censored:
+        n = lookback if lookback > 0 else sessions
+        label = f"antes del {_ddmm(bound_date)} · >{n} ruedas"
+        return {
+            "date": None,
+            "earliest_seen": bound_date,
+            "sessions": sessions,
+            "lookback_sessions": n,
+            "censored": True,
+            "label": label,
+        }
+    ruedas = "rueda" if sessions == 1 else "ruedas"
+    label = f"{_ddmm(entry_date or '')} · {sessions} {ruedas}"
+    return {
+        "date": entry_date,
+        "earliest_seen": entry_date,
+        "sessions": sessions,
+        "lookback_sessions": lookback,
+        "censored": False,
+        "label": label,
+    }
+
+
+def streaks_from_membership(
+    membership_oldest_first: list[tuple[str, list[str]]],
+) -> dict[str, dict]:
+    """Racha ininterrumpida hasta hoy de cada símbolo del Top 10 de la última sesión.
+
+    `membership_oldest_first`: [(YYYY-MM-DD, símbolos del Top 10 en orden de rank), ...]
+    de la sesión más antigua a la más reciente. Si el símbolo está en todas las sesiones,
+    no se observó la salida y la entrada queda censurada.
+    """
+    if not membership_oldest_first:
+        return {}
+    window_len = len(membership_oldest_first)
+    oldest = membership_oldest_first[0][0]
+    by_date = {d: set(syms) for d, syms in membership_oldest_first}
+    out: dict[str, dict] = {}
+    for sym in membership_oldest_first[-1][1]:
+        if not sym or sym in out:
+            continue
+        sessions = 0
+        entry = membership_oldest_first[-1][0]
+        for d, _syms in reversed(membership_oldest_first):
+            if sym in by_date[d]:
+                sessions += 1
+                entry = d
+            else:
+                break
+        censored = sessions == window_len
+        out[sym] = format_entro(
+            None if censored else entry,
+            sessions,
+            censored,
+            oldest if censored else entry,
+            window_len,
+        )
+    return out
+
+
+def rank_universe_asof(
+    meta_by: dict[str, dict],
+    all_bars: dict[str, list[dict]],
+    session: str,
+) -> list[dict]:
+    """Ranking Desk Score con cada serie truncada en `session` (inclusive)."""
+    spy_bars = bars_through(all_bars.get("SPY") or [], session)
+    if len(spy_bars) < 60:
+        return []
+    spy_closes = [float(b["c"]) for b in spy_bars]
+    rows: list[dict] = []
+    for sym, bars in all_bars.items():
+        meta = meta_by.get(sym) or {"symbol": sym}
+        row = compute_symbol(meta, bars_through(bars, session), spy_closes, {})
+        if row:
+            rows.append(row)
+    return apply_cross_section_scores(rows)
+
+
+def compute_top10_entry(
+    meta_by: dict[str, dict],
+    all_bars: dict[str, list[dict]],
+    lookback: int = ENTRY_LOOKBACK_SESSIONS,
+    today_rows: list[dict] | None = None,
+) -> dict[str, Any]:
+    """Fecha en que cada miembro del Top 10 actual entró en su racha ininterrumpida.
+
+    Recomputa el ranking al cierre de cada una de las últimas `lookback` sesiones de SPY
+    con las barras ya en memoria. `today_rows` (ranking publicado) fija la membresía de
+    la última sesión para que la racha coincida con el Top 10 que ve la UI.
+    """
+    empty = {
+        "lookback_sessions": lookback,
+        "sessions_evaluated": 0,
+        "window_start": None,
+        "window_end": None,
+        "by_symbol": {},
+        "note": TOP10_ENTRY_NOTE,
+    }
+    spy_bars = all_bars.get("SPY") or []
+    dates = session_dates_from_bars(spy_bars)
+    if not dates or lookback < 1:
+        return empty
+    valid = [d for d in dates[-lookback:] if len(bars_through(spy_bars, d)) >= 60]
+    if not valid:
+        return empty
+    last = valid[-1]
+    membership: list[tuple[str, list[str]]] = []
+    for d in valid:
+        if today_rows is not None and d == last:
+            top = [r["symbol"] for r in today_rows[:10] if r.get("symbol")]
+        else:
+            ranked = rank_universe_asof(meta_by, all_bars, d)
+            top = [r["symbol"] for r in ranked[:10]]
+        membership.append((d, top))
+    return {
+        "lookback_sessions": lookback,
+        "sessions_evaluated": len(valid),
+        "window_start": valid[0],
+        "window_end": last,
+        "by_symbol": streaks_from_membership(membership),
+        "note": TOP10_ENTRY_NOTE,
+    }
+
+
+def attach_entro(ranking: list[dict], top10: dict | None, streaks: dict[str, dict]) -> None:
+    """Copia `entro` al ranking (null fuera del Top 10 actual) y a las filas del panel."""
+    for r in ranking or []:
+        sym = r.get("symbol")
+        r["entro"] = streaks.get(sym) if sym in streaks else None
+    if not top10:
+        return
+    for row in top10.get("rows") or []:
+        sym = row.get("symbol")
+        row["entro"] = streaks.get(sym) if sym in streaks else None
+
+
+def copy_entro_from_ranking(ranking: list[dict], top10: dict | None) -> None:
+    """Reaplica `entro` ya calculado (p. ej. patch de retornos, sin rehacer el universo)."""
+    by = {r.get("symbol"): r.get("entro") for r in ranking or [] if r.get("symbol")}
+    if not top10:
+        return
+    for row in top10.get("rows") or []:
+        row["entro"] = by.get(row.get("symbol"))
+
+
 def main() -> None:
     alpaca_headers()  # falla temprano y claro si faltan keys (sin imprimirlas)
     if not load_finnhub_key():
@@ -915,33 +1148,8 @@ def main() -> None:
         else:
             failures.append(f"{sym}: compute falló")
 
-    # RS Score: percentile of rel_perf among scored universe (excl. incomplete)
-    rels = [r["_rel_perf_raw"] for r in rows if r["_rel_perf_raw"] is not None]
-    for r in rows:
-        if r["_rel_perf_raw"] is None:
-            rs = 50.0
-        else:
-            rs = percentile_rank(rels, r["_rel_perf_raw"])
-        r["rs_score"] = safe_round(rs, 1)
-        fuerza = score_fuerza_rs(rs, r["_rs_accel"])
-        r["pillars"]["fuerza_rs"] = safe_round(fuerza, 1)
-        ds = desk_score(r["_tend"], fuerza, r["_contr"], r["_setup"])
-        # Soft penalty for flags
-        if "extendido_vs_ema200" in r["flags"]:
-            ds = clamp(ds - 5)
-        if "posible_distribucion" in r["flags"]:
-            ds = clamp(ds - 4)
-        if "atr_elevado" in r["flags"]:
-            ds = clamp(ds - 3)
-        r["desk_score"] = safe_round(ds, 1)
-        # cleanup internals
-        for k in list(r.keys()):
-            if k.startswith("_"):
-                del r[k]
-
-    rows.sort(key=lambda x: (-(x["desk_score"] or 0), x["symbol"]))
-    for i, r in enumerate(rows, 1):
-        r["rank"] = i
+    # RS Score (percentil en el universo) + Desk Score + rank
+    apply_cross_section_scores(rows)
 
     # KPIs (universe excl. pure benchmarks optional — include all scored)
     n = len(rows)
@@ -1008,6 +1216,20 @@ def main() -> None:
     notes.append(
         f"Retorno Top 10 ({WINDOW_SESSIONS} ruedas): medio {top10_return.get('avg_return_pct')}% · SPY {top10_return.get('spy_return_pct')}%"
     )
+    top10_entry = compute_top10_entry(
+        meta_by, all_bars, ENTRY_LOOKBACK_SESSIONS, today_rows=rows
+    )
+    attach_entro(rows, top10_return, top10_entry.get("by_symbol") or {})
+    if top10_entry.get("by_symbol"):
+        bits = [
+            f"{sym} {info.get('label')}"
+            for sym, info in top10_entry["by_symbol"].items()
+        ]
+        notes.append(
+            f"Entró Top 10 (ventana {top10_entry.get('sessions_evaluated')} sesiones, "
+            f"{top10_entry.get('window_start')} → {top10_entry.get('window_end')}): "
+            + " · ".join(bits)
+        )
 
     payload = {
         "generated_at": generated_at,
@@ -1027,6 +1249,7 @@ def main() -> None:
         "regime": regime_obj,
         "regime_stub": regime_obj,  # alias back-compat
         "top10_return": top10_return,
+        "top10_entry": top10_entry,
         "ranking": rows,
         "earnings": earnings,
         "failures": failures,
@@ -1042,6 +1265,7 @@ def main() -> None:
             "dist_ema200_pct": "(close/EMA200 − 1) * 100",
             "regime": rule,
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
+            "top10_entry": TOP10_ENTRY_NOTE,
         },
         "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
     }
@@ -1067,6 +1291,12 @@ def main() -> None:
         f"avg={t10.get('avg_return_pct')}% SPY={t10.get('spy_return_pct')}% "
         f"n={len(t10.get('rows') or [])}"
     )
+    print(
+        f"Entró Top 10 ({top10_entry.get('sessions_evaluated')} sesiones, "
+        f"{top10_entry.get('window_start')} → {top10_entry.get('window_end')}):"
+    )
+    for sym, info in (top10_entry.get("by_symbol") or {}).items():
+        print(f"  {sym:6} {info.get('label')}")
     if failures:
         print(f"Fallos/omitidos ({len(failures)}):")
         for f in failures[:20]:

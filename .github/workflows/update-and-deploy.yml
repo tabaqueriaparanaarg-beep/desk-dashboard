@@ -40,6 +40,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Test Top 10 entry streaks (mock bars)
+        run: python -m unittest test_top10_entry.py
+
       - name: Build datos.json (Alpaca + Finnhub)
         # Si falla (API caída, keys faltantes), se publica el datos.json existente del repo.
         continue-on-error: true

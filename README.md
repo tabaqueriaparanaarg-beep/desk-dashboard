@@ -52,7 +52,7 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
 2. Baja barras diarias (~250 sesiones) desde Alpaca Data API (feed IEX, batches, reintentos 429).
 3. Calcula indicadores y **Desk Score 0–100**.
 4. KPIs de universo + earnings de la semana (Finnhub, falla soft).
-5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY) y escribe todo en `datos.json`.
+5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY), la columna **Entró** (racha en el Top 10, últimas 30 sesiones) y escribe todo en `datos.json`.
 6. Baja logos faltantes (Finnhub `profile2`, falla soft) y agrega `logo` por fila + mapa `logos`.
 
 Símbolos sin barras suficientes se omiten y quedan en `failures`.
@@ -62,6 +62,7 @@ Símbolos sin barras suficientes se omiten y quedan en `failures`.
 | Pieza | Peso / definición |
 |--------|-------------------|
 | **Desk Score** | `0.25·Tendencia + 0.30·Fuerza_RS + 0.30·Contracción + 0.15·Setup` (pilares 0–100) |
+| **Entró (Top 10)** | Fecha en que el ticker entró al Top 10 en la racha actual, más las ruedas de esa racha |
 | **Tendencia (~25%)** | Precio vs SMA50 / EMA200, pendientes ~5d, estructura SMA50&gt;EMA200 |
 | **Fuerza RS (~30%)** | Percentil del *relative performance* vs SPY (~126d / 6m; fallback 63d) + bonus por aceleración 1m |
 | **RS Score** | Percentil 0–100 de `(retorno_ticker − retorno_SPY)` en el universo scored |
@@ -102,7 +103,23 @@ Reglas (`datos.json` → `regime` / `formulas.regime`):
 Panel después de los KPIs: retorno de las últimas **10 ruedas** del Top 10 por Desk Score, con sparkline SVG, score y barra de retorno (verde/rojo). Compara el retorno medio del Top 10 vs SPY en la misma ventana.
 
 - En cada `python3 build.py` se regenera `datos.json` → `top10_return`.
-- Sin rebuild completo del universo: `python3 patch_top10_return.py` (solo Top 10 + SPY vía Alpaca).
+- Sin rebuild completo del universo: `python3 patch_top10_return.py` (solo Top 10 + SPY vía Alpaca). No recomputa la racha «Entró» (hace falta el historial largo); copia `ranking[].entro` a las filas del panel.
+
+### Entró (racha en el Top 10)
+
+Columna **Entró** en el panel Top 10 y en el ranking. Para cada ticker que hoy está en el Top 10, muestra la fecha en que empezó su racha actual (sin huecos) y cuántas ruedas lleva, por ejemplo `12/09 · 9 ruedas`.
+
+En cada build, sin archivos de historia y sin llamadas extra a la API:
+
+1. Se toman las últimas **30** sesiones de SPY dentro de las barras diarias que ya se bajaron.
+2. Se recomputa el Desk Score de todo el universo truncando cada serie en esa fecha (mismos pilares y penalizaciones).
+3. Se camina desde hoy hacia atrás hasta la primera sesión en la que el ticker no estaba en el Top 10. Esa sesión siguiente es la entrada.
+
+Si la racha cubre las 30 sesiones, no se vio el inicio: `antes del DD/MM · >30 ruedas`.
+
+**Aproximación:** el Desk Score no usa earnings ni ningún otro dato de Finnhub (sólo precio, volumen y SPY). La reconstrucción histórica es la misma fórmula que el ranking del día; no hay pilar “congelado”. Si más adelante un pilar dependiera de un dato puntual no histórico, habría que dejarlo fijo en la ventana.
+
+El resultado queda en `ranking[].entro`, `top10_return.rows[].entro` y el bloque `top10_entry` (`label`, `date`, `sessions`, `censored`, `lookback_sessions`). Fuera del Top 10 actual, `entro` es `null`.
 
 ### Logos de empresas
 
