@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Desk Dashboard / CEO X Dashboard — pipeline de datos técnicos.
+Angus — pipeline de datos técnicos.
 Genera datos.json a partir de Alpaca (barras) + Finnhub (earnings + logos).
 Sin paywall, sin login. Uso interno.
 """
@@ -1841,7 +1841,7 @@ def main() -> None:
     end_s = end_dt.isoformat() + "T23:59:59Z"
 
     print(
-        f"Desk Dashboard build — {len(symbols)} símbolos, {start_s[:10]} → {end_s[:10]} "
+        f"Angus build — {len(symbols)} símbolos, {start_s[:10]} → {end_s[:10]} "
         f"(ranking desde {ranking_floor})"
     )
 
@@ -2013,7 +2013,7 @@ def main() -> None:
     payload = {
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
-        "brand": "Desk Dashboard",
+        "brand": "Angus",
         "kpis": {
             "activos": n,
             "above_ema200": above_ema,
