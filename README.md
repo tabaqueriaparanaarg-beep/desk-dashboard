@@ -1,4 +1,4 @@
-# Desk Dashboard (CEO X)
+# Angus
 
 Dashboard técnico interno MVP. **Sin paywall, sin login.** Branding original (no Warren Bife / Warren Score).
 

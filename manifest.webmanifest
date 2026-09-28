@@ -1,7 +1,7 @@
 {
-  "name": "Desk Dashboard",
-  "short_name": "Desk",
-  "description": "CEO X · métricas técnicas internas",
+  "name": "Angus",
+  "short_name": "Angus",
+  "description": "Dashboard técnico interno",
   "id": "./",
   "start_url": "./",
   "scope": "./",

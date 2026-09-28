@@ -853,7 +853,7 @@
     renderSectors(data.sectors);
     applyFilters();
     renderNotes(data.notes);
-    state.baseTitle = "Desk Dashboard — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
+    state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
     document.title = state.baseTitle;
     renderRoute();
   }
@@ -1285,7 +1285,7 @@
       root.innerHTML =
         '<div class="dd-ficha-top">' + fichaBackButton() + "</div>" +
         '<p class="dd-ficha-empty">' + escapeHtml(msg) + "</p>";
-      document.title = sym + " · Desk Dashboard";
+      document.title = sym + " · Angus";
       return;
     }
     var total = state.ranking.length;
@@ -1405,7 +1405,7 @@
       '<p class="dd-ficha-note">' + escapeHtml(caption) + "</p>" +
       "</section>" +
       '<p class="dd-ficha-disclaimer"><strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.</p>';
-    document.title = row.symbol + " · Desk Dashboard";
+    document.title = row.symbol + " · Angus";
   }
 
   function renderRoute() {
