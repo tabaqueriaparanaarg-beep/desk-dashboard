@@ -41,8 +41,17 @@ ALPACA_FEED = _env_first("ALPACA_FEED", default="iex")  # iex (gratis) | sip (pa
 APCA_KEY = _env_first("ALPACA_API_KEY", "APCA_API_KEY_ID")
 APCA_SECRET = _env_first("ALPACA_SECRET_KEY", "APCA_API_SECRET_KEY")
 
-# Barras diarias ~250 días de trading ≈ 380 días calendario
+# Barras diarias ~250 días de trading ≈ 380 días calendario.
+# El ranking publicado se recorta a esta ventana para que el Desk Score del día
+# no cambie al pedir historia extra para la simulación.
 LOOKBACK_CALENDAR_DAYS = 400
+# Walk-forward: 200 ruedas de calentamiento (EMA200) + ~26 semanas + feriados y margen.
+# Misma API de Alpaca (un request por lote); el ranking no usa estas barras viejas.
+WALKFORWARD_LOOKBACK_CALENDAR_DAYS = 560
+WALKFORWARD_WEEKS = 26
+WALKFORWARD_WARMUP_SESSIONS = 200
+WALKFORWARD_RECENT = 6
+WALKFORWARD_TOP_N = 10
 BATCH_SIZE = 8
 MAX_RETRIES = 5
 SLEEP_BETWEEN_BATCHES = 0.35
@@ -1209,18 +1218,39 @@ def streaks_from_membership(
     return out
 
 
+def ranking_window_bars(bars: list[dict], floor: str) -> list[dict]:
+    """Barras con fecha de sesión >= `floor` (YYYY-MM-DD). Serie ascendente."""
+    if not bars or not floor:
+        return []
+    lo, hi = 0, len(bars)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if bar_session_date(bars[mid]) < floor:
+            lo = mid + 1
+        else:
+            hi = mid
+    return bars[lo:]
+
+
 def rank_universe_asof(
     meta_by: dict[str, dict],
     all_bars: dict[str, list[dict]],
     session: str,
+    require_exact_session: bool = False,
 ) -> list[dict]:
-    """Ranking Desk Score con cada serie truncada en `session` (inclusive)."""
+    """Ranking Desk Score con cada serie truncada en `session` (inclusive).
+
+    `require_exact_session`: omite símbolos sin barra ese día, para no tratar
+    un cierre viejo como si fuera el cierre de la sesión.
+    """
     spy_bars = bars_through(all_bars.get("SPY") or [], session)
     if len(spy_bars) < 60:
         return []
     spy_closes = [float(b["c"]) for b in spy_bars]
     rows: list[dict] = []
     for sym, bars in all_bars.items():
+        if require_exact_session and not has_exact_session(bars, session):
+            continue
         meta = meta_by.get(sym) or {"symbol": sym}
         row = compute_symbol(meta, bars_through(bars, session), spy_closes, {})
         if row:
@@ -1295,6 +1325,301 @@ def copy_entro_from_ranking(ranking: list[dict], top10: dict | None) -> None:
         row["entro"] = by.get(row.get("symbol"))
 
 
+# Simulación walk-forward del Top 10. No es el panel «Retorno Top 10» (ese arma el
+# Top 10 de hoy y mira esas mismas acciones hacia atrás).
+TOP10_WALKFORWARD_FORMULA = (
+    "Walk-forward semanal: en el último cierre de cada semana ISO se recalcula el Desk Score "
+    "con barras hasta ese cierre (misma fórmula que el ranking, sin earnings ni Finnhub). "
+    "Se compra el Top 10 equiponderado a ese cierre y se mantiene hasta el último cierre de "
+    "la semana siguiente; ahí se venden los que salieron y se compran los que entraron. "
+    f"Solo entran fechas con al menos {WALKFORWARD_WARMUP_SESSIONS} ruedas de SPY (EMA200 definida) "
+    f"y se miden como máximo las {WALKFORWARD_WEEKS} semanas más recientes. "
+    "Un símbolo sin barra en la sesión de rebalanceo no se rankea ese día. "
+    "Si a un nombre del libro le falta el cierre de salida, esa semana se reparte el peso entre "
+    "los que sí tienen ambos cierres. SPY es comprar y mantener entre las mismas fechas. "
+    "Sin comisiones. Rotación = cantidad de nombres que salen, promediada en cada rebalanceo "
+    "posterior a la compra inicial. El Top 10 del último cierre no se usa para el retorno de "
+    "esa semana: ese cierre solo marca el valor del libro armado la semana anterior."
+)
+
+
+def _ddmmyyyy(iso_date: str | None) -> str:
+    if iso_date and len(iso_date) >= 10 and iso_date[4] == "-" and iso_date[7] == "-":
+        return f"{iso_date[8:10]}/{iso_date[5:7]}/{iso_date[0:4]}"
+    return iso_date or ""
+
+
+def walkforward_note(weeks: int, start: str | None, end: str | None, warmup: int) -> str:
+    """Texto plano del panel: qué es, qué ventana se usó y que no es una recomendación."""
+    if weeks and start and end:
+        ventana = (
+            f" Ventana usada: {weeks} semanas, del {_ddmmyyyy(start)} al {_ddmmyyyy(end)}"
+            f" (calentamiento de {warmup} ruedas para que exista la EMA200)."
+        )
+    else:
+        ventana = (
+            f" No alcanzó el historial: hacen falta {warmup} ruedas de calentamiento y al menos "
+            "una semana completa después."
+        )
+    return (
+        "Simulación semanal: en el último cierre de cada semana se recalcula el Desk Score "
+        "solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada "
+        "nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a "
+        "ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia "
+        "atrás. Sin comisiones. Es una simulación, no una recomendación. Los resultados pasados "
+        "no garantizan resultados futuros."
+        + ventana
+    )
+
+
+def _empty_walkforward(warmup: int, target_weeks: int, start: str | None = None, end: str | None = None) -> dict[str, Any]:
+    return {
+        "rebalance": "ultimo_cierre_semana_iso",
+        "execution": "mismo_cierre",
+        "warmup_sessions": warmup,
+        "target_weeks": target_weeks,
+        "weeks": 0,
+        "window_start": start,
+        "window_end": end,
+        "base": 100,
+        "total_return_pct": None,
+        "spy_total_return_pct": None,
+        "excess_return_pct": None,
+        "weeks_beat_spy": 0,
+        "weeks_beat_spy_pct": None,
+        "max_drawdown_pct": None,
+        "spy_max_drawdown_pct": None,
+        "avg_names_changed": None,
+        "curve": [],
+        "recent": [],
+        "note": walkforward_note(0, start, end, warmup),
+        "signals": [],
+        "periods": [],
+    }
+
+
+def eligible_weekly_dates(spy_dates: list[str], warmup: int, weeks: int) -> list[str]:
+    """Cierres de rebalanceo (último de cada semana ISO) ya con calentamiento.
+
+    Devuelve como máximo `weeks + 1` fechas (el último punto solo marca el valor).
+    Cada fecha tiene al menos `warmup` sesiones de SPY hasta ese día, inclusive.
+    """
+    if warmup < 1 or weeks < 1:
+        return []
+    eligible = [d for i, d in enumerate(spy_dates) if i + 1 >= warmup and len(d) == 10]
+    if len(eligible) < 2:
+        return []
+    weekly = weekly_close_dates(eligible, weeks=len(eligible))
+    if len(weekly) < 2:
+        return []
+    return weekly[-(weeks + 1) :]
+
+
+def close_by_session(all_bars: dict[str, list[dict]]) -> dict[str, dict[str, float]]:
+    """symbol → {YYYY-MM-DD → cierre}. Si hay dos barras el mismo día, queda la última."""
+    out: dict[str, dict[str, float]] = {}
+    for sym, bars in all_bars.items():
+        closes: dict[str, float] = {}
+        for bar in bars:
+            d = bar_session_date(bar)
+            c = bar.get("c")
+            if len(d) == 10 and c is not None:
+                closes[d] = float(c)
+        out[sym] = closes
+    return out
+
+
+def equal_weight_return(
+    symbols: list[str],
+    closes: dict[str, dict[str, float]],
+    d0: str,
+    d1: str,
+) -> float | None:
+    """Retorno equiponderado (fracción, no %) entre dos cierres.
+
+    Los nombres sin cierre en ambos extremos se dejan afuera y el peso se reparte
+    entre los que sí cotizaron. None si no queda ninguno.
+    """
+    rets: list[float] = []
+    for sym in symbols:
+        book = closes.get(sym) or {}
+        c0 = book.get(d0)
+        c1 = book.get(d1)
+        if c0 is None or c1 is None or c0 == 0:
+            continue
+        rets.append(c1 / c0 - 1.0)
+    if not rets:
+        return None
+    return sum(rets) / len(rets)
+
+
+def names_left(prev: list[str], curr: list[str]) -> int:
+    """Nombres del libro anterior que ya no están (los que se venden)."""
+    return len(set(prev) - set(curr))
+
+
+def max_drawdown_pct(equity: list[float]) -> float:
+    """Peor caída desde un máximo, en %. 0 si la curva no baja."""
+    if not equity:
+        return 0.0
+    peak = equity[0]
+    worst = 0.0
+    for x in equity:
+        if x > peak:
+            peak = x
+        if peak > 0:
+            dd = (x / peak - 1.0) * 100.0
+            if dd < worst:
+                worst = dd
+    return worst
+
+
+def walkforward_from_schedule(
+    dates: list[str],
+    holdings_at: dict[str, list[str]],
+    closes: dict[str, dict[str, float]],
+    *,
+    warmup_sessions: int = WALKFORWARD_WARMUP_SESSIONS,
+    target_weeks: int = WALKFORWARD_WEEKS,
+    recent: int = WALKFORWARD_RECENT,
+) -> dict[str, Any]:
+    """Contabilidad del libro. `dates` va de más viejo a más nuevo.
+
+    El libro elegido en `dates[i]` gana el retorno hasta `dates[i+1]`.
+    El Top 10 de la fecha final no entra en ningún retorno.
+    """
+    if len(dates) < 2:
+        return _empty_walkforward(warmup_sessions, target_weeks)
+    spy = closes.get("SPY") or {}
+    eq_p = 100.0
+    eq_s = 100.0
+    curve_p = [eq_p]
+    curve_s = [eq_s]
+    periods: list[dict[str, Any]] = []
+    prev: list[str] | None = None
+    for i in range(len(dates) - 1):
+        d0, d1 = dates[i], dates[i + 1]
+        held = list(holdings_at.get(d0) or [])
+        pret = equal_weight_return(held, closes, d0, d1)
+        if pret is None:
+            pret = 0.0
+        s0, s1 = spy.get(d0), spy.get(d1)
+        sret = (s1 / s0 - 1.0) if s0 and s1 else 0.0
+        changed = None if prev is None else names_left(prev, held)
+        eq_p *= 1.0 + pret
+        eq_s *= 1.0 + sret
+        curve_p.append(eq_p)
+        curve_s.append(eq_s)
+        periods.append(
+            {
+                "start": d0,
+                "end": d1,
+                "symbols": held,
+                "portfolio_return": pret * 100.0,
+                "spy_return": sret * 100.0,
+                "names_changed": changed,
+            }
+        )
+        prev = held
+
+    weeks_n = len(periods)
+    start, end = dates[0], dates[-1]
+    beats = sum(1 for p in periods if p["portfolio_return"] > p["spy_return"])
+    changes = [p["names_changed"] for p in periods if p["names_changed"] is not None]
+    total_p = (curve_p[-1] / 100.0 - 1.0) * 100.0
+    total_s = (curve_s[-1] / 100.0 - 1.0) * 100.0
+    recent_n = recent if recent > 0 else 0
+    recent_rows = []
+    for p in periods[-recent_n:]:
+        recent_rows.append(
+            {
+                "date": p["end"],
+                "portfolio_return_pct": safe_round(p["portfolio_return"], 2),
+                "spy_return_pct": safe_round(p["spy_return"], 2),
+                "names_changed": p["names_changed"],
+            }
+        )
+    return {
+        "rebalance": "ultimo_cierre_semana_iso",
+        "execution": "mismo_cierre",
+        "warmup_sessions": warmup_sessions,
+        "target_weeks": target_weeks,
+        "weeks": weeks_n,
+        "window_start": start,
+        "window_end": end,
+        "base": 100,
+        "total_return_pct": safe_round(total_p, 2),
+        "spy_total_return_pct": safe_round(total_s, 2),
+        "excess_return_pct": safe_round(total_p - total_s, 2),
+        "weeks_beat_spy": beats,
+        "weeks_beat_spy_pct": safe_round(beats / weeks_n * 100.0, 1) if weeks_n else None,
+        "max_drawdown_pct": safe_round(max_drawdown_pct(curve_p), 2),
+        "spy_max_drawdown_pct": safe_round(max_drawdown_pct(curve_s), 2),
+        "avg_names_changed": safe_round(sum(changes) / len(changes), 2) if changes else None,
+        "curve": [
+            {
+                "date": d,
+                "portfolio": safe_round(curve_p[i], 2),
+                "spy": safe_round(curve_s[i], 2),
+            }
+            for i, d in enumerate(dates)
+        ],
+        "recent": recent_rows,
+        "note": walkforward_note(weeks_n, start, end, warmup_sessions),
+        "signals": [{"date": p["start"], "symbols": list(p["symbols"])} for p in periods],
+        "periods": periods,
+    }
+
+
+def top10_symbols_asof(
+    meta_by: dict[str, dict],
+    all_bars: dict[str, list[dict]],
+    session: str,
+    top_n: int = WALKFORWARD_TOP_N,
+) -> list[str]:
+    """Top N del Desk Score en `session`, solo con datos hasta ese cierre."""
+    ranked = rank_universe_asof(
+        meta_by, all_bars, session, require_exact_session=True
+    )
+    return [r["symbol"] for r in ranked[:top_n] if r.get("symbol")]
+
+
+def compute_top10_walkforward(
+    meta_by: dict[str, dict],
+    all_bars: dict[str, list[dict]],
+    *,
+    warmup_sessions: int = WALKFORWARD_WARMUP_SESSIONS,
+    weeks: int = WALKFORWARD_WEEKS,
+    top_n: int = WALKFORWARD_TOP_N,
+    recent: int = WALKFORWARD_RECENT,
+) -> dict[str, Any]:
+    """Cartera que sigue el Top 10 recomputado cada semana, contra SPY comprar y mantener."""
+    spy_dates = session_dates_from_bars(all_bars.get("SPY") or [])
+    marks = eligible_weekly_dates(spy_dates, warmup_sessions, weeks)
+    if len(marks) < 2:
+        return _empty_walkforward(warmup_sessions, weeks)
+    closes = close_by_session(all_bars)
+    holdings: dict[str, list[str]] = {}
+    # El último cierre solo marca el valor: no hace falta rankearlo.
+    for d in marks[:-1]:
+        holdings[d] = top10_symbols_asof(meta_by, all_bars, d, top_n=top_n)
+    return walkforward_from_schedule(
+        marks,
+        holdings,
+        closes,
+        warmup_sessions=warmup_sessions,
+        target_weeks=weeks,
+        recent=recent,
+    )
+
+
+def walkforward_public(block: dict | None) -> dict[str, Any]:
+    """Payload de datos.json: sin el detalle interno de cada libro."""
+    if not block:
+        return _empty_walkforward(WALKFORWARD_WARMUP_SESSIONS, WALKFORWARD_WEEKS)
+    return {k: v for k, v in block.items() if k not in ("signals", "periods")}
+
+
 def main() -> None:
     alpaca_headers()  # falla temprano y claro si faltan keys (sin imprimirlas)
     if not load_finnhub_key():
@@ -1307,25 +1632,40 @@ def main() -> None:
     meta_by = {u["symbol"]: u for u in universe}
 
     end_dt = datetime.now(timezone.utc).date()
-    start_dt = end_dt - timedelta(days=LOOKBACK_CALENDAR_DAYS)
+    # El ranking, la ficha y «Entró» siguen mirando la ventana corta.
+    ranking_floor = (end_dt - timedelta(days=LOOKBACK_CALENDAR_DAYS)).isoformat()
+    fetch_days = max(LOOKBACK_CALENDAR_DAYS, WALKFORWARD_LOOKBACK_CALENDAR_DAYS)
+    start_dt = end_dt - timedelta(days=fetch_days)
     start_s = start_dt.isoformat() + "T00:00:00Z"
     end_s = end_dt.isoformat() + "T23:59:59Z"
 
-    print(f"Desk Dashboard build — {len(symbols)} símbolos, {start_s[:10]} → {end_s[:10]}")
+    print(
+        f"Desk Dashboard build — {len(symbols)} símbolos, {start_s[:10]} → {end_s[:10]} "
+        f"(ranking desde {ranking_floor})"
+    )
 
+    full_bars: dict[str, list[dict]] = {}
     all_bars: dict[str, list[dict]] = {}
+
+    def _keep(sym: str, bars: list[dict], retry: bool = False) -> bool:
+        sliced = ranking_window_bars(bars, ranking_floor)
+        tag = " (retry)" if retry else ""
+        if len(sliced) < 60:
+            if not retry:
+                failures.append(f"{sym}: insuficientes barras ({len(sliced)})")
+            print(f"  SKIP {sym}{tag}: {len(sliced)} bars en ventana de ranking")
+            return False
+        full_bars[sym] = bars
+        all_bars[sym] = sliced
+        print(f"  OK   {sym}{tag}: {len(sliced)} bars ranking / {len(bars)} walk-forward")
+        return True
+
     for i in range(0, len(symbols), BATCH_SIZE):
         batch = symbols[i : i + BATCH_SIZE]
         try:
             got = fetch_bars_batch(batch, start_s, end_s)
             for s in batch:
-                bars = got.get(s) or []
-                if len(bars) < 60:
-                    failures.append(f"{s}: insuficientes barras ({len(bars)})")
-                    print(f"  SKIP {s}: {len(bars)} bars")
-                else:
-                    all_bars[s] = bars
-                    print(f"  OK   {s}: {len(bars)} bars")
+                _keep(s, got.get(s) or [])
         except Exception as e:
             for s in batch:
                 failures.append(f"{s}: fetch error {type(e).__name__}: {e}")
@@ -1337,13 +1677,8 @@ def main() -> None:
                 try:
                     time.sleep(0.4)
                     got = fetch_bars_batch([s], start_s, end_s)
-                    bars = got.get(s) or []
-                    if len(bars) >= 60:
-                        all_bars[s] = bars
+                    if _keep(s, got.get(s) or [], retry=True):
                         failures = [f for f in failures if not f.startswith(f"{s}:")]
-                        print(f"  OK   {s} (retry): {len(bars)} bars")
-                    else:
-                        print(f"  SKIP {s} (retry): {len(bars)} bars")
                 except Exception as e2:
                     print(f"  FAIL {s}: {e2}")
         time.sleep(SLEEP_BETWEEN_BATCHES)
@@ -1440,6 +1775,11 @@ def main() -> None:
         meta_by, all_bars, ENTRY_LOOKBACK_SESSIONS, today_rows=rows
     )
     attach_entro(rows, top10_return, top10_entry.get("by_symbol") or {})
+    t_wf = time.perf_counter()
+    # Historia larga (full_bars). El ranking de arriba ya quedó calculado con all_bars recortado.
+    top10_walkforward_full = compute_top10_walkforward(meta_by, full_bars)
+    top10_walkforward = walkforward_public(top10_walkforward_full)
+    print(f"  walk-forward: {time.perf_counter() - t_wf:.2f}s")
     if top10_entry.get("by_symbol"):
         bits = [
             f"{sym} {info.get('label')}"
@@ -1449,6 +1789,18 @@ def main() -> None:
             f"Entró Top 10 (ventana {top10_entry.get('sessions_evaluated')} sesiones, "
             f"{top10_entry.get('window_start')} → {top10_entry.get('window_end')}): "
             + " · ".join(bits)
+        )
+    if top10_walkforward.get("weeks"):
+        notes.append(
+            f"Walk-forward Top 10 ({top10_walkforward.get('weeks')} semanas, "
+            f"{top10_walkforward.get('window_start')} → {top10_walkforward.get('window_end')}): "
+            f"cartera {top10_walkforward.get('total_return_pct')}% · "
+            f"SPY {top10_walkforward.get('spy_total_return_pct')}% · "
+            f"exceso {top10_walkforward.get('excess_return_pct')}%"
+        )
+    else:
+        notes.append(
+            "Walk-forward Top 10: sin semanas suficientes tras el calentamiento de la EMA200."
         )
 
     payload = {
@@ -1470,6 +1822,7 @@ def main() -> None:
         "regime_stub": regime_obj,  # alias back-compat
         "top10_return": top10_return,
         "top10_entry": top10_entry,
+        "top10_walkforward": top10_walkforward,
         "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
@@ -1487,6 +1840,7 @@ def main() -> None:
             "regime": rule,
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
             "top10_entry": TOP10_ENTRY_NOTE,
+            "top10_walkforward": TOP10_WALKFORWARD_FORMULA,
             "pillar_points": "Puntos del pilar = score 0–100 × peso (Tendencia 0.25, Fuerza RS 0.30, Contracción 0.30, Setup 0.15), antes de las penalizaciones suaves del Desk Score",
             "range_52w": f"Mínimo y máximo de high/low en las últimas {RANGE_52W_SESSIONS} sesiones (o las disponibles). position_pct = (close − mín) / (máx − mín) × 100",
             "change_pct": "(close / close anterior − 1) × 100",
@@ -1523,6 +1877,16 @@ def main() -> None:
     )
     for sym, info in (top10_entry.get("by_symbol") or {}).items():
         print(f"  {sym:6} {info.get('label')}")
+    wf = payload.get("top10_walkforward") or {}
+    print(
+        f"Walk-forward Top 10 ({wf.get('weeks')} semanas, "
+        f"{wf.get('window_start')} → {wf.get('window_end')}): "
+        f"cartera={wf.get('total_return_pct')}% SPY={wf.get('spy_total_return_pct')}% "
+        f"exceso={wf.get('excess_return_pct')}% "
+        f"semanas>SPY={wf.get('weeks_beat_spy')}/{wf.get('weeks')} "
+        f"DD={wf.get('max_drawdown_pct')}% / SPY {wf.get('spy_max_drawdown_pct')}% "
+        f"rotación={wf.get('avg_names_changed')}"
+    )
     if failures:
         print(f"Fallos/omitidos ({len(failures)}):")
         for f in failures[:20]:

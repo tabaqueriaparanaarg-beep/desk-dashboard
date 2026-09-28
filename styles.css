@@ -819,6 +819,124 @@ body {
   }
 }
 
+/* ── Simulación walk-forward Top 10 vs SPY ── */
+
+.dd-wf-caption {
+  margin: 0 0 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--dd-muted);
+}
+
+.dd-wf-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+
+.dd-wf-kpis .dd-top10-card {
+  padding: 0.9rem 1rem;
+}
+
+.dd-wf-kpis .dd-kpi-value {
+  font-size: 1.35rem;
+}
+
+.dd-wf-kpis .dd-kpi-sub {
+  margin-top: 0.2rem;
+}
+
+.dd-wf-chart-wrap {
+  margin: 0.25rem 0 1.15rem;
+  padding: 0.85rem 0.9rem 0.7rem;
+  background: var(--dd-bg-elevated);
+  border: 1px solid var(--dd-border);
+  border-radius: 16px;
+}
+
+.dd-wf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--dd-muted);
+}
+
+.dd-wf-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dd-wf-swatch {
+  width: 1.15rem;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.dd-wf-swatch-port {
+  background: #ff6b35;
+}
+
+.dd-wf-swatch-spy {
+  background: #7eb6ff;
+}
+
+.dd-wf-chart {
+  width: 100%;
+  min-height: 180px;
+}
+
+.dd-wf-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.dd-wf-chart text {
+  fill: var(--dd-muted);
+  font-family: var(--dd-font);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dd-wf-table {
+  min-width: 0;
+  width: 100%;
+}
+
+.dd-wf-table th,
+.dd-wf-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dd-wf-table .dd-empty {
+  text-align: left;
+  color: var(--dd-muted);
+  padding: 0.85rem 0.75rem;
+  white-space: normal;
+}
+
+@media (max-width: 900px) {
+  .dd-wf-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dd-wf-kpis .dd-kpi-value {
+    font-size: 1.2rem;
+  }
+
+  .dd-wf-caption {
+    font-size: 0.82rem;
+  }
+}
+
 /* ── Notes ── */
 
 .dd-tip {
