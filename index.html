@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=20" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -111,6 +111,78 @@
       </div>
     </section>
 
+    <section class="dd-wf dd-panel" data-section="top10-walkforward" aria-label="Simulación del Top 10 contra SPY">
+      <div class="dd-top10-head">
+        <h2 class="dd-section-title">Simulación Top 10 vs SPY</h2>
+        <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward semanal · base 100</p>
+      </div>
+      <p class="dd-wf-caption" id="wf-caption">
+        Simulación semanal: en el último cierre de cada semana se recalcula el Desk Score
+        solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada
+        nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a
+        ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia
+        atrás. Sin comisiones. Es una simulación, no una recomendación. Los resultados pasados
+        no garantizan resultados futuros.
+      </p>
+      <div class="dd-wf-kpis" id="wf-kpis" aria-label="Resultados de la simulación">
+        <article class="dd-top10-card" data-kpi="wf_port">
+          <h3 class="dd-kpi-label">Cartera</h3>
+          <p class="dd-kpi-value" id="wf-port">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_spy">
+          <h3 class="dd-kpi-label">SPY</h3>
+          <p class="dd-kpi-value" id="wf-spy">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_excess">
+          <h3 class="dd-kpi-label">Exceso</h3>
+          <p class="dd-kpi-value" id="wf-excess">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_beat">
+          <h3 class="dd-kpi-label">Semanas &gt; SPY</h3>
+          <p class="dd-kpi-value" id="wf-beat">—</p>
+          <p class="dd-kpi-sub" id="wf-beat-sub"></p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_dd">
+          <h3 class="dd-kpi-label">Caída máx.</h3>
+          <p class="dd-kpi-value" id="wf-dd">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_dd_spy">
+          <h3 class="dd-kpi-label">Caída máx. SPY</h3>
+          <p class="dd-kpi-value" id="wf-dd-spy">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_weeks">
+          <h3 class="dd-kpi-label">Semanas</h3>
+          <p class="dd-kpi-value" id="wf-weeks">—</p>
+        </article>
+        <article class="dd-top10-card" data-kpi="wf_turn">
+          <h3 class="dd-kpi-label">Rotación</h3>
+          <p class="dd-kpi-value" id="wf-turn">—</p>
+          <p class="dd-kpi-sub" id="wf-turn-sub"></p>
+        </article>
+      </div>
+      <div class="dd-wf-chart-wrap">
+        <p class="dd-wf-legend">
+          <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-port" aria-hidden="true"></span>Cartera Top 10</span>
+          <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-spy" aria-hidden="true"></span>SPY</span>
+        </p>
+        <div id="wf-chart" class="dd-wf-chart" role="img" aria-label="Curva de la cartera contra SPY, base 100"></div>
+      </div>
+      <div class="dd-table-wrap dd-wf-table-wrap">
+        <table class="dd-table dd-wf-table" id="wf-table">
+          <caption class="dd-sr-only">Últimas semanas de la simulación</caption>
+          <thead>
+            <tr>
+              <th scope="col">Cierre</th>
+              <th scope="col">Cartera</th>
+              <th scope="col">SPY</th>
+              <th scope="col" title="Nombres que salieron del Top 10 al empezar esa semana">Cambios</th>
+            </tr>
+          </thead>
+          <tbody id="wf-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="dd-earnings dd-panel" data-section="earnings" aria-label="Calendario de resultados">
       <h2 class="dd-section-title">Earnings (semana actual)</h2>
       <div id="earnings-strip" class="dd-earnings-strip" data-role="earnings-strip">
@@ -181,6 +253,6 @@
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=13" defer></script>
+  <script src="app.js?v=14" defer></script>
 </body>
 </html>

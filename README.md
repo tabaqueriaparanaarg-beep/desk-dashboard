@@ -52,7 +52,7 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
 2. Baja barras diarias (~250 sesiones) desde Alpaca Data API (feed IEX, batches, reintentos 429).
 3. Calcula indicadores y **Desk Score 0–100**.
 4. KPIs de universo + earnings de la semana (Finnhub, falla soft).
-5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY), la columna **Entró** (racha en el Top 10, últimas 30 sesiones) y escribe todo en `datos.json`.
+5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY), la columna **Entró** (racha en el Top 10, últimas 30 sesiones), la **simulación walk-forward** del Top 10 contra SPY y escribe todo en `datos.json`.
 6. Baja logos faltantes (Finnhub `profile2`, falla soft) y agrega `logo` por fila + mapa `logos`.
 
 Símbolos sin barras suficientes se omiten y quedan en `failures`.
@@ -63,6 +63,7 @@ Símbolos sin barras suficientes se omiten y quedan en `failures`.
 |--------|-------------------|
 | **Desk Score** | `0.25·Tendencia + 0.30·Fuerza_RS + 0.30·Contracción + 0.15·Setup` (pilares 0–100) |
 | **Entró (Top 10)** | Fecha en que el ticker entró al Top 10 en la racha actual, más las ruedas de esa racha |
+| **Walk-forward Top 10** | Cada último cierre semanal, Top 10 equiponderado con datos solo hasta ese cierre, vs SPY comprar y mantener |
 | **Tendencia (~25%)** | Precio vs SMA50 / EMA200, pendientes ~5d, estructura SMA50&gt;EMA200 |
 | **Fuerza RS (~30%)** | Percentil del *relative performance* vs SPY (~126d / 6m; fallback 63d) + bonus por aceleración 1m |
 | **RS Score** | Percentil 0–100 de `(retorno_ticker − retorno_SPY)` en el universo scored |
@@ -123,6 +124,21 @@ Si la racha cubre las 30 sesiones, no se vio el inicio: `antes del DD/MM · >30 
 **Aproximación:** el Desk Score no usa earnings ni ningún otro dato de Finnhub (sólo precio, volumen y SPY). La reconstrucción histórica es la misma fórmula que el ranking del día; no hay pilar “congelado”. Si más adelante un pilar dependiera de un dato puntual no histórico, habría que dejarlo fijo en la ventana.
 
 El resultado queda en `ranking[].entro`, `top10_return.rows[].entro` y el bloque `top10_entry` (`label`, `date`, `sessions`, `censored`, `lookback_sessions`). Fuera del Top 10 actual, `entro` es `null`.
+
+### Simulación Top 10 vs SPY (walk-forward)
+
+Panel debajo de «Retorno Top 10». No es lo mismo: aquel toma el Top 10 **de hoy** y mide cómo les fue en las últimas 10 ruedas (sesgo de supervivencia y de look-ahead). Esta simulación arma el Top 10 **en cada fecha**, solo con lo que ya había pasado.
+
+Reglas (`datos.json` → `top10_walkforward` / `formulas.top10_walkforward`):
+
+- **Rebalanceo:** último cierre de cada semana ISO (el viernes, o el jueves si el viernes no hubo rueda). Misma idea de semana que el RS semanal. Se opera a ese mismo cierre: la señal y el precio de compra/venta son el cierre. No hay demora de un día ni comisiones.
+- **Señal:** Desk Score de todo el universo truncando las barras en ese cierre (`rank_universe_asof`, la misma fórmula que el ranking). Un símbolo sin barra ese día no entra. El Top 10 del último cierre de la ventana **no** se usa para el retorno de esa semana: ese cierre solo marca el valor del libro armado la semana anterior.
+- **Cartera:** los 10 nombres con el mismo peso, hasta el cierre semanal siguiente. Los que salen se venden y entran los nuevos. Si a un nombre le falta el cierre de salida, esa semana el peso se reparte entre los que sí tienen ambos cierres.
+- **SPY:** comprar y mantener entre el primer y el último cierre de la ventana.
+- **Historia:** el ranking publicado sigue usando ~400 días calendario (el Desk Score del día no cambia). Para la simulación se piden ~560 días, se descartan las primeras 200 ruedas (recién ahí la EMA200 existe) y se miden como máximo las **26** semanas más recientes. Si el historial no alcanza, el panel dice cuántas semanas hubo.
+- **Métricas:** retorno total de la cartera y de SPY, exceso (resta simple), porcentaje de semanas en que la cartera le gana a SPY (un empate no cuenta), caída máxima de las dos curvas (base 100) y rotación media (nombres que salen del Top 10 en cada rebalanceo, sin contar la compra inicial).
+
+Es una simulación, no una recomendación. Los resultados pasados no garantizan resultados futuros.
 
 ### Ficha del ticker
 

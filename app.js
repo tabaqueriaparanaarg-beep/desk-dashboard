@@ -18,6 +18,7 @@
     fichaSym: null,
     listScroll: 0,
     baseTitle: "",
+    walkforward: null,
   };
 
   var PILLAR_SPEC = [
@@ -294,6 +295,191 @@
     if (section) section.setAttribute("data-ready", "1");
   }
 
+  function fmtSignedPct2(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Math.round(Number(n) * 100) / 100;
+    var body = Math.abs(v).toFixed(2);
+    if (v > 0) return "+" + body + "%";
+    if (v < 0) return "-" + body + "%";
+    return "0.00%";
+  }
+
+  function fmtIso(iso) {
+    if (!iso || String(iso).length < 10) return iso || "—";
+    return String(iso).slice(8, 10) + "/" + String(iso).slice(5, 7) + "/" + String(iso).slice(0, 4);
+  }
+
+  function setSignedValue(id, n) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmtSignedPct2(n);
+    el.className = "dd-kpi-value " + distClass(n);
+  }
+
+  function drawWalkforwardChart(block) {
+    var host = document.getElementById("wf-chart");
+    if (!host) return;
+    var curve = (block && block.curve) || [];
+    if (curve.length < 2) {
+      host.innerHTML = "";
+      host.setAttribute("aria-label", "Sin curva de la simulación");
+      return;
+    }
+    var width = Math.round(host.clientWidth || (host.parentNode && host.parentNode.clientWidth) || 0);
+    if (width < 40) {
+      host._wfRetry = (host._wfRetry || 0) + 1;
+      if (host._wfRetry < 6) {
+        window.requestAnimationFrame(function () { drawWalkforwardChart(block); });
+      }
+      return;
+    }
+    host._wfRetry = 0;
+    var height = width < 560 ? 200 : 236;
+    var padL = 46;
+    var padR = 12;
+    var padT = 14;
+    var padB = 26;
+    var vals = [];
+    curve.forEach(function (p) {
+      vals.push(Number(p.portfolio), Number(p.spy));
+    });
+    var minV = Math.min.apply(null, vals);
+    var maxV = Math.max.apply(null, vals);
+    if (minV === maxV) {
+      minV -= 1;
+      maxV += 1;
+    }
+    var span = maxV - minV;
+    minV -= span * 0.08;
+    maxV += span * 0.08;
+    function xAt(i) {
+      if (curve.length === 1) return padL;
+      return padL + (i / (curve.length - 1)) * (width - padL - padR);
+    }
+    function yAt(v) {
+      return padT + (1 - (v - minV) / (maxV - minV)) * (height - padT - padB);
+    }
+    function poly(key) {
+      return curve.map(function (p, i) {
+        return xAt(i).toFixed(1) + "," + yAt(Number(p[key])).toFixed(1);
+      }).join(" ");
+    }
+    var ticks = [maxV, (maxV + minV) / 2, minV];
+    var grid = ticks.map(function (v) {
+      var y = yAt(v).toFixed(1);
+      var label = Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
+      return (
+        '<line x1="' + padL + '" y1="' + y + '" x2="' + (width - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>' +
+        '<text x="' + (padL - 8) + '" y="' + y + '" text-anchor="end" dominant-baseline="middle">' + escapeHtml(label) + "</text>"
+      );
+    }).join("");
+    var baseLine = "";
+    if (100 >= minV && 100 <= maxV) {
+      var yb = yAt(100).toFixed(1);
+      baseLine =
+        '<line x1="' + padL + '" y1="' + yb + '" x2="' + (width - padR) + '" y2="' + yb +
+        '" stroke="rgba(255,255,255,0.28)" stroke-width="1" stroke-dasharray="4 4"></line>';
+    }
+    var areaPts =
+      xAt(0).toFixed(1) + "," + yAt(Number(curve[0].portfolio)).toFixed(1) + " " +
+      poly("portfolio") + " " +
+      xAt(curve.length - 1).toFixed(1) + "," + (height - padB).toFixed(1) + " " +
+      xAt(0).toFixed(1) + "," + (height - padB).toFixed(1);
+    var last = curve[curve.length - 1];
+    var first = curve[0];
+    var xLabels =
+      '<text x="' + xAt(0).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="start">' + escapeHtml(fmtIso(first.date)) + "</text>" +
+      '<text x="' + xAt(curve.length - 1).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="end">' + escapeHtml(fmtIso(last.date)) + "</text>";
+    var dot =
+      '<circle cx="' + xAt(curve.length - 1).toFixed(1) + '" cy="' + yAt(Number(last.portfolio)).toFixed(1) + '" r="3.2" fill="#FF6B35"></circle>' +
+      '<circle cx="' + xAt(curve.length - 1).toFixed(1) + '" cy="' + yAt(Number(last.spy)).toFixed(1) + '" r="3" fill="#7EB6FF"></circle>';
+    host.innerHTML =
+      '<svg viewBox="0 0 ' + width + " " + height + '" width="' + width + '" height="' + height + '" role="presentation">' +
+      grid + baseLine +
+      '<polygon points="' + areaPts + '" fill="rgba(255,107,53,0.14)" stroke="none"></polygon>' +
+      '<polyline fill="none" stroke="#7EB6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + poly("spy") + '"></polyline>' +
+      '<polyline fill="none" stroke="#FF6B35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="' + poly("portfolio") + '"></polyline>' +
+      dot + xLabels +
+      "</svg>";
+    var portLbl = fmtSignedPct2(block.total_return_pct);
+    var spyLbl = fmtSignedPct2(block.spy_total_return_pct);
+    host.setAttribute(
+      "aria-label",
+      "Curva base 100. Cartera " + portLbl + ", SPY " + spyLbl +
+      ", del " + fmtIso(first.date) + " al " + fmtIso(last.date) + "."
+    );
+  }
+
+  function renderWalkforward(block) {
+    state.walkforward = block || null;
+    var sub = document.getElementById("wf-subtitle");
+    var caption = document.getElementById("wf-caption");
+    var body = document.getElementById("wf-body");
+    if (caption && block && block.note) caption.textContent = block.note;
+
+    function clearKpis() {
+      ["wf-port", "wf-spy", "wf-excess", "wf-dd", "wf-dd-spy"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = "—";
+        el.className = "dd-kpi-value";
+      });
+      setText("wf-beat", "—");
+      setText("wf-beat-sub", "");
+      setText("wf-weeks", "—");
+      setText("wf-turn", "—");
+      setText("wf-turn-sub", "");
+    }
+
+    if (!block || !block.weeks) {
+      clearKpis();
+      if (sub) sub.textContent = "Walk-forward semanal · base 100";
+      drawWalkforwardChart(null);
+      if (body) {
+        body.innerHTML = '<tr><td colspan="4" class="dd-empty">Sin simulación todavía. Se calcula al correr build.py.</td></tr>';
+      }
+      return;
+    }
+
+    if (sub && block.window_start && block.window_end) {
+      sub.textContent = "Del " + fmtIso(block.window_start) + " al " + fmtIso(block.window_end) + " · base 100";
+    }
+    setSignedValue("wf-port", block.total_return_pct);
+    setSignedValue("wf-spy", block.spy_total_return_pct);
+    setSignedValue("wf-excess", block.excess_return_pct);
+    setSignedValue("wf-dd", block.max_drawdown_pct);
+    setSignedValue("wf-dd-spy", block.spy_max_drawdown_pct);
+    setText("wf-beat", block.weeks_beat_spy + "/" + block.weeks);
+    setText("wf-beat-sub", block.weeks_beat_spy_pct != null ? fmtPct(block.weeks_beat_spy_pct) : "");
+    setText("wf-weeks", String(block.weeks));
+    if (block.avg_names_changed == null) {
+      setText("wf-turn", "—");
+      setText("wf-turn-sub", "");
+    } else {
+      setText("wf-turn", fmtNum(block.avg_names_changed, 2));
+      setText("wf-turn-sub", "nombres que salen / semana");
+    }
+    drawWalkforwardChart(block);
+
+    if (!body) return;
+    body.innerHTML = "";
+    var rows = block.recent || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="4" class="dd-empty">Sin semanas para mostrar.</td></tr>';
+      return;
+    }
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      var changed = r.names_changed == null ? "—" : String(r.names_changed);
+      tr.innerHTML =
+        '<td>' + escapeHtml(fmtIso(r.date)) + "</td>" +
+        '<td class="' + distClass(r.portfolio_return_pct) + '">' + escapeHtml(fmtSignedPct2(r.portfolio_return_pct)) + "</td>" +
+        '<td class="' + distClass(r.spy_return_pct) + '">' + escapeHtml(fmtSignedPct2(r.spy_return_pct)) + "</td>" +
+        "<td>" + escapeHtml(changed) + "</td>";
+      body.appendChild(tr);
+    });
+  }
+
   function renderEarnings(list) {
     var strip = document.getElementById("earnings-strip");
     if (!strip) return;
@@ -482,6 +668,7 @@
     state.loadError = "";
     renderKpis(data);
     renderTop10(data.top10_return);
+    renderWalkforward(data.top10_walkforward);
     renderEarnings(data.earnings);
     applyFilters();
     renderNotes(data.notes);
@@ -1108,6 +1295,15 @@
       });
     });
   }
+
+  var wfResizeTimer = null;
+  window.addEventListener("resize", function () {
+    if (!state.walkforward || !state.walkforward.weeks) return;
+    window.clearTimeout(wfResizeTimer);
+    wfResizeTimer = window.setTimeout(function () {
+      drawWalkforwardChart(state.walkforward);
+    }, 120);
+  });
 
   registerServiceWorker();
   bindFilters();
