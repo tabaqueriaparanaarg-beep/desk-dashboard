@@ -1620,6 +1620,207 @@ def walkforward_public(block: dict | None) -> dict[str, Any]:
     return {k: v for k, v in block.items() if k not in ("signals", "periods")}
 
 
+# Vista por sectores: sólo acciones. Los ETFs (benchmark y de sector) son canastas.
+SECTOR_RS_WEEKS_AGO = 4
+SECTOR_LOW_SAMPLE_MAX = 2
+SECTOR_RS_FLAT_BAND = 1.0
+SECTOR_LABELS_ES = {
+    "Technology": "Tecnología",
+    "Health Care": "Salud",
+    "Consumer Staples": "Consumo básico",
+    "Consumer Discretionary": "Consumo discrecional",
+    "Communication": "Comunicación",
+    "Financials": "Finanzas",
+    "Industrials": "Industria",
+    "Energy": "Energía",
+    "Materials": "Materiales",
+    "Utilities": "Servicios",
+}
+SECTOR_CAPTION = (
+    "Acá se ve en qué sectores está la fuerza del universo. "
+    "Cada tarjeta promedia el Desk Score, el RS y el cambio del día, "
+    "y cuenta cuántos nombres están sobre la EMA200 y cuántos entran al Top 10 de hoy. "
+    "La flecha compara el RS medio de ahora con el de hace 4 semanas. "
+    "Es una lectura del tablero, no una recomendación."
+)
+SECTOR_EXCLUSION_SUMMARY = (
+    "No entran los ETFs: ni los benchmarks (SPY, QQQ, IWM, DIA) ni los de sector "
+    "(XLK, XLF, XLE, XLV, XLI, XLP, XLY y cualquier otro). Son canastas, no acciones, "
+    "y mezclarlos cambiaría el conteo y el promedio."
+)
+SECTOR_EXCLUSION_RULE = (
+    "Quedan fuera las filas con kind etf (benchmarks de mercado con sector Benchmark "
+    "y ETFs de sector que sí traen un sector, como XLK o XLV) y las filas sin sector. "
+    "El Top 10 de cada tarjeta cuenta sólo nombres de ese conjunto con rank 1–10."
+)
+SECTOR_FORMULA = (
+    "Promedios por sector de las acciones del ranking (sin ETFs ni filas sin sector), "
+    "ordenados por Desk Score medio. pct_above_ema200 = nombres sobre EMA200 / count. "
+    "top10_count = cuántos de esos nombres tienen rank ≤ 10 hoy. "
+    "best = mayor Desk Score (empate: símbolo alfabético). "
+    f"rs_delta = RS medio de ahora − RS medio de hace {SECTOR_RS_WEEKS_AGO} semanas "
+    "(rs_weekly; sólo nombres con los dos puntos). "
+    f"rs_trend: up/down si |delta| ≥ {SECTOR_RS_FLAT_BAND:g}, si no flat. "
+    f"low_sample si count ≤ {SECTOR_LOW_SAMPLE_MAX}."
+)
+
+
+def _as_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(number) or math.isinf(number):
+        return None
+    return number
+
+
+def _mean(values: list[float | None], ndigits: int) -> float | None:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    return safe_round(sum(nums) / len(nums), ndigits)
+
+
+def sector_key(row: dict) -> str:
+    return str(row.get("sector") or "").strip()
+
+
+def sector_row_included(row: dict) -> bool:
+    """Acción con sector. ETFs y filas vacías / Benchmark quedan afuera."""
+    if str(row.get("kind") or "").strip().lower() == "etf":
+        return False
+    sector = sector_key(row)
+    if not sector or sector == "Benchmark":
+        return False
+    return True
+
+
+def _in_top10(row: dict) -> bool:
+    try:
+        rank = int(row.get("rank"))
+    except (TypeError, ValueError):
+        return False
+    return 1 <= rank <= 10
+
+
+def _rs_trend_pair(row: dict, weeks_ago: int) -> tuple[float | None, float | None]:
+    """(RS ahora, RS de hace `weeks_ago` cierres semanales), o (None, None)."""
+    seq = row.get("rs_weekly")
+    if not isinstance(seq, list) or weeks_ago < 1 or len(seq) <= weeks_ago:
+        return None, None
+    now = _as_float(seq[-1])
+    prev = _as_float(seq[-1 - weeks_ago])
+    if now is None or prev is None:
+        return None, None
+    return now, prev
+
+
+def _rs_trend_label(delta: float | None, band: float = SECTOR_RS_FLAT_BAND) -> str | None:
+    if delta is None:
+        return None
+    if abs(delta) < band:
+        return "flat"
+    return "up" if delta > 0 else "down"
+
+
+def compute_sector_view(
+    rows: list[dict] | None,
+    weeks_ago: int = SECTOR_RS_WEEKS_AGO,
+    low_sample_max: int = SECTOR_LOW_SAMPLE_MAX,
+) -> dict[str, Any]:
+    """Agrega el ranking por sector. Payload chico para datos.json; no toca las filas."""
+    grouped: dict[str, list[dict]] = {}
+    excluded: list[str] = []
+    included = 0
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        if not sector_row_included(row):
+            sym = str(row.get("symbol") or "").strip()
+            if sym:
+                excluded.append(sym)
+            continue
+        included += 1
+        grouped.setdefault(sector_key(row), []).append(row)
+
+    out_rows: list[dict] = []
+    for sector, members in grouped.items():
+        desks = [_as_float(r.get("desk_score")) for r in members]
+        rss = [_as_float(r.get("rs_score")) for r in members]
+        changes = [_as_float(r.get("change_pct")) for r in members]
+        above = sum(1 for r in members if r.get("above_ema200"))
+        top10 = sum(1 for r in members if _in_top10(r))
+        nows: list[float | None] = []
+        prevs: list[float | None] = []
+        for r in members:
+            now, prev = _rs_trend_pair(r, weeks_ago)
+            if now is None:
+                continue
+            nows.append(now)
+            prevs.append(prev)
+        rs_now = _mean(nows, 1)
+        rs_prev = _mean(prevs, 1)
+        rs_delta = None
+        if rs_now is not None and rs_prev is not None:
+            rs_delta = safe_round(rs_now - rs_prev, 1)
+        best = min(
+            members,
+            key=lambda r: (
+                -(_as_float(r.get("desk_score")) if _as_float(r.get("desk_score")) is not None else float("-inf")),
+                str(r.get("symbol") or ""),
+            ),
+        )
+        count = len(members)
+        out_rows.append(
+            {
+                "sector": sector,
+                "label": SECTOR_LABELS_ES.get(sector, sector),
+                "count": count,
+                "avg_desk_score": _mean(desks, 1),
+                "avg_rs_score": _mean(rss, 1),
+                "above_ema200": above,
+                "pct_above_ema200": safe_round(above / count * 100.0, 1) if count else None,
+                "top10_count": top10,
+                "best": {
+                    "symbol": best.get("symbol"),
+                    "name": best.get("name"),
+                    "desk_score": _as_float(best.get("desk_score")),
+                },
+                "avg_change_pct": _mean(changes, 2),
+                "rs_now": rs_now,
+                "rs_weeks_ago": rs_prev,
+                "rs_delta": rs_delta,
+                "rs_trend": _rs_trend_label(rs_delta),
+                "low_sample": count <= low_sample_max,
+            }
+        )
+
+    out_rows.sort(
+        key=lambda r: (
+            r["avg_desk_score"] is None,
+            -(r["avg_desk_score"] or 0),
+            r["sector"],
+        )
+    )
+    return {
+        "caption": SECTOR_CAPTION,
+        "sorted_by": "avg_desk_score",
+        "rs_trend_weeks": weeks_ago,
+        "rs_flat_band": SECTOR_RS_FLAT_BAND,
+        "low_sample_max": low_sample_max,
+        "included": included,
+        "excluded": {
+            "rule": SECTOR_EXCLUSION_RULE,
+            "summary": SECTOR_EXCLUSION_SUMMARY,
+            "symbols": sorted(set(excluded)),
+        },
+        "rows": out_rows,
+    }
+
+
 def main() -> None:
     alpaca_headers()  # falla temprano y claro si faltan keys (sin imprimirlas)
     if not load_finnhub_key():
@@ -1803,6 +2004,12 @@ def main() -> None:
             "Walk-forward Top 10: sin semanas suficientes tras el calentamiento de la EMA200."
         )
 
+    sectors = compute_sector_view(rows)
+    notes.append(
+        f"Sectores: {len(sectors.get('rows') or [])} grupos, {sectors.get('included')} nombres "
+        f"(excluidos {len((sectors.get('excluded') or {}).get('symbols') or [])} ETFs o sin sector)."
+    )
+
     payload = {
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
@@ -1823,6 +2030,7 @@ def main() -> None:
         "top10_return": top10_return,
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
+        "sectors": sectors,
         "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
@@ -1846,6 +2054,7 @@ def main() -> None:
             "change_pct": "(close / close anterior − 1) × 100",
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
             "rs_weekly": RS_WEEKLY_DEFINITION,
+            "sectors": SECTOR_FORMULA,
         },
         "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
     }
@@ -1887,6 +2096,18 @@ def main() -> None:
         f"DD={wf.get('max_drawdown_pct')}% / SPY {wf.get('spy_max_drawdown_pct')}% "
         f"rotación={wf.get('avg_names_changed')}"
     )
+    sec = payload.get("sectors") or {}
+    print(
+        f"Sectores: {len(sec.get('rows') or [])} grupos, {sec.get('included')} nombres, "
+        f"excluidos {len((sec.get('excluded') or {}).get('symbols') or [])}"
+    )
+    for srow in sec.get("rows") or []:
+        best = (srow.get("best") or {}).get("symbol")
+        print(
+            f"  {srow.get('label')}: n={srow.get('count')} "
+            f"desk={srow.get('avg_desk_score')} RS={srow.get('avg_rs_score')} "
+            f"tendencia={srow.get('rs_trend')} mejor={best}"
+        )
     if failures:
         print(f"Fallos/omitidos ({len(failures)}):")
         for f in failures[:20]:

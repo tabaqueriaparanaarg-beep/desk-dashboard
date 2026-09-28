@@ -52,7 +52,7 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
 2. Baja barras diarias (~250 sesiones) desde Alpaca Data API (feed IEX, batches, reintentos 429).
 3. Calcula indicadores y **Desk Score 0–100**.
 4. KPIs de universo + earnings de la semana (Finnhub, falla soft).
-5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY), la columna **Entró** (racha en el Top 10, últimas 30 sesiones), la **simulación walk-forward** del Top 10 contra SPY y escribe todo en `datos.json`.
+5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY), la columna **Entró** (racha en el Top 10, últimas 30 sesiones), la **simulación walk-forward** del Top 10 contra SPY, la **vista por sectores** y escribe todo en `datos.json`.
 6. Baja logos faltantes (Finnhub `profile2`, falla soft) y agrega `logo` por fila + mapa `logos`.
 
 Símbolos sin barras suficientes se omiten y quedan en `failures`.
@@ -140,6 +140,16 @@ Reglas (`datos.json` → `top10_walkforward` / `formulas.top10_walkforward`):
 
 Es una simulación, no una recomendación. Los resultados pasados no garantizan resultados futuros.
 
+### Vista por sectores
+
+Panel arriba del ranking (`datos.json` → `sectors`). Agrupa las **acciones** del universo y las ordena por Desk Score medio. Cada tarjeta muestra cantidad de nombres, Desk Score medio, RS Score medio, % sobre EMA200, cuántos están en el Top 10 de hoy, el mejor ticker (enlace a `#/t/TICKER`) y el cambio diario medio. La flecha compara el RS medio de ahora con el de hace 4 semanas (`rs_weekly`): sube, baja, o queda plana si el salto es menor a 1 punto. Con 1 o 2 nombres aparece **Muestra chica**.
+
+**Qué queda afuera.** Los ETFs (`kind: etf`), aunque tengan sector: benchmarks (SPY, QQQ, IWM, DIA, sector Benchmark) y ETFs de sector (XLK, XLF, XLE, XLV, XLI, XLP, XLY). Son canastas, no acciones; meterlos inflaría el conteo y mezclaría el fondo con los nombres. También se excluye una fila sin sector. El detalle viaja en `sectors.excluded` y en `formulas.sectors`.
+
+Tocar una tarjeta (o el chip de sector en el ranking) filtra el ranking a esas acciones, sin los ETFs de ese sector. Volver a tocarla saca el filtro.
+
+Es una lectura del tablero, no una recomendación.
+
 ### Ficha del ticker
 
 Al tocar una fila del ranking o del Top 10 se abre `#/t/TICKER` (el botón atrás y el retroceso del navegador vuelven al ranking). La ficha usa datos que `build.py` ya calcula:
@@ -167,7 +177,7 @@ Al tocar una fila del ranking o del Top 10 se abre `#/t/TICKER` (el botón atrá
 
 ### Filtros ranking
 
-Kind (Todos / US / CEDEAR proxy / ETF), toggles Sobre EMA200 y RS > 70, búsqueda por ticker. Contador "Mostrando X de Y" (cliente).
+Kind (Todos / US / CEDEAR proxy / ETF), sector (Todos más un chip por sector de la vista), toggles Sobre EMA200 y RS > 70, búsqueda por ticker. El filtro de sector deja afuera los ETFs, igual que la vista. Contador "Mostrando X de Y" (cliente).
 
 ## Archivos
 

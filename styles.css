@@ -1750,3 +1750,227 @@ body.is-ficha .dd-footer {
     padding-top: 1.75rem;
   }
 }
+
+/* ── Vista por sectores ── */
+
+.dd-sector-caption,
+.dd-sector-note {
+  margin: 0 0 0.85rem;
+  color: var(--dd-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 68rem;
+}
+
+.dd-sector-note {
+  margin-bottom: 1.1rem;
+  font-size: 0.8rem;
+  color: var(--dd-muted-dim);
+}
+
+.dd-sector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 0.85rem;
+}
+
+.dd-sector-card {
+  --heat: 0.4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.95rem 1rem 0.85rem;
+  border-radius: 16px;
+  border: 1px solid var(--dd-border);
+  background:
+    linear-gradient(160deg, rgba(255, 107, 53, calc(var(--heat) * 0.38)) 0%, transparent 62%),
+    var(--dd-bg-elevated);
+  box-shadow: var(--dd-shadow-sm);
+  min-width: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.dd-sector-card:hover,
+.dd-sector-card:focus-within {
+  border-color: rgba(255, 107, 53, 0.45);
+}
+
+.dd-sector-card.is-active {
+  border-color: rgba(255, 107, 53, 0.75);
+  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.35), var(--dd-shadow-sm);
+}
+
+.dd-sector-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.dd-sector-select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.dd-sector-name {
+  display: block;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 1.02rem;
+}
+
+.dd-sector-count {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--dd-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dd-sector-trend {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dd-muted);
+  white-space: nowrap;
+}
+
+.dd-sector-trend.is-up {
+  color: var(--dd-ok);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.dd-sector-trend.is-down {
+  color: var(--dd-bad);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.dd-sector-trend.is-flat {
+  color: var(--dd-warn);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.dd-sector-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: -0.2rem;
+}
+
+.dd-sector-low {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--dd-warn);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+}
+
+.dd-sector-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.dd-sector-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dd-accent-gradient);
+  min-width: 0;
+}
+
+.dd-sector-bar.dd-score-low > span {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.dd-sector-bar.dd-score-mid > span {
+  background: linear-gradient(90deg, #c45a32, #ff8c42);
+}
+
+.dd-sector-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem 0.6rem;
+  margin: 0;
+}
+
+.dd-sector-metrics div:nth-child(4),
+.dd-sector-metrics div:nth-child(5) {
+  grid-column: span 1;
+}
+
+.dd-sector-metrics dt {
+  margin: 0;
+  color: var(--dd-muted-dim);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.dd-sector-metrics dd {
+  margin: 0.05rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-sector-metrics .dd-score-high {
+  color: #ffb080;
+}
+
+.dd-sector-metrics .dd-score-mid {
+  color: var(--dd-accent-end);
+}
+
+.dd-sector-metrics .dd-score-low {
+  color: var(--dd-muted);
+}
+
+.dd-sector-best {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--dd-muted);
+  font-weight: 600;
+}
+
+.dd-sector-link {
+  color: var(--dd-fg);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 107, 53, 0.55);
+}
+
+.dd-sector-link:hover,
+.dd-sector-link:focus-visible {
+  color: var(--dd-accent-end);
+}
+
+.dd-sector-best-score {
+  color: var(--dd-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 420px) {
+  .dd-sector-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

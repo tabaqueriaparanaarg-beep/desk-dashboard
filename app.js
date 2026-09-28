@@ -1,4 +1,4 @@
-/* Desk Dashboard — carga datos.json y pinta KPIs / top10 / earnings / ranking */
+/* Desk Dashboard — carga datos.json y pinta KPIs / top10 / sectores / earnings / ranking */
 (function () {
   "use strict";
 
@@ -9,6 +9,9 @@
     earnings: [],
     rsWeekly: null,
     kind: "",
+    sector: "",
+    sectorLabel: "",
+    sectors: null,
     flags: { above_ema200: false, rs_gt_70: false },
     search: "",
     autoTimer: null,
@@ -508,6 +511,10 @@
     var q = (state.search || "").trim().toUpperCase();
     return state.ranking.filter(function (r) {
       if (state.kind && r.kind !== state.kind) return false;
+      if (state.sector) {
+        if (r.sector !== state.sector) return false;
+        if (String(r.kind || "").toLowerCase() === "etf") return false;
+      }
       if (state.flags.above_ema200 && !r.above_ema200) return false;
       if (state.flags.rs_gt_70 && !((r.rs_score || 0) > 70)) return false;
       if (q && String(r.symbol || "").toUpperCase().indexOf(q) === -1) return false;
@@ -516,7 +523,8 @@
   }
 
   function updateFilterCount(shown, total) {
-    setText("filter-count", "Mostrando " + shown + " de " + total);
+    var extra = state.sector ? " · " + (state.sectorLabel || state.sector) : "";
+    setText("filter-count", "Mostrando " + shown + " de " + total + extra);
   }
 
 
@@ -659,6 +667,178 @@
     btn.textContent = on ? "Actualizando…" : "Actualizar";
   }
 
+  function sectorLabelFor(sector) {
+    var rows = (state.sectors && state.sectors.rows) || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].sector === sector) return rows[i].label || sector;
+    }
+    return sector || "";
+  }
+
+  function syncSectorActive() {
+    var current = state.sector || "";
+    document.querySelectorAll(".dd-sector-card").forEach(function (card) {
+      var on = !!current && card.getAttribute("data-sector") === current;
+      card.classList.toggle("is-active", on);
+      var btn = card.querySelector(".dd-sector-select");
+      if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    var group = document.querySelector('.dd-filter-group[data-filter="sector"]');
+    if (!group) return;
+    group.querySelectorAll(".dd-chip").forEach(function (btn) {
+      var key = btn.getAttribute("data-sector") || "";
+      var on = key === current;
+      btn.classList.toggle("is-active", on);
+      if (on && current && btn.scrollIntoView) {
+        btn.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    });
+  }
+
+  function setSectorFilter(sector, scroll) {
+    var next = sector || "";
+    if (next && next === state.sector) next = "";
+    state.sector = next;
+    state.sectorLabel = next ? sectorLabelFor(next) : "";
+    syncSectorActive();
+    applyFilters();
+    if (scroll && state.sector) {
+      var el = document.querySelector('[data-section="ranking"]');
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function renderSectorFilters(rows) {
+    var group = document.querySelector('.dd-filter-group[data-filter="sector"]');
+    if (!group) return;
+    var known = {};
+    (rows || []).forEach(function (r) {
+      if (r && r.sector) known[r.sector] = r.label || r.sector;
+    });
+    if (state.sector && !known[state.sector]) {
+      state.sector = "";
+      state.sectorLabel = "";
+    } else if (state.sector) {
+      state.sectorLabel = known[state.sector];
+    }
+    group.innerHTML = "";
+    var all = document.createElement("button");
+    all.type = "button";
+    all.className = "dd-chip" + (state.sector ? "" : " is-active");
+    all.setAttribute("data-sector", "");
+    all.textContent = "Todos";
+    group.appendChild(all);
+    (rows || []).forEach(function (r) {
+      if (!r || !r.sector) return;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "dd-chip" + (r.sector === state.sector ? " is-active" : "");
+      btn.setAttribute("data-sector", r.sector);
+      btn.textContent = r.label || r.sector;
+      group.appendChild(btn);
+    });
+  }
+
+  function trendHtml(item) {
+    var trend = item.rs_trend;
+    var delta = item.rs_delta;
+    var cls = "dd-sector-trend";
+    var arrow = "—";
+    var word = "sin historia de RS";
+    if (trend === "up") {
+      cls += " is-up";
+      arrow = "▲";
+      word = "RS en alza";
+    } else if (trend === "down") {
+      cls += " is-down";
+      arrow = "▼";
+      word = "RS en baja";
+    } else if (trend === "flat") {
+      cls += " is-flat";
+      arrow = "→";
+      word = "RS sin cambio";
+    }
+    var num = "";
+    if (delta != null && !Number.isNaN(Number(delta))) {
+      var v = Math.round(Number(delta) * 10) / 10;
+      num = " " + (v > 0 ? "+" : "") + v;
+    }
+    var title =
+      word +
+      (item.rs_now != null ? " · ahora " + fmtNum(item.rs_now, 1) : "") +
+      (item.rs_weeks_ago != null ? " · hace 4 sem " + fmtNum(item.rs_weeks_ago, 1) : "");
+    return (
+      '<span class="' + cls + '" title="' + escapeHtml(title) + '">' +
+      '<span class="dd-sr-only">' + escapeHtml(word) + "</span>" +
+      '<span aria-hidden="true">' + arrow + num + "</span></span>"
+    );
+  }
+
+  function renderSectors(block) {
+    state.sectors = block || null;
+    var grid = document.getElementById("sector-grid");
+    var caption = document.getElementById("sector-caption");
+    var note = document.getElementById("sector-note");
+    var rows = (block && block.rows) || [];
+    if (caption && block && block.caption) caption.textContent = block.caption;
+    if (note) {
+      var summary = block && block.excluded && block.excluded.summary;
+      if (summary) note.textContent = summary;
+    }
+    renderSectorFilters(rows);
+    if (!grid) return;
+    grid.innerHTML = "";
+    if (!rows.length) {
+      var empty = document.createElement("p");
+      empty.className = "dd-empty";
+      empty.textContent = "Sin agregados por sector. Se calculan al correr build.py.";
+      grid.appendChild(empty);
+      return;
+    }
+    rows.forEach(function (item) {
+      var card = document.createElement("article");
+      card.className = "dd-sector-card" + (item.sector === state.sector ? " is-active" : "");
+      card.setAttribute("data-sector", item.sector || "");
+      card.setAttribute("role", "listitem");
+      var heat = item.avg_desk_score == null ? 0 : Math.max(0, Math.min(100, Number(item.avg_desk_score))) / 100;
+      card.style.setProperty("--heat", String(heat));
+      var tier = scoreTierClass(item.avg_desk_score).trim();
+      var best = item.best || {};
+      var bestSym = best.symbol || "";
+      var low = item.low_sample
+        ? '<span class="dd-sector-low" title="1 o 2 nombres: el promedio se mueve con cualquiera de ellos.">Muestra chica</span>'
+        : "";
+      var barW = item.avg_desk_score == null ? 0 : Math.max(0, Math.min(100, Number(item.avg_desk_score)));
+      card.innerHTML =
+        '<div class="dd-sector-top">' +
+        '<button type="button" class="dd-sector-select" aria-pressed="' +
+        (item.sector === state.sector ? "true" : "false") + '">' +
+        '<span class="dd-sector-name">' + escapeHtml(item.label || item.sector || "—") + "</span>" +
+        '<span class="dd-sector-count">' + escapeHtml(String(item.count)) +
+        (item.count === 1 ? " nombre" : " nombres") + "</span>" +
+        "</button>" +
+        trendHtml(item) +
+        "</div>" +
+        (low ? '<div class="dd-sector-badges">' + low + "</div>" : "") +
+        '<div class="dd-sector-bar ' + tier + '" aria-hidden="true"><span style="width:' + barW + '%"></span></div>' +
+        '<dl class="dd-sector-metrics">' +
+        '<div><dt>Desk</dt><dd class="' + tier + '">' + fmtNum(item.avg_desk_score, 1) + "</dd></div>" +
+        '<div><dt>RS</dt><dd>' + fmtNum(item.avg_rs_score, 1) + "</dd></div>" +
+        '<div><dt>Sobre EMA200</dt><dd>' + fmtPct(item.pct_above_ema200) + "</dd></div>" +
+        '<div><dt>Top 10</dt><dd>' + escapeHtml(String(item.top10_count != null ? item.top10_count : "—")) + "</dd></div>" +
+        '<div><dt>Cambio día</dt><dd class="' + distClass(item.avg_change_pct) + '">' + fmtSignedPct2(item.avg_change_pct) + "</dd></div>" +
+        "</dl>" +
+        '<p class="dd-sector-best">Mejor ' +
+        (bestSym
+          ? '<a class="dd-sector-link" href="#/t/' + encodeURIComponent(bestSym) + '">' +
+            escapeHtml(bestSym) + "</a>"
+          : "—") +
+        (best.desk_score != null ? ' <span class="dd-sector-best-score">' + fmtNum(best.desk_score, 1) + "</span>" : "") +
+        "</p>";
+      grid.appendChild(card);
+    });
+  }
+
   function applyData(data) {
     state.ranking = data.ranking || [];
     state.logos = data.logos || {};
@@ -670,6 +850,7 @@
     renderTop10(data.top10_return);
     renderWalkforward(data.top10_walkforward);
     renderEarnings(data.earnings);
+    renderSectors(data.sectors);
     applyFilters();
     renderNotes(data.notes);
     state.baseTitle = "Desk Dashboard — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
@@ -752,6 +933,33 @@
       search.addEventListener("input", function () {
         state.search = search.value || "";
         applyFilters();
+      });
+    }
+
+    var sectorGroup = document.querySelector('.dd-filter-group[data-filter="sector"]');
+    if (sectorGroup) {
+      sectorGroup.addEventListener("click", function (ev) {
+        var btn = ev.target.closest(".dd-chip");
+        if (!btn || !sectorGroup.contains(btn)) return;
+        var key = btn.getAttribute("data-sector") || "";
+        if (!key) {
+          state.sector = "";
+          state.sectorLabel = "";
+          syncSectorActive();
+          applyFilters();
+          return;
+        }
+        setSectorFilter(key, true);
+      });
+    }
+
+    var sectorGrid = document.getElementById("sector-grid");
+    if (sectorGrid) {
+      sectorGrid.addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return;
+        var card = ev.target.closest(".dd-sector-card");
+        if (!card || !sectorGrid.contains(card)) return;
+        setSectorFilter(card.getAttribute("data-sector") || "", true);
       });
     }
   }
