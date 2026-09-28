@@ -687,7 +687,11 @@
     if (!group) return;
     group.querySelectorAll(".dd-chip").forEach(function (btn) {
       var key = btn.getAttribute("data-sector") || "";
-      btn.classList.toggle("is-active", key === current);
+      var on = key === current;
+      btn.classList.toggle("is-active", on);
+      if (on && current && btn.scrollIntoView) {
+        btn.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
     });
   }
 
