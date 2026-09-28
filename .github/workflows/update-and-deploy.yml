@@ -41,7 +41,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Test Top 10 entry streaks, ficha math and walk-forward (mock bars)
-        run: python -m unittest test_top10_entry.py test_ficha.py test_walkforward.py
+        run: python -m unittest test_top10_entry.py test_ficha.py test_walkforward.py test_sectors.py
 
       - name: Build datos.json (Alpaca + Finnhub)
         # Si falla (API caída, keys faltantes), se publica el datos.json existente del repo.

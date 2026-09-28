@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20" />
+  <link rel="stylesheet" href="styles.css?v=21" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -190,6 +190,27 @@
       </div>
     </section>
 
+    <section class="dd-sectors dd-panel" data-section="sectors" aria-label="Vista por sectores">
+      <div class="dd-top10-head">
+        <h2 class="dd-section-title">Vista por sectores</h2>
+        <p class="dd-section-sub">Tocá un sector para filtrar el ranking. El mejor nombre abre la ficha.</p>
+      </div>
+      <p class="dd-sector-caption" id="sector-caption">
+        Acá se ve en qué sectores está la fuerza del universo.
+        Cada tarjeta promedia el Desk Score, el RS y el cambio del día,
+        y cuenta cuántos nombres están sobre la EMA200 y cuántos entran al Top 10 de hoy.
+        La flecha compara el RS medio de ahora con el de hace 4 semanas.
+        Es una lectura del tablero, no una recomendación.
+      </p>
+      <p class="dd-sector-note" id="sector-note">
+        No entran los ETFs: ni los benchmarks (SPY, QQQ, IWM, DIA) ni los de sector
+        (XLK, XLV y el resto). Son canastas, no acciones, y mezclarlos cambiaría el promedio.
+      </p>
+      <div id="sector-grid" class="dd-sector-grid" role="list">
+        <p class="dd-empty">Cargando…</p>
+      </div>
+    </section>
+
     <section class="dd-ranking dd-panel" data-section="ranking" aria-label="Ranking Desk Score">
       <h2 class="dd-section-title">Ranking Desk Score</h2>
       <p class="dd-section-sub">Tocá una fila para abrir la ficha.</p>
@@ -199,6 +220,9 @@
           <button type="button" class="dd-chip" data-kind="us">US</button>
           <button type="button" class="dd-chip" data-kind="cedear_proxy">CEDEAR proxy</button>
           <button type="button" class="dd-chip" data-kind="etf">ETF</button>
+        </div>
+        <div class="dd-filter-group" data-filter="sector" role="group" aria-label="Sector">
+          <button type="button" class="dd-chip is-active" data-sector="">Todos</button>
         </div>
         <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
@@ -253,6 +277,6 @@
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=14" defer></script>
+  <script src="app.js?v=15" defer></script>
 </body>
 </html>
