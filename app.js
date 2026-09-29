@@ -22,7 +22,23 @@
     listScroll: 0,
     baseTitle: "",
     walkforward: null,
+    patternTab: "breakout_52w",
+    patternScan: null,
   };
+
+  var HEALTH_SPECS = [
+    { key: "pe_ttm", label: "P/E", kind: "ratio" },
+    { key: "revenue_growth_yoy", label: "Ingresos", kind: "pct" },
+    { key: "eps_growth_yoy", label: "EPS", kind: "pct" },
+    { key: "gross_margin", label: "Margen bruto", kind: "pct" },
+    { key: "operating_margin", label: "Margen op.", kind: "pct" },
+    { key: "net_margin", label: "Margen neto", kind: "pct" },
+    { key: "roe", label: "ROE", kind: "pct" },
+    { key: "debt_equity", label: "Deuda/patrimonio", kind: "ratio" },
+    { key: "current_ratio", label: "Liquidez", kind: "ratio" },
+    { key: "pb", label: "P/B", kind: "ratio" },
+    { key: "dividend_yield", label: "Dividendo", kind: "pct" },
+  ];
 
   var PILLAR_SPEC = [
     { key: "tendencia", label: "Tendencia", max: 25 },
@@ -536,28 +552,34 @@
     rsi_sobreventa: "RSI bajo",
   };
 
-  function formatFlags(flags) {
-    if (!flags || !flags.length) {
+  function insiderBadgeHtml(row) {
+    var ins = row && row.insiders;
+    if (!ins || !ins.notable) return "";
+    return (
+      '<span class="dd-flag dd-flag-insider" data-flag="insider_buy" title="Compras netas de insiders, últimos 90 días">Insiders</span>'
+    );
+  }
+
+  function formatFlags(flags, extraHtml) {
+    var items = flags || [];
+    if (!items.length && !extraHtml) {
       return '<span class="dd-flags-empty">—</span>';
     }
-    return (
-      '<span class="dd-flags">' +
-      flags
-        .map(function (f) {
-          var label = FLAG_LABELS[f] || f;
-          return (
-            '<span class="dd-flag" data-flag="' +
-            escapeHtml(f) +
-            '" title="' +
-            escapeHtml(f) +
-            '">' +
-            escapeHtml(label) +
-            "</span>"
-          );
-        })
-        .join("") +
-      "</span>"
-    );
+    var body = items
+      .map(function (f) {
+        var label = FLAG_LABELS[f] || f;
+        return (
+          '<span class="dd-flag" data-flag="' +
+          escapeHtml(f) +
+          '" title="' +
+          escapeHtml(f) +
+          '">' +
+          escapeHtml(label) +
+          "</span>"
+        );
+      })
+      .join("");
+    return '<span class="dd-flags">' + body + (extraHtml || "") + "</span>";
   }
 
   function renderRanking(rows) {
@@ -578,7 +600,7 @@
         tickerWithLogo(r, "dd-ticker"),
         '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>",
         entroInline(r.entro),
-        formatFlags(r.flags),
+        formatFlags(r.flags, insiderBadgeHtml(r)),
         fmtNum(p.tendencia, 1),
         fmtNum(r.rs_score, 1),
         fmtNum(p.contraccion, 1),
@@ -644,6 +666,8 @@
       p.textContent = msg;
       strip.appendChild(p);
     }
+    var resumenText = document.getElementById("resumen-text");
+    if (resumenText) resumenText.textContent = msg;
     renderRoute();
   }
 
@@ -839,6 +863,253 @@
     });
   }
 
+  function fmtMetric(kind, n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    if (kind === "pct") return fmtEsSmart(n, 1) + "%";
+    return fmtEsSmart(n, 1);
+  }
+
+  function fmtShares(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Number(n);
+    if (v > 0) return "+" + fmtEsNum(v, 0);
+    return fmtEsNum(v, 0);
+  }
+
+  function fmtUsdShort(n) {
+    if (n == null || Number.isNaN(Number(n))) return "";
+    var v = Number(n);
+    var sign = v < 0 ? "−" : "";
+    var a = Math.abs(v);
+    if (a >= 1000000) return sign + "USD " + fmtEsSmart(a / 1000000, 1) + " millones";
+    if (a >= 1000) return sign + "USD " + fmtEsSmart(a / 1000, 0) + " mil";
+    return sign + "USD " + fmtEsSmart(a, 0);
+  }
+
+  function fmtArt(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    try {
+      return (
+        new Intl.DateTimeFormat("es-AR", {
+          timeZone: "America/Argentina/Buenos_Aires",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(d) + " ART"
+      );
+    } catch (e) {
+      return String(iso);
+    }
+  }
+
+  function linkRow(item, extraText) {
+    var sym = (item && item.symbol) || "";
+    var score = item && item.desk_score != null ? fmtEsSmart(item.desk_score, 1) : "—";
+    return (
+      '<a class="dd-link-row" href="#/t/' + encodeURIComponent(sym) + '">' +
+      logoHtml(sym, logoFor(item), 22) +
+      '<span class="dd-link-sym">' + escapeHtml(sym) + "</span>" +
+      '<span class="dd-link-score">Desk ' + escapeHtml(score) + "</span>" +
+      '<span class="dd-link-extra">' + escapeHtml(extraText || "") + "</span></a>"
+    );
+  }
+
+  function renderResumen(data) {
+    var block = data && data.resumen;
+    var when = document.getElementById("resumen-when");
+    var text = document.getElementById("resumen-text");
+    if (!text) return;
+    if (!block || !block.text) {
+      if (when) when.textContent = "";
+      text.textContent = "Sin resumen en esta publicación. Se arma al correr build.py.";
+      return;
+    }
+    if (when) {
+      var stamp = fmtArt(block.generated_at || data.generated_at);
+      when.textContent = stamp || block.headline || "";
+      if (block.generated_at) when.setAttribute("datetime", block.generated_at);
+    }
+    text.textContent = block.text;
+  }
+
+  function renderInsiders(block) {
+    var root = document.getElementById("insider-list");
+    var cap = document.getElementById("insider-caption");
+    if (cap && block && block.caption) cap.textContent = block.caption;
+    if (!root) return;
+    var rows = (block && block.rows) || [];
+    if (!rows.length) {
+      root.innerHTML =
+        '<p class="dd-empty">Sin compras netas de insiders para mostrar. Si recién arranca, los datos se completan de a poco para no pasarnos del límite de Finnhub.</p>';
+      return;
+    }
+    root.innerHTML = rows
+      .map(function (r) {
+        var bits = [];
+        if (r.net_shares != null) bits.push(fmtShares(r.net_shares) + " acc.");
+        if (r.buyers != null) bits.push(r.buyers === 1 ? "1 compró" : r.buyers + " compraron");
+        if (r.net_value_usd != null) bits.push(fmtUsdShort(r.net_value_usd) + (r.value_approx ? " aprox." : ""));
+        return linkRow(r, bits.join(" · "));
+      })
+      .join("");
+  }
+
+  function renderPatterns(block) {
+    state.patternScan = block || null;
+    var tabs = document.getElementById("pattern-tabs");
+    var list = document.getElementById("pattern-list");
+    var groups = (block && block.groups) || [];
+    if (!groups.length) {
+      if (tabs) tabs.innerHTML = "";
+      if (list) list.innerHTML = '<p class="dd-empty">Sin patrones en esta publicación.</p>';
+      return;
+    }
+    if (!groups.some(function (g) { return g.id === state.patternTab; })) {
+      state.patternTab = groups[0].id;
+    }
+    if (tabs) {
+      tabs.innerHTML = groups
+        .map(function (g) {
+          var on = g.id === state.patternTab;
+          return (
+            '<button type="button" class="dd-chip' + (on ? " is-active" : "") +
+            '" role="tab" aria-selected="' + (on ? "true" : "false") +
+            '" data-pattern="' + escapeHtml(g.id) + '">' +
+            escapeHtml(g.label || g.id) + " · " + g.count + "</button>"
+          );
+        })
+        .join("");
+    }
+    var group = groups.filter(function (g) { return g.id === state.patternTab; })[0] || groups[0];
+    if (!list) return;
+    var hits = (group && group.rows) || [];
+    if (!hits.length) {
+      list.innerHTML = '<p class="dd-empty">Ningún nombre cumple este patrón hoy.</p>';
+      return;
+    }
+    list.innerHTML = hits
+      .map(function (r) {
+        return linkRow(r, r.detail || "");
+      })
+      .join("");
+  }
+
+  function bindPatternTabs() {
+    var panel = document.getElementById("pattern-panel");
+    if (!panel) return;
+    panel.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("[data-pattern]");
+      if (!btn || !panel.contains(btn)) return;
+      state.patternTab = btn.getAttribute("data-pattern") || state.patternTab;
+      renderPatterns(state.patternScan);
+    });
+  }
+
+  function patternChips(row) {
+    var pats = (row && row.patterns) || [];
+    if (!pats.length) {
+      return '<p class="dd-ficha-empty">Sin patrones del escáner en esta rueda.</p>';
+    }
+    return (
+      '<div class="dd-pat-chips">' +
+      pats
+        .map(function (p) {
+          return (
+            '<span class="dd-pat-chip" title="' + escapeHtml(p.detail || "") + '">' +
+            escapeHtml(p.label || p.id || "") + "</span>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function healthBlock(row) {
+    var head = '<section class="dd-ficha-card" aria-label="Salud de la empresa"><h2 class="dd-ficha-kicker">Salud de la empresa</h2>';
+    if (String((row && row.kind) || "").toLowerCase() === "etf") {
+      return head + '<p class="dd-ficha-empty">Sin datos. Los ETF no tienen fundamentos de empresa.</p></section>';
+    }
+    var fund = row && row.fundamentals;
+    var metrics = (fund && fund.metrics) || {};
+    var vs = (fund && fund.vs_sector) || {};
+    var cells = [];
+    HEALTH_SPECS.forEach(function (spec) {
+      var value = metrics[spec.key];
+      if (value == null || value === "") return;
+      var cmp = vs[spec.key] || {};
+      var line = spec.label + " " + fmtMetric(spec.kind, value);
+      if (cmp.median != null && cmp.n >= 3) {
+        line += " vs " + fmtMetric(spec.kind, cmp.median) + " del sector";
+      }
+      var cue = cmp.cue || "";
+      var cueWord = cue === "green" ? "mejor que el sector" : cue === "red" ? "peor que el sector" : cue === "amber" ? "en línea con el sector" : "";
+      cells.push(
+        '<div class="dd-health-item" data-cue="' + escapeHtml(cue) + '">' +
+        "<span>" + escapeHtml(line) + "</span>" +
+        (cueWord ? '<span class="dd-health-cue">' + escapeHtml(cueWord) + "</span>" : "") +
+        "</div>"
+      );
+    });
+    var body = cells.length
+      ? '<div class="dd-health-grid">' + cells.join("") + "</div>"
+      : '<p class="dd-ficha-empty">Sin datos</p>';
+    return (
+      head + body +
+      '<p class="dd-ficha-note">Informativo. No entra en el Desk Score.</p></section>'
+    );
+  }
+
+  function insiderFichaBlock(row) {
+    var head = '<section class="dd-ficha-card" aria-label="Qué compran los grandes"><h2 class="dd-ficha-kicker">Qué compran los grandes</h2>';
+    if (String((row && row.kind) || "").toLowerCase() === "etf") {
+      return head + '<p class="dd-ficha-empty">Sin datos. Los ETF no tienen operaciones de insiders.</p></section>';
+    }
+    var ins = row && row.insiders;
+    if (!ins || (ins.net_shares == null && ins.open_market_count == null)) {
+      return head + '<p class="dd-ficha-empty">Sin datos</p></section>';
+    }
+    var money = ins.net_value_usd == null ? "" : " · " + fmtUsdShort(ins.net_value_usd) + (ins.value_approx ? " aprox." : "");
+    var latest = ins.latest_date ? " · última " + fmtDayMonth(ins.latest_date) : "";
+    var summary =
+      "Neto " + fmtShares(ins.net_shares) + " acciones · " +
+      (ins.buyers || 0) + " compraron y " + (ins.sellers || 0) + " vendieron" +
+      money + latest;
+    var txs = ins.transactions || [];
+    var list;
+    if (!txs.length) {
+      list = '<p class="dd-ficha-empty">Sin operaciones de mercado abierto en los últimos 90 días.</p>';
+    } else {
+      list =
+        '<ul class="dd-ins-tx">' +
+        txs
+          .map(function (t) {
+            var sell = t.side === "sell";
+            var role = t.role ? '<span class="dd-ins-role">' + escapeHtml(t.role) + "</span>" : "";
+            return (
+              "<li><span class=\"dd-ins-name\">" + escapeHtml(t.name || "Sin nombre") + "</span>" +
+              role +
+              '<span class="dd-ins-side ' + (sell ? "is-sell" : "is-buy") + '">' +
+              (sell ? "Venta" : "Compra") + "</span>" +
+              '<span class="dd-ins-shares">' + escapeHtml(t.shares == null ? "—" : fmtEsNum(t.shares, 0)) + "</span>" +
+              '<span class="dd-ins-px">' + escapeHtml(t.price == null ? "—" : fmtPrice(t.price)) + "</span>" +
+              '<span class="dd-ins-date">' + escapeHtml(fmtDayMonth(t.date)) + "</span></li>"
+            );
+          })
+          .join("") +
+        "</ul>";
+    }
+    var excluded = ins.excluded_count
+      ? '<p class="dd-ficha-note">Quedaron afuera ' + escapeHtml(String(ins.excluded_count)) +
+        " movimientos que no son de mercado abierto (premios, ejercicios y similares).</p>"
+      : "";
+    return head + '<p class="dd-ficha-entro">' + escapeHtml(summary) + "</p>" + list + excluded + "</section>";
+  }
+
   function applyData(data) {
     state.ranking = data.ranking || [];
     state.logos = data.logos || {};
@@ -847,10 +1118,13 @@
     state.ready = true;
     state.loadError = "";
     renderKpis(data);
+    renderResumen(data);
     renderTop10(data.top10_return);
     renderWalkforward(data.top10_walkforward);
     renderEarnings(data.earnings);
     renderSectors(data.sectors);
+    renderInsiders(data.insider_buys);
+    renderPatterns(data.patterns);
     applyFilters();
     renderNotes(data.notes);
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
@@ -1379,6 +1653,12 @@
       '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
       '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
       "</div></header>" +
+      '<section class="dd-ficha-card" aria-label="Patrones">' +
+      '<h2 class="dd-ficha-kicker">Patrones</h2>' +
+      patternChips(row) +
+      "</section>" +
+      healthBlock(row) +
+      insiderFichaBlock(row) +
       '<section class="dd-ficha-card" aria-label="Desk Score">' +
       '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
@@ -1517,6 +1797,7 @@
   bindFilters();
   bindRefresh();
   bindFichaNav();
+  bindPatternTabs();
   renderRoute();
   loadData({ silent: false }).then(startAuto);
 })();

@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=22" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -43,6 +43,14 @@
   </header>
 
   <main class="dd-main">
+    <section class="dd-resumen dd-panel" data-section="resumen" aria-label="Resumen diario">
+      <div class="dd-resumen-head">
+        <h2 class="dd-section-title">Resumen del día</h2>
+        <time id="resumen-when" class="dd-resumen-when">—</time>
+      </div>
+      <p id="resumen-text" class="dd-resumen-text">Cargando…</p>
+    </section>
+
     <section class="dd-kpis" data-section="kpis" aria-label="KPIs del universo">
       <article class="dd-kpi-card" data-kpi="activos">
         <h2 class="dd-kpi-label">Activos</h2>
@@ -210,6 +218,27 @@
       </div>
     </section>
 
+    <section class="dd-insiders dd-panel" data-section="insiders" aria-label="Qué compran los grandes">
+      <div class="dd-top10-head">
+        <h2 class="dd-section-title">Qué compran los grandes</h2>
+        <p class="dd-section-sub" id="insider-caption">Compras netas de insiders, últimos 90 días.</p>
+      </div>
+      <div id="insider-list" class="dd-link-list">
+        <p class="dd-empty">Cargando…</p>
+      </div>
+    </section>
+
+    <section class="dd-scan dd-panel" id="pattern-panel" data-section="patterns" aria-label="Escáner de patrones">
+      <div class="dd-top10-head">
+        <h2 class="dd-section-title">Escáner de patrones</h2>
+        <p class="dd-section-sub">Tocá un nombre para abrir la ficha. Sale del precio que ya baja Alpaca.</p>
+      </div>
+      <div class="dd-filter-group" id="pattern-tabs" role="tablist" aria-label="Patrones"></div>
+      <div id="pattern-list" class="dd-link-list">
+        <p class="dd-empty">Cargando…</p>
+      </div>
+    </section>
+
     <section class="dd-ranking dd-panel" data-section="ranking" aria-label="Ranking Desk Score">
       <h2 class="dd-section-title">Ranking Desk Score</h2>
       <p class="dd-section-sub">Tocá una fila para abrir la ficha.</p>
@@ -276,6 +305,6 @@
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=17" defer></script>
+  <script src="app.js?v=18" defer></script>
 </body>
 </html>

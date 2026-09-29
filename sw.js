@@ -5,15 +5,15 @@
  */
 "use strict";
 
-var VERSION = "dd-v18";
+var VERSION = "dd-v19";
 var SHELL_CACHE = VERSION + "-shell";
 var DATA_CACHE = VERSION + "-data";
 
 var SHELL_ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=21",
-  "app.js?v=17",
+  "styles.css?v=22",
+  "app.js?v=18",
   "manifest.webmanifest",
   "assets/logo.svg?v=7",
   "assets/favicon.ico?v=7",
@@ -51,6 +51,10 @@ self.addEventListener("activate", function (event) {
 
 function isDataRequest(url) {
   return /\/datos\.json$/.test(url.pathname);
+}
+
+function isResumenRequest(url) {
+  return /\/resumen\.txt$/.test(url.pathname);
 }
 
 function networkFirstData(request) {
@@ -110,6 +114,10 @@ self.addEventListener("fetch", function (event) {
 
   if (isDataRequest(url)) {
     event.respondWith(networkFirstData(req));
+  } else if (isResumenRequest(url)) {
+    event.respondWith(fetch(req, { cache: "no-store" }).catch(function () {
+      return caches.match(req);
+    }));
   } else if (req.mode === "navigate") {
     event.respondWith(networkFirstPage(req));
   } else {

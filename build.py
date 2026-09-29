@@ -18,6 +18,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import signals
+
 ROOT = Path(__file__).resolve().parent
 UNIVERSE_PATH = ROOT / "universe.json"
 OUT_PATH = ROOT / "datos.json"
@@ -1821,12 +1823,209 @@ def compute_sector_view(
     }
 
 
+# Insiders y fundamentos cambian lento. Se reusa lo publicado y cada corrida
+# refresca un cupo, para quedarse debajo de ~60 llamadas/minuto de Finnhub.
+FINNHUB_MIN_INTERVAL_S = 1.05
+INSIDER_MAX_AGE_DAYS = 4
+FUNDAMENTALS_MAX_AGE_DAYS = 10
+SLOW_BUDGET_WARM = 36
+SLOW_BUDGET_COLD = 80
+PUBLISHED_DATOS_URL = "https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/datos.json"
+RESUMEN_PATH = ROOT / "resumen.txt"
+
+
+class _FinnhubPacer:
+    def __init__(self, interval: float) -> None:
+        self.interval = interval
+        self._next = 0.0
+
+    def wait(self) -> None:
+        now = time.monotonic()
+        if now < self._next:
+            time.sleep(self._next - now)
+        self._next = time.monotonic() + self.interval
+
+
+def fetch_previous_payload() -> tuple[dict | None, str]:
+    """Foto publicada para el resumen y la caché. Un solo intento, sin reintentos.
+
+    Si Pages no responde, cae al datos.json del repo. Nunca lanza.
+    """
+    req = urllib.request.Request(
+        PUBLISHED_DATOS_URL,
+        headers={"User-Agent": "desk-dashboard/1.0"},
+        method="GET",
+    )
+    try:
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if isinstance(data, dict) and data.get("ranking"):
+            return data, "publicado"
+    except Exception as e:
+        print(f"  publicación anterior no disponible ({type(e).__name__})")
+    try:
+        data = json.loads(OUT_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("ranking"):
+            return data, "local"
+    except Exception as e:
+        print(f"  datos.json local no disponible ({type(e).__name__})")
+    return None, "ninguno"
+
+
+def _prev_by_symbol(payload: dict | None) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for row in (payload or {}).get("ranking") or []:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or "").upper()
+        if sym:
+            out[sym] = row
+    return out
+
+
+def _fetched_age_days(block: Any, today: date) -> int | None:
+    if not isinstance(block, dict) or not block.get("fetched_on"):
+        return None
+    try:
+        fetched = date.fromisoformat(str(block["fetched_on"])[:10])
+    except ValueError:
+        return None
+    return (today - fetched).days
+
+
+def _copy_cached_company(row: dict, prev: dict) -> None:
+    ins = prev.get("insiders")
+    if isinstance(ins, dict) and ins.get("fetched_on"):
+        row["insiders"] = ins
+    fund = prev.get("fundamentals")
+    if isinstance(fund, dict) and fund.get("fetched_on"):
+        row["fundamentals"] = {
+            "source": fund.get("source") or "finnhub",
+            "endpoint": fund.get("endpoint") or "/stock/metric",
+            "fetched_on": fund.get("fetched_on"),
+            "metrics": dict(fund.get("metrics") or {}),
+            "vs_sector": {},
+        }
+
+
+def _plan_slow_fetches(symbols: list[str], prev: dict[str, dict], today: date) -> tuple[list[tuple[str, str]], int]:
+    pending: list[tuple] = []
+    for sym in symbols:
+        cached = prev.get(sym) or {}
+        for kind, field, max_age, order in (
+            ("insiders", "insiders", INSIDER_MAX_AGE_DAYS, 0),
+            ("fundamentals", "fundamentals", FUNDAMENTALS_MAX_AGE_DAYS, 1),
+        ):
+            age = _fetched_age_days(cached.get(field), today)
+            if age is None:
+                pending.append((0, 0, sym, order, kind))
+            elif age >= max_age:
+                pending.append((1, -age, sym, order, kind))
+    pending.sort()
+    missing = sum(1 for item in pending if item[0] == 0)
+    budget = SLOW_BUDGET_COLD if missing > 40 else SLOW_BUDGET_WARM
+    plan = [(sym, kind) for _pri, _age, sym, _order, kind in pending[:budget]]
+    return plan, budget
+
+
+def _finnhub_get(path: str, params: dict[str, str], key: str, pacer: _FinnhubPacer) -> Any:
+    """GET a Finnhub. El token va en la query y no se imprime ni se relanza."""
+    pacer.wait()
+    query = dict(params)
+    query["token"] = key
+    url = "https://finnhub.io/api/v1/" + path.lstrip("/") + "?" + urllib.parse.urlencode(query)
+    try:
+        data = http_get_json(url, timeout=30)
+    except Exception as e:
+        raise RuntimeError(type(e).__name__) from None
+    if isinstance(data, dict) and data.get("error"):
+        raise RuntimeError("finnhub_error")
+    return data
+
+
+def enrich_company_data(
+    rows: list[dict],
+    finnhub_key: str,
+    prev: dict[str, dict],
+    today: date,
+) -> list[str]:
+    """Insiders + fundamentos. Falla por símbolo, nunca corta el build."""
+    notes: list[str] = []
+    by = {str(r.get("symbol") or ""): r for r in rows}
+    stocks = [
+        sym
+        for sym, row in by.items()
+        if sym and str(row.get("kind") or "").lower() != "etf"
+    ]
+    for sym in stocks:
+        _copy_cached_company(by[sym], prev.get(sym) or {})
+    if not finnhub_key:
+        notes.append(
+            "Finnhub: sin API key — insiders y fundamentos quedan en lo ya publicado, si había."
+        )
+        signals.attach_sector_medians(rows)
+        return notes
+    plan, budget = _plan_slow_fetches(stocks, prev, today)
+    pacer = _FinnhubPacer(FINNHUB_MIN_INTERVAL_S)
+    ok_i = ok_f = fail = 0
+    for sym, kind in plan:
+        row = by[sym]
+        try:
+            if kind == "insiders":
+                raw = _finnhub_get("stock/insider-transactions", {"symbol": sym}, finnhub_key, pacer)
+                data_rows = raw.get("data") if isinstance(raw, dict) else None
+                row["insiders"] = signals.aggregate_insiders(
+                    data_rows if isinstance(data_rows, list) else [],
+                    today=today,
+                    close=row.get("close"),
+                    fetched_on=today,
+                )
+                ok_i += 1
+            else:
+                raw = _finnhub_get(
+                    "stock/metric",
+                    {"symbol": sym, "metric": "all"},
+                    finnhub_key,
+                    pacer,
+                )
+                row["fundamentals"] = signals.parse_fundamentals(
+                    raw if isinstance(raw, dict) else {},
+                    fetched_on=today,
+                )
+                ok_f += 1
+        except Exception as e:
+            fail += 1
+            print(f"  finnhub {kind} {sym}: {type(e).__name__}")
+    signals.attach_sector_medians(rows)
+    notes.append(
+        f"Finnhub lento: cupo {budget}, pedidos {len(plan)}, "
+        f"insiders {ok_i}, fundamentos {ok_f}, fallos {fail}. "
+        "Sin 13F (Finnhub lo tiene en plan pago; EDGAR no entra en el tiempo del build)."
+    )
+    return notes
+
+
+def write_resumen_file(resumen: dict) -> None:
+    headline = str(resumen.get("headline") or "Angus — resumen")
+    text = str(resumen.get("text") or "Sin resumen en esta corrida.")
+    RESUMEN_PATH.write_text(
+        headline
+        + "\n\n"
+        + text
+        + "\n\nNo es recomendación de compra ni de inversión.\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     alpaca_headers()  # falla temprano y claro si faltan keys (sin imprimirlas)
     if not load_finnhub_key():
         print("AVISO: no hay FINNHUB_API_KEY — earnings omitidos, logos sólo desde cache")
     notes: list[str] = []
     failures: list[str] = []
+    previous_payload, previous_source = fetch_previous_payload()
+    print(f"  base del resumen: {previous_source}")
 
     universe = json.loads(UNIVERSE_PATH.read_text())
     symbols = [u["symbol"] for u in universe]
@@ -2010,6 +2209,36 @@ def main() -> None:
         f"(excluidos {len((sectors.get('excluded') or {}).get('symbols') or [])} ETFs o sin sector)."
     )
 
+    for row in rows:
+        try:
+            row["patterns"] = signals.detect_patterns(all_bars.get(row["symbol"]) or [])
+        except Exception:
+            row["patterns"] = []
+    try:
+        notes.extend(
+            enrich_company_data(
+                rows,
+                finnhub_key,
+                _prev_by_symbol(previous_payload),
+                end_dt,
+            )
+        )
+    except Exception as e:
+        print(f"  insiders/fundamentos falló (soft): {type(e).__name__}")
+        notes.append(f"Insiders y fundamentos: fallo soft ({type(e).__name__}).")
+    insider_buys = signals.insider_panel(rows)
+    pattern_scan = {"source": "alpaca_bars", "groups": signals.pattern_groups(rows)}
+    pat_bits = [
+        f"{g['label']} {g['count']}" for g in pattern_scan["groups"] if g.get("count")
+    ]
+    notes.append(
+        "Escáner: " + (", ".join(pat_bits) if pat_bits else "sin patrones con estos umbrales") + "."
+    )
+    notes.append(
+        f"Resumen comparado contra la base {previous_source}. "
+        "No incluye tenedores institucionales (13F)."
+    )
+
     payload = {
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
@@ -2031,6 +2260,8 @@ def main() -> None:
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
         "sectors": sectors,
+        "insider_buys": insider_buys,
+        "patterns": pattern_scan,
         "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
@@ -2055,9 +2286,49 @@ def main() -> None:
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
             "rs_weekly": RS_WEEKLY_DEFINITION,
             "sectors": SECTOR_FORMULA,
+            "patterns": (
+                "breakout_52w: cierre >= máximo de las sesiones previas (hasta 252, mínimo 60), "
+                "o a <=2% de ese máximo con volumen > media de 50 sesiones. "
+                "pullback_sma50: cierre > EMA200, mínimo dentro de ±2% de la SMA50 en las últimas 5 sesiones "
+                "y cierre de hoy > SMA50. "
+                "base: ventana de 15, 20 o 30 sesiones con rango <=6%, deriva <=2%, "
+                "cierre a <=3% del máximo de la ventana y a <=8% del máximo de 52 semanas. "
+                "ema200_cross: último cruce arriba/abajo dentro de las últimas 5 sesiones. "
+                "No entra en el Desk Score."
+            ),
+            "insiders": (
+                "Finnhub /stock/insider-transactions, últimos 90 días. "
+                "Solo códigos P (compra) y S (venta) de mercado abierto. "
+                "Premios, ejercicios y el resto se cuentan aparte y no mueven el neto. "
+                "Sin 13F."
+            ),
+            "fundamentals": (
+                "Finnhub /stock/metric?metric=all. Informativo: no entra en el Desk Score. "
+                "P/E, márgenes y crecimiento se comparan con la mediana del mismo sector "
+                "en el universo (mínimo 3 nombres, ETF afuera)."
+            ),
+            "resumen": "Texto plantilla comparado con la publicación anterior. Sin modelo de lenguaje.",
         },
         "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
     }
+    try:
+        prev_snap = signals.snapshot_from_payload(previous_payload) if previous_payload else None
+        resumen = signals.compose_resumen(signals.snapshot_from_payload(payload), prev_snap)
+    except Exception as e:
+        print(f"  resumen falló (soft): {type(e).__name__}")
+        resumen = {
+            "generated_at": generated_at,
+            "headline": "Angus — resumen",
+            "text": "No se pudo armar el resumen de esta corrida.",
+            "sentences": ["No se pudo armar el resumen de esta corrida."],
+            "compared_to": None,
+        }
+    payload["resumen"] = resumen
+    payload["notes"].append(resumen.get("headline") or "Resumen diario generado.")
+    try:
+        write_resumen_file(resumen)
+    except Exception as e:
+        print(f"  resumen.txt falló (soft): {type(e).__name__}")
 
     # Logos (soft: nunca rompe el build)
     logo_syms = [logo_symbol(u) for u in universe]
