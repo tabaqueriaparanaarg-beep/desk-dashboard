@@ -12,6 +12,7 @@ __pycache__/
 
 # Build de GitHub Pages
 _site/
+resumen.txt
 
 # SO / editores
 .DS_Store

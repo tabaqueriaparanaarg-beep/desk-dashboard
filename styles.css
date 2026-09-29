@@ -1974,3 +1974,200 @@ body.is-ficha .dd-footer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ── Resumen, insiders, escáner, salud ── */
+
+.dd-resumen-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+}
+
+.dd-resumen-head .dd-section-title {
+  margin-bottom: 0;
+}
+
+.dd-resumen-when {
+  color: var(--dd-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-resumen-text {
+  margin: 0.9rem 0 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  max-width: 68rem;
+}
+
+.dd-link-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.35rem;
+}
+
+.dd-link-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 48px;
+  padding: 0.45rem 0.1rem;
+  border-bottom: 1px solid var(--dd-border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.dd-link-row:hover,
+.dd-link-row:focus-visible {
+  color: var(--dd-accent-end);
+}
+
+.dd-link-sym {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dd-link-score {
+  color: var(--dd-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-link-extra {
+  margin-left: auto;
+  color: var(--dd-muted);
+  font-size: 0.78rem;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.dd-flag-insider,
+.dd-flag[data-flag="insider_buy"] {
+  color: var(--dd-ok);
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.dd-pat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.dd-pat-chip {
+  display: inline-block;
+  border-radius: var(--dd-radius-chip);
+  padding: 0.28rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--dd-accent-soft);
+  color: var(--dd-accent-end);
+  border: 1px solid rgba(255, 107, 53, 0.35);
+}
+
+.dd-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 0.5rem;
+}
+
+.dd-health-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 1px solid var(--dd-border);
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+  background: var(--dd-bg-elevated);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.dd-health-item[data-cue="green"] {
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.dd-health-item[data-cue="amber"] {
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.dd-health-item[data-cue="red"] {
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.dd-health-cue {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--dd-muted);
+}
+
+.dd-health-item[data-cue="green"] .dd-health-cue { color: var(--dd-ok); }
+.dd-health-item[data-cue="red"] .dd-health-cue { color: var(--dd-bad); }
+.dd-health-item[data-cue="amber"] .dd-health-cue { color: var(--dd-warn); }
+
+.dd-ins-tx {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+
+.dd-ins-tx li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.65rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--dd-border);
+  font-size: 0.82rem;
+}
+
+.dd-ins-name {
+  font-weight: 700;
+}
+
+.dd-ins-role {
+  color: var(--dd-muted);
+  font-size: 0.75rem;
+}
+
+.dd-ins-side {
+  font-weight: 700;
+}
+
+.dd-ins-side.is-buy { color: var(--dd-ok); }
+.dd-ins-side.is-sell { color: var(--dd-bad); }
+
+.dd-ins-date {
+  margin-left: auto;
+  color: var(--dd-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-scan .dd-filter-group {
+  margin: 0.2rem 0 0.6rem;
+}
+
+@media (max-width: 640px) {
+  .dd-link-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .dd-link-extra {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
+  }
+
+  .dd-resumen-text {
+    font-size: 0.95rem;
+  }
+
+  .dd-ins-date {
+    margin-left: 0;
+  }
+}

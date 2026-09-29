@@ -41,7 +41,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Test Top 10 entry streaks, ficha math and walk-forward (mock bars)
-        run: python -m unittest test_top10_entry.py test_ficha.py test_walkforward.py test_sectors.py
+        run: python -m unittest discover -s . -p 'test_*.py'
 
       - name: Build datos.json (Alpaca + Finnhub)
         # Si falla (API caída, keys faltantes), se publica el datos.json existente del repo.
@@ -57,6 +57,7 @@ jobs:
           rm -rf _site
           mkdir -p _site
           cp index.html app.js styles.css sw.js manifest.webmanifest datos.json _site/
+          if [ -f resumen.txt ]; then cp resumen.txt _site/resumen.txt; else printf '%s\n' 'Sin resumen en esta publicación.' > _site/resumen.txt; fi
           cp -r assets _site/assets
           touch _site/.nojekyll
           ls -la _site
