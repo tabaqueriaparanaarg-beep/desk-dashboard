@@ -62,13 +62,10 @@ def _row(**overrides):
 def _verdict(row, earnings=None, *, known=True, through=THROUGH, today=TODAY):
     return s.entry_verdict(
         row,
-        sector_index=s._sector_index(_sectors()),
         earnings=earnings or [],
         today=today,
         earnings_known=known,
         earnings_through=through if known else None,
-        rs_weeks=4,
-        rs_band=1.0,
     )
 
 
@@ -78,21 +75,19 @@ class EntryVerdictTests(unittest.TestCase):
         score, rank = row["desk_score"], row["rank"]
         out = _verdict(row)
         self.assertEqual(out["verdict"], "verde")
-        self.assertEqual(out["label"], "Verde: condiciones a favor")
+        self.assertEqual(out["label"], "Verde: sin alertas de riesgo")
         self.assertEqual(out["disclaimer"], s.ENTRY_DISCLAIMER)
+        self.assertEqual(out["rules_version"], s.SEMAFORO_RULES_VERSION)
         self.assertTrue(all(c["ok"] for c in out["checks"]))
         self.assertEqual(row["desk_score"], score)
         self.assertEqual(row["rank"], rank)
         ids = [c["id"] for c in out["checks"]]
-        self.assertEqual(
-            ids,
-            ["trend", "sector", "score", "pattern", "earnings", "extension", "flags", "bearish_cross"],
-        )
+        self.assertEqual(ids, ["trend", "bearish_cross", "earnings"])
 
     def test_trend_failure_is_red_even_if_the_rest_passes(self):
         out = _verdict(_row(above_ema200=False, ema200_slope_up=True))
         self.assertEqual(out["verdict"], "rojo")
-        self.assertEqual(out["label"], "Rojo: no entrar por ahora")
+        self.assertEqual(out["label"], "Rojo: alerta de riesgo")
         trend = next(c for c in out["checks"] if c["id"] == "trend")
         self.assertFalse(trend["ok"])
         self.assertTrue(trend["hard"])
@@ -114,15 +109,25 @@ class EntryVerdictTests(unittest.TestCase):
         self.assertTrue(bear["hard"])
         self.assertIn("Cruce bajista", bear["reason"])
 
-    def test_soft_misses_are_amber_not_red(self):
-        low = _verdict(_row(desk_score=58.2, patterns=[]))
-        self.assertEqual(low["verdict"], "ambar")
-        self.assertEqual(low["label"], "Ámbar: revisar")
-        score = next(c for c in low["checks"] if c["id"] == "score")
-        self.assertIn("58,2", score["reason"])
-        self.assertIn("debajo de 65", score["reason"])
-        pattern = next(c for c in low["checks"] if c["id"] == "pattern")
-        self.assertIn("Sin pullback", pattern["reason"])
+    def test_score_pattern_and_extension_do_not_change_the_light(self):
+        out = _verdict(
+            _row(
+                desk_score=12.0,
+                patterns=[],
+                dist_ema200_pct=40.0,
+                dist_sma50_pct=30.0,
+                rsi14=90.0,
+                flags=["atr_elevado", "rsi_sobrecompra"],
+                sector="Utilities",
+            )
+        )
+        self.assertEqual(out["verdict"], "verde")
+        self.assertEqual(out["label"], "Verde: sin alertas de riesgo")
+        ids = [c["id"] for c in out["checks"]]
+        self.assertNotIn("extension", ids)
+        self.assertNotIn("score", ids)
+        self.assertNotIn("sector", ids)
+        self.assertNotIn("flags", ids)
 
     def test_earnings_inside_seven_days_blocks_green_with_the_date(self):
         out = _verdict(
@@ -130,6 +135,7 @@ class EntryVerdictTests(unittest.TestCase):
             earnings=[{"symbol": "NKE", "date": "2026-10-01", "hour": "AMC"}],
         )
         self.assertEqual(out["verdict"], "ambar")
+        self.assertEqual(out["label"], "Ámbar: resultados cerca")
         earn = next(c for c in out["checks"] if c["id"] == "earnings")
         self.assertFalse(earn["ok"])
         self.assertEqual(earn["reason"], "Presenta resultados el 01/10")
@@ -157,75 +163,12 @@ class EntryVerdictTests(unittest.TestCase):
         self.assertTrue(earn["ok"])
         self.assertEqual(earn["reason"], "Sin resultados en los próximos 7 días")
 
-    def test_overextension_uses_ema_sma_or_rsi(self):
-        sma = _verdict(_row(dist_sma50_pct=18.2))
-        self.assertEqual(sma["verdict"], "ambar")
-        ext = next(c for c in sma["checks"] if c["id"] == "extension")
-        self.assertIn("Muy estirado", ext["reason"])
-        self.assertIn("SMA50", ext["reason"])
-        rsi = _verdict(_row(rsi14=76.4))
-        reason = next(c for c in rsi["checks"] if c["id"] == "extension")["reason"]
-        self.assertIn("RSI14", reason)
-        self.assertEqual(_verdict(_row(dist_ema200_pct=18.0))["verdict"], "verde")
-        self.assertEqual(_verdict(_row(dist_ema200_pct=18.1))["verdict"], "ambar")
-
-    def test_penalty_flags_are_amber(self):
-        out = _verdict(_row(flags=["atr_elevado", "rsi_sobrecompra"]))
-        self.assertEqual(out["verdict"], "ambar")
-        flags = next(c for c in out["checks"] if c["id"] == "flags")
-        self.assertIn("ATR alto", flags["reason"])
-        self.assertIn("RSI en sobrecompra", flags["reason"])
-
-    def test_sector_down_outside_the_top_half_fails(self):
-        out = _verdict(_row(sector="Utilities", patterns=[{"id": "base"}]))
-        self.assertEqual(out["verdict"], "ambar")
-        sector = next(c for c in out["checks"] if c["id"] == "sector")
-        self.assertEqual(sector["reason"], "Sector en baja")
-
-    def test_sector_down_but_in_the_top_half_passes(self):
-        out = _verdict(_row(symbol="XOM", sector="Energy"))
-        sector = next(c for c in out["checks"] if c["id"] == "sector")
-        self.assertTrue(sector["ok"])
-        self.assertIn("mitad alta", sector["reason"])
-
-    def test_flat_sector_passes(self):
-        out = _verdict(_row(sector="Consumer Staples"))
-        sector = next(c for c in out["checks"] if c["id"] == "sector")
-        self.assertTrue(sector["ok"])
-        self.assertIn("estable", sector["reason"])
-
-    def test_etf_uses_its_own_rs_not_the_sector(self):
-        green = _verdict(
-            _row(symbol="SPY", kind="etf", sector="Benchmark", rs_score=40, rs_weekly=[10, 20, 30, 40, 50, 55])
+    def test_etf_uses_the_same_risk_checks(self):
+        out = _verdict(
+            _row(symbol="XLF", kind="etf", sector="Financials", rs_score=30, rs_weekly=[80, 70, 60, 50, 40, 20])
         )
-        own = next(c for c in green["checks"] if c["id"] == "sector")
-        self.assertEqual(own["label"], "RS propio")
-        self.assertTrue(own["ok"])
-        self.assertIn("alza", own["reason"])
-        red_rs = _verdict(
-            _row(
-                symbol="XLF",
-                kind="etf",
-                sector="Financials",
-                rs_score=30,
-                rs_weekly=[80, 70, 60, 50, 40, 20],
-            )
-        )
-        own_bad = next(c for c in red_rs["checks"] if c["id"] == "sector")
-        self.assertFalse(own_bad["ok"])
-        self.assertEqual(own_bad["reason"], "RS propio en baja")
-        half = _verdict(
-            _row(
-                symbol="XLV",
-                kind="etf",
-                sector="Health Care",
-                rs_score=62.5,
-                rs_weekly=[90, 80, 70, 60, 50, 40],
-            )
-        )
-        own_half = next(c for c in half["checks"] if c["id"] == "sector")
-        self.assertTrue(own_half["ok"])
-        self.assertIn("mitad alta", own_half["reason"])
+        self.assertEqual(out["verdict"], "verde")
+        self.assertEqual([c["id"] for c in out["checks"]], ["trend", "bearish_cross", "earnings"])
 
     def test_attach_keeps_ranking_order(self):
         rows = [
@@ -373,13 +316,13 @@ class EntryResumenTests(unittest.TestCase):
         self.assertTrue(snap["entry_known"])
         self.assertEqual(snap["entry_green"], ["LLY", "XOM", "ITUB"])
         text = s.compose_resumen(snap, None)["text"]
-        self.assertIn("Hoy hay 3 acciones en verde: LLY, XOM y ITUB.", text)
+        self.assertIn("Hoy hay 3 acciones sin alertas de riesgo: LLY, XOM y ITUB.", text)
         many = dict(snap)
         many["entry_green"] = ["LLY", "MA", "ABBV", "V", "DIS", "ITUB", "JNJ", "XOM", "CVX"]
         many_text = s.compose_resumen(many, None)["text"]
-        self.assertIn("Hoy hay 9 acciones en verde: LLY, MA, ABBV, V y 5 más.", many_text)
+        self.assertIn("Hoy hay 9 acciones sin alertas de riesgo: LLY, MA, ABBV, V y 5 más.", many_text)
         self.assertNotIn("y V y", many_text)
-        self.assertNotIn("SPY", text.split("verde")[1][:40])
+        self.assertNotIn("SPY", text.split("riesgo")[1][:40])
 
     def test_old_payload_does_not_invent_a_green_count(self):
         snap = s.snapshot_from_payload(
@@ -391,7 +334,7 @@ class EntryResumenTests(unittest.TestCase):
         )
         self.assertFalse(snap["entry_known"])
         text = s.compose_resumen(snap, None)["text"]
-        self.assertNotIn("en verde", text)
+        self.assertNotIn("sin alertas de riesgo", text)
 
     def test_no_greens_is_stated(self):
         snap = s.snapshot_from_payload(
@@ -404,7 +347,7 @@ class EntryResumenTests(unittest.TestCase):
             }
         )
         text = s.compose_resumen(snap, None)["text"]
-        self.assertIn("Hoy no hay acciones en verde.", text)
+        self.assertIn("Hoy no hay acciones sin alertas de riesgo.", text)
 
 
 if __name__ == "__main__":

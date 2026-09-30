@@ -72,7 +72,7 @@ class PillarPointTests(unittest.TestCase):
         self.assertAlmostEqual(sum(b.PILLAR_WEIGHTS.values()), 1.0)
         self.assertEqual(
             b.PILLAR_MAX_POINTS,
-            {"tendencia": 25, "fuerza_rs": 30, "contraccion": 30, "setup": 15},
+            {"tendencia": 30, "fuerza_rs": 35, "contraccion": 35},
         )
         self.assertEqual(sum(b.PILLAR_MAX_POINTS.values()), 100)
 

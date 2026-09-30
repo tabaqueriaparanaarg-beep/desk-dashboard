@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Historial del semáforo de entrada.
+"""Historial del semáforo de riesgo.
 
 Cada build guarda una foto por fecha de rueda (veredicto, Desk Score, puesto
 y cierre). Una corrida posterior del mismo día pisa esa foto, así el build de
@@ -52,7 +52,14 @@ PROVISIONAL_MIN_CLOSED_SIGNALS = 10
 PROVISIONAL_PURGE_REAL_DAYS = 60
 VERDICTS = ("verde", "ambar", "rojo")
 
-DISCLAIMER = "Resultados pasados no garantizan resultados futuros."
+DISCLAIMER = (
+    "El verde es «sin alertas de riesgo», no una compra. "
+    "Resultados pasados no garantizan resultados futuros."
+)
+UNIVERSE_BENCHMARK = (
+    "Además de SPY, cada ventana se compara con el promedio equiponderado de las acciones "
+    "(sin ETFs ni SPY) que tienen cierre en los dos extremos."
+)
 EARNINGS_NOTE = (
     "En los días reconstruidos el chequeo de resultados se tomó como aprobado, "
     "porque ese calendario no se puede armar hacia atrás."
@@ -129,12 +136,21 @@ def _clean_row(row: dict) -> dict[str, Any] | None:
     return out
 
 
+def _rules_version(snap: dict | None) -> int:
+    """Fotos sin el campo son la definición 1 (semáforo de entrada)."""
+    raw = snap.get("rules_version") if isinstance(snap, dict) else None
+    if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+        return raw
+    return 1
+
+
 def make_snapshot(
     session: str,
     rows: list[dict],
     *,
     after_close: bool,
     reconstruido: bool,
+    rules_version: int | None = None,
 ) -> dict[str, Any] | None:
     day = _iso(session)
     if day is None:
@@ -150,10 +166,12 @@ def make_snapshot(
     if not clean:
         return None
     clean.sort(key=lambda r: (r.get("rank") is None, r.get("rank") or 0, r["symbol"]))
+    version = signals.SEMAFORO_RULES_VERSION if rules_version is None else int(rules_version)
     return {
         "date": day,
         "after_close": bool(after_close),
         "reconstruido": bool(reconstruido),
+        "rules_version": version,
         "earnings_check": "omitido" if reconstruido else "publicado",
         "rows": clean,
     }
@@ -165,6 +183,7 @@ def snapshot_from_rows(
     *,
     after_close: bool,
     reconstruido: bool,
+    rules_version: int | None = None,
 ) -> dict[str, Any] | None:
     """Foto del ranking ya calculado (el del día, con calendario real)."""
     packed: list[dict] = []
@@ -183,7 +202,13 @@ def snapshot_from_rows(
                 "close": row.get("close"),
             }
         )
-    return make_snapshot(session, packed, after_close=after_close, reconstruido=reconstruido)
+    return make_snapshot(
+        session,
+        packed,
+        after_close=after_close,
+        reconstruido=reconstruido,
+        rules_version=rules_version,
+    )
 
 
 def session_date_from_rows(rows: list[dict] | None) -> str | None:
@@ -249,9 +274,44 @@ def upsert_snapshot(history: dict, snapshot: dict | None) -> dict:
     return history
 
 
-def needs_backfill(history: dict) -> bool:
+def backfill_is_current(history: dict) -> bool:
     backfill = history.get("backfill")
-    return not (isinstance(backfill, dict) and backfill.get("done"))
+    if not isinstance(backfill, dict) or not backfill.get("done"):
+        return False
+    return backfill.get("rules_version") == signals.SEMAFORO_RULES_VERSION
+
+
+def needs_backfill(history: dict) -> bool:
+    return not backfill_is_current(history)
+
+
+def retire_stale_reconstruction(history: dict) -> bool:
+    """Tira la reconstrucción de otra definición para poder rehacerla.
+
+    Las fotos reales quedan. Si la reconstrucción ya es de esta definición,
+    se marca el backfill y no se toca.
+    """
+    if backfill_is_current(history):
+        return False
+    recon = history.get("reconstructed")
+    if isinstance(recon, dict) and recon:
+        current = signals.SEMAFORO_RULES_VERSION
+        if all(_rules_version(s) == current for s in recon.values() if isinstance(s, dict)):
+            backfill = dict(history.get("backfill") or {})
+            backfill["done"] = True
+            backfill["rules_version"] = current
+            history["backfill"] = backfill
+            return False
+    elif not isinstance(recon, dict):
+        history["reconstructed"] = {}
+    history["reconstructed"] = {}
+    previous = history.get("backfill") if isinstance(history.get("backfill"), dict) else {}
+    history["backfill"] = {
+        "done": False,
+        "reason": "cambio_de_definicion",
+        "previous_rules_version": previous.get("rules_version") or 1,
+    }
+    return True
 
 
 def apply_backfill(history: dict, snaps: list[dict]) -> int:
@@ -285,11 +345,13 @@ def apply_backfill(history: dict, snaps: list[dict]) -> int:
             "added": added,
             "earnings": "omitido",
             "provisional": True,
+            "rules_version": signals.SEMAFORO_RULES_VERSION,
             "note": (
                 "Reconstruido solo con precios hasta esa fecha, en un bloque aparte. "
                 "El chequeo de resultados se tomó como aprobado. "
+                f"Definición versión {signals.SEMAFORO_RULES_VERSION}. "
                 "Se borra al llegar a "
-                f"{PROVISIONAL_PURGE_REAL_DAYS} ruedas reales."
+                f"{PROVISIONAL_PURGE_REAL_DAYS} ruedas reales de esa definición."
             ),
         }
     else:
@@ -306,9 +368,17 @@ def real_snapshot_count(history: dict) -> int:
     return 0
 
 
+def current_real_snapshot_count(history: dict) -> int:
+    snaps = history.get("snapshots")
+    if not isinstance(snaps, dict):
+        return 0
+    version = signals.SEMAFORO_RULES_VERSION
+    return sum(1 for snap in snaps.values() if isinstance(snap, dict) and _rules_version(snap) == version)
+
+
 def maybe_purge_reconstructed(history: dict) -> bool:
-    """Borra la reconstrucción al llegar a PROVISIONAL_PURGE_REAL_DAYS ruedas reales."""
-    if real_snapshot_count(history) < PROVISIONAL_PURGE_REAL_DAYS:
+    """Borra la reconstrucción al llegar a PROVISIONAL_PURGE_REAL_DAYS ruedas de esta definición."""
+    if current_real_snapshot_count(history) < PROVISIONAL_PURGE_REAL_DAYS:
         return False
     history["reconstructed"] = {}
     backfill = history.get("backfill") if isinstance(history.get("backfill"), dict) else {}
@@ -317,6 +387,7 @@ def maybe_purge_reconstructed(history: dict) -> bool:
     backfill["purged"] = True
     backfill["provisional"] = False
     backfill["reason"] = "ruedas_reales"
+    backfill["rules_version"] = signals.SEMAFORO_RULES_VERSION
     history["backfill"] = backfill
     return True
 
@@ -334,11 +405,17 @@ def _snap_from_item(item: dict, *, reconstruido: bool) -> dict[str, Any] | None:
     rows = item.get("rows")
     if day is None or not isinstance(rows, list):
         return None
+    raw_version = item.get("rules_version")
+    if isinstance(raw_version, int) and not isinstance(raw_version, bool) and raw_version > 0:
+        rules_version = raw_version
+    else:
+        rules_version = 1
     return make_snapshot(
         day,
         [r for r in rows if isinstance(r, dict)],
         after_close=bool(item.get("after_close")),
         reconstruido=reconstruido,
+        rules_version=rules_version,
     )
 
 
@@ -694,26 +771,44 @@ def window_return(
     return _closed_window(ticker, spy, i, horizon)
 
 
+def _with_universe(payload: dict[str, Any], universe_ret: float | None) -> dict[str, Any]:
+    out = dict(payload)
+    ret = payload.get("return_pct")
+    out["universe_return_pct"] = universe_ret
+    out["excess_universe_pct"] = None if universe_ret is None or ret is None else ret - universe_ret
+    return out
+
+
 def _closed_window(
     ticker: list[float | None],
     spy: list[float | None],
     i: int,
     horizon: int,
+    universe_at: Callable[[int, int], float | None] | None = None,
 ) -> dict[str, Any] | None:
     pair = _pair_at(ticker, spy, i, i + horizon)
     if pair is None:
         return None
     ticker_ret, spy_ret = pair
-    return {
-        "status": "cerrada",
-        "return_pct": ticker_ret,
-        "spy_return_pct": spy_ret,
-        "excess_pct": ticker_ret - spy_ret,
-        "sessions": horizon,
-    }
+    uret = None if universe_at is None else universe_at(i, i + horizon)
+    return _with_universe(
+        {
+            "status": "cerrada",
+            "return_pct": ticker_ret,
+            "spy_return_pct": spy_ret,
+            "excess_pct": ticker_ret - spy_ret,
+            "sessions": horizon,
+        },
+        uret,
+    )
 
 
-def _pending_window(ticker: list[float | None], spy: list[float | None], i: int) -> dict[str, Any]:
+def _pending_window(
+    ticker: list[float | None],
+    spy: list[float | None],
+    i: int,
+    universe_at: Callable[[int, int], float | None] | None = None,
+) -> dict[str, Any]:
     """Retorno hasta el último cierre disponible. Si no hay rueda posterior, sigue en curso."""
     last = None
     for j in range(len(ticker) - 1, i, -1):
@@ -721,23 +816,30 @@ def _pending_window(ticker: list[float | None], spy: list[float | None], i: int)
             last = j
             break
     if last is None:
-        return {
-            "status": "en curso",
-            "return_pct": None,
-            "spy_return_pct": None,
-            "excess_pct": None,
-            "sessions": 0,
-        }
+        return _with_universe(
+            {
+                "status": "en curso",
+                "return_pct": None,
+                "spy_return_pct": None,
+                "excess_pct": None,
+                "sessions": 0,
+            },
+            None,
+        )
     pair = _pair_at(ticker, spy, i, last)
     assert pair is not None
     ticker_ret, spy_ret = pair
-    return {
-        "status": "en curso",
-        "return_pct": ticker_ret,
-        "spy_return_pct": spy_ret,
-        "excess_pct": ticker_ret - spy_ret,
-        "sessions": last - i,
-    }
+    uret = None if universe_at is None else universe_at(i, last)
+    return _with_universe(
+        {
+            "status": "en curso",
+            "return_pct": ticker_ret,
+            "spy_return_pct": spy_ret,
+            "excess_pct": ticker_ret - spy_ret,
+            "sessions": last - i,
+        },
+        uret,
+    )
 
 
 def signal_outcome(
@@ -745,55 +847,104 @@ def signal_outcome(
     spy: list[float | None],
     i: int,
     horizon: int = 20,
+    universe_at: Callable[[int, int], float | None] | None = None,
 ) -> dict[str, Any]:
     """Para la lista: la ventana de 20 ruedas si ya cerró; si no, el retorno a hoy."""
-    closed = _closed_window(ticker, spy, i, horizon)
+    closed = _closed_window(ticker, spy, i, horizon, universe_at)
     if closed is not None:
         return closed
-    return _pending_window(ticker, spy, i)
+    return _pending_window(ticker, spy, i, universe_at)
 
 
-def _agg(pairs: list[tuple[float, float]]) -> dict[str, Any]:
+def _empty_agg() -> dict[str, Any]:
+    return {
+        "n": 0,
+        "avg": None,
+        "median": None,
+        "spy_avg": None,
+        "excess": None,
+        "universe_avg": None,
+        "excess_universe": None,
+        "hit_pct": None,
+        "beat_pct": None,
+        "beat_universe_pct": None,
+        "best": None,
+        "worst": None,
+    }
+
+
+def _agg(pairs: list[tuple[float, float, float | None]]) -> dict[str, Any]:
     if not pairs:
-        return {
-            "n": 0,
-            "avg": None,
-            "median": None,
-            "spy_avg": None,
-            "excess": None,
-            "hit_pct": None,
-            "beat_pct": None,
-            "best": None,
-            "worst": None,
-        }
+        return _empty_agg()
     ticker = [p[0] for p in pairs]
     spy = [p[1] for p in pairs]
-    excess = [a - b for a, b in pairs]
+    excess = [p[0] - p[1] for p in pairs]
+    uni = [p[2] for p in pairs if p[2] is not None]
+    excess_u = [p[0] - p[2] for p in pairs if p[2] is not None]
     return {
         "n": len(pairs),
         "avg": round(sum(ticker) / len(ticker), 2),
         "median": round(float(statistics.median(ticker)), 2),
         "spy_avg": round(sum(spy) / len(spy), 2),
         "excess": round(sum(excess) / len(excess), 2),
+        "universe_avg": round(sum(uni) / len(uni), 2) if uni else None,
+        "excess_universe": round(sum(excess_u) / len(excess_u), 2) if excess_u else None,
         "hit_pct": round(sum(1 for v in ticker if v > 0) / len(ticker) * 100.0, 1),
         "beat_pct": round(sum(1 for v in excess if v > 0) / len(excess) * 100.0, 1),
+        "beat_universe_pct": round(sum(1 for v in excess_u if v > 0) / len(excess_u) * 100.0, 1) if excess_u else None,
         "best": round(max(ticker), 2),
         "worst": round(min(ticker), 2),
     }
 
 
-def _stats(signals: list[dict], closes: dict[str, list[float | None]], spy: list[float | None], horizon: int, *, reconstructed: bool | None = None) -> dict[str, Any]:
-    pairs: list[tuple[float, float]] = []
+def _stock_symbols(closes: dict[str, list[float | None]], meta_by: dict[str, dict]) -> list[str]:
+    return sorted(sym for sym in closes if sym != "SPY" and not _is_etf(sym, meta_by))
+
+
+def _universe_return(
+    closes: dict[str, list[float | None]],
+    symbols: list[str],
+    i: int,
+    j: int,
+) -> float | None:
+    """Promedio equiponderado del retorno de las acciones entre dos ruedas."""
+    rets: list[float] = []
+    for sym in symbols:
+        series = closes.get(sym) or []
+        if i < 0 or j >= len(series) or j < 0:
+            continue
+        c0, c1 = series[i], series[j]
+        if c0 in (None, 0) or c1 in (None, 0):
+            continue
+        assert c0 is not None and c1 is not None
+        rets.append((c1 / c0 - 1.0) * 100.0)
+    if not rets:
+        return None
+    return sum(rets) / len(rets)
+
+
+def _stats(
+    signals: list[dict],
+    closes: dict[str, list[float | None]],
+    spy: list[float | None],
+    horizon: int,
+    *,
+    reconstructed: bool | None = None,
+    universe_at: Callable[[int, int], float | None] | None = None,
+) -> dict[str, Any]:
+    pairs: list[tuple[float, float, float | None]] = []
     for sig in signals:
         if reconstructed is not None and bool(sig.get("reconstruido")) is not reconstructed:
             continue
         series = closes.get(sig["symbol"])
         if not series:
             continue
-        closed = _closed_window(series, spy, int(sig["index"]), horizon)
+        index = int(sig["index"])
+        closed = _closed_window(series, spy, index, horizon)
         if closed is None:
             continue
-        pairs.append((closed["return_pct"], closed["spy_return_pct"]))
+        uret = None if universe_at is None else universe_at(index, index + horizon)
+        pairs.append((closed["return_pct"], closed["spy_return_pct"], uret))
     return _agg(pairs)
 
 
@@ -818,28 +969,43 @@ def _step_return(symbols: list[str], i: int, closes: dict[str, list[float | None
     return sum(rets) / len(rets)
 
 
+def _snap_stocks(snap: dict, meta_by: dict[str, dict]) -> list[str]:
+    out: list[str] = []
+    for row in snap.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or "").upper()
+        if not sym or sym == "SPY" or _is_etf(sym, meta_by):
+            continue
+        out.append(sym)
+    return out
+
+
 def equity_curve(history: dict, meta_by: dict[str, dict]) -> dict[str, Any]:
-    """Cartera equiponderada de lo que estaba en verde al cierre anterior, contra SPY."""
+    """Cartera de lo que estaba sin alertas, contra el universo equiponderado y SPY."""
     snaps = _sorted_snaps(history)
     dates, closes = _close_matrix(history)
     note = (
-        "Cada rueda se mantiene, en partes iguales, lo que estaba en verde al cierre anterior. "
-        "La serie de acciones deja afuera los ETF. Si ese día no hay ninguna, el tramo queda en efectivo. "
-        "SPY es comprar y mantener entre las mismas fechas. Sin comisiones."
+        "Cada rueda se mantiene, en partes iguales, lo que estaba sin alertas al cierre anterior. "
+        "Esa serie deja afuera los ETF. Si ese día no hay ninguna, el tramo queda en efectivo. "
+        "El universo es el promedio equiponderado de las acciones de esa rueda, también sin ETF. "
+        "SPY es comprar y mantener entre las mismas fechas. Sin comisiones. No es una señal de compra."
     )
     if len(dates) < 2:
         return {
             "base": 100,
             "stocks_return_pct": None,
             "all_return_pct": None,
+            "universe_return_pct": None,
             "spy_return_pct": None,
             "note": note,
             "curve": [],
         }
     eq_s = 100.0
     eq_a = 100.0
+    eq_u = 100.0
     eq_spy = 100.0
-    curve = [{"date": dates[0], "stocks": 100.0, "all": 100.0, "spy": 100.0}]
+    curve = [{"date": dates[0], "stocks": 100.0, "all": 100.0, "universe": 100.0, "spy": 100.0}]
     for i, snap in enumerate(snaps[:-1]):
         stocks: list[str] = []
         everyone: list[str] = []
@@ -854,12 +1020,14 @@ def equity_curve(history: dict, meta_by: dict[str, dict]) -> dict[str, Any]:
                 stocks.append(sym)
         eq_s *= 1.0 + _step_return(stocks, i, closes)
         eq_a *= 1.0 + _step_return(everyone, i, closes)
+        eq_u *= 1.0 + _step_return(_snap_stocks(snap, meta_by), i, closes)
         eq_spy *= 1.0 + _step_return(["SPY"], i, closes)
         curve.append(
             {
                 "date": dates[i + 1],
                 "stocks": round(eq_s, 2),
                 "all": round(eq_a, 2),
+                "universe": round(eq_u, 2),
                 "spy": round(eq_spy, 2),
             }
         )
@@ -867,6 +1035,7 @@ def equity_curve(history: dict, meta_by: dict[str, dict]) -> dict[str, Any]:
         "base": 100,
         "stocks_return_pct": round(eq_s - 100.0, 2),
         "all_return_pct": round(eq_a - 100.0, 2),
+        "universe_return_pct": round(eq_u - 100.0, 2),
         "spy_return_pct": round(eq_spy - 100.0, 2),
         "note": note,
         "curve": curve,
@@ -885,24 +1054,38 @@ def _ddmm(iso: str | None) -> str:
     return text
 
 
-def panel_sentence(stats: dict | None, *, provisional: bool = False) -> str:
+def _vs_benchmarks(stats: dict) -> str:
+    text = f"contra {_fmt_pct(stats.get('spy_avg'))} de SPY"
+    if stats.get("universe_avg") is not None:
+        text += f" y {_fmt_pct(stats.get('universe_avg'))} del universo equiponderado"
+    return text
+
+
+def panel_sentence(stats: dict | None, *, provisional: bool = False, entrada: bool = False) -> str:
+    if entrada:
+        who = "las verdes de la definición anterior"
+        empty = "Todavía no hay verdes de la definición anterior con la ventana de 20 ruedas cerrada."
+    else:
+        who = "sin alertas de riesgo"
+        empty = "Todavía no hay señales sin alertas de riesgo con la ventana de 20 ruedas cerrada."
     if not stats or not stats.get("n") or stats.get("avg") is None or stats.get("spy_avg") is None:
-        base = "Todavía no hay señales verdes con la ventana de 20 ruedas cerrada."
+        base = empty
     else:
         base = (
-            f"En las últimas {stats['n']} señales, las verdes rindieron {_fmt_pct(stats['avg'])} "
-            f"en 20 ruedas contra {_fmt_pct(stats['spy_avg'])} de SPY."
+            f"En las últimas {stats['n']} señales, {who} rindieron {_fmt_pct(stats['avg'])} "
+            f"en 20 ruedas {_vs_benchmarks(stats)}."
         )
     if provisional:
         return "Provisorio (reconstruido). " + base
     return base
 
 
-def _provisional_note(real_closed: int) -> str:
+def _provisional_note(real_closed: int, *, entrada: bool = False) -> str:
+    kind = "verdes de la definición anterior" if entrada else "sin alertas"
     if real_closed == 1:
-        cuantas = "Hay 1 señal verde real con esta ventana cerrada."
+        cuantas = f"Hay 1 señal real {kind} con esta ventana cerrada."
     else:
-        cuantas = f"Hay {real_closed} señales verdes reales con esta ventana cerrada."
+        cuantas = f"Hay {real_closed} señales reales {kind} con esta ventana cerrada."
     return (
         cuantas
         + f" El provisorio desaparece al llegar a {PROVISIONAL_MIN_CLOSED_SIGNALS}."
@@ -916,9 +1099,11 @@ def resumen_sentence(block: dict | None) -> str | None:
         return None
     bits: list[str] = []
     for item in closed[:3]:
+        uni = item.get("universe_return_pct")
+        extra = f" y {_fmt_pct(uni)} del universo" if uni is not None else ""
         bits.append(
-            f"{item.get('symbol')} (verde el {_ddmm(item.get('date'))}, "
-            f"{_fmt_pct(item.get('return_pct'))} contra {_fmt_pct(item.get('spy_return_pct'))} de SPY)"
+            f"{item.get('symbol')} (sin alerta el {_ddmm(item.get('date'))}, "
+            f"{_fmt_pct(item.get('return_pct'))} contra {_fmt_pct(item.get('spy_return_pct'))} de SPY{extra})"
         )
     sentence = "Cerró la ventana de 20 ruedas " + signals._es_join(bits)
     extra = len(closed) - 3
@@ -941,16 +1126,32 @@ def append_resumen_sentence(resumen: dict | None, block: dict | None) -> None:
 
 def _round_outcome(outcome: dict[str, Any]) -> dict[str, Any]:
     out = dict(outcome)
-    for key in ("return_pct", "spy_return_pct", "excess_pct"):
+    for key in ("return_pct", "spy_return_pct", "excess_pct", "universe_return_pct", "excess_universe_pct"):
         if out.get(key) is not None:
             out[key] = round(float(out[key]), 2)
     return out
 
 
-def _metrics_bundle(history: dict) -> tuple[dict[str, dict[str, Any]], dict[str, Any], list[dict[str, Any]], list[str], dict[str, list[float | None]], list[float | None]]:
-    """Tabla, variante de todos los días, señales verdes deduplicadas, fechas, cierres y SPY."""
+def _metrics_bundle(
+    history: dict,
+    meta_by: dict[str, dict],
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[str],
+    dict[str, list[float | None]],
+    list[float | None],
+    Callable[[int, int], float | None],
+]:
+    """Tabla, variante de todos los días, señales deduplicadas, fechas, cierres, SPY y universo."""
     dates, closes = _close_matrix(history)
     spy = closes.get("SPY") or [None] * len(dates)
+    symbols = _stock_symbols(closes, meta_by)
+
+    def universe_at(i: int, j: int) -> float | None:
+        return _universe_return(closes, symbols, i, j)
+
     groups = {
         "verde": iter_signals(history, "verde", dedup=True),
         "ambar": iter_signals(history, "ambar", dedup=True),
@@ -959,28 +1160,40 @@ def _metrics_bundle(history: dict) -> tuple[dict[str, dict[str, Any]], dict[str,
     }
     table: dict[str, dict[str, Any]] = {}
     for name, signals_ in groups.items():
-        table[name] = {str(h): _stats(signals_, closes, spy, h) for h in HORIZONS}
+        table[name] = {str(h): _stats(signals_, closes, spy, h, universe_at=universe_at) for h in HORIZONS}
     verde_all = iter_signals(history, "verde", dedup=False)
-    all_days = {str(h): _stats(verde_all, closes, spy, h) for h in HORIZONS}
-    return table, all_days, groups["verde"], dates, closes, spy
+    all_days = {str(h): _stats(verde_all, closes, spy, h, universe_at=universe_at) for h in HORIZONS}
+    return table, all_days, groups["verde"], dates, closes, spy, universe_at
 
 
 def _book_history(book: dict) -> dict:
     return {"snapshots": book, "reconstructed": {}}
 
 
-def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[str, Any]:
-    """Informe para la UI. Cada horizonte sale de una sola fuente, real o reconstruida."""
-    meta_by = meta_by or {}
-    real_book = history.get("snapshots") if isinstance(history.get("snapshots"), dict) else {}
-    recon_book = history.get("reconstructed") if isinstance(history.get("reconstructed"), dict) else {}
-    purged = real_snapshot_count({"snapshots": real_book}) >= PROVISIONAL_PURGE_REAL_DAYS
+def _split_by_rules(book: dict | None) -> tuple[dict[str, dict], dict[str, dict]]:
+    current: dict[str, dict] = {}
+    legacy: dict[str, dict] = {}
+    version = signals.SEMAFORO_RULES_VERSION
+    if not isinstance(book, dict):
+        return current, legacy
+    for day, snap in book.items():
+        if not isinstance(snap, dict):
+            continue
+        target = current if _rules_version(snap) == version else legacy
+        target[str(day)] = snap
+    return current, legacy
+
+
+def _assemble_slice(real_book: dict, recon_book: dict, meta_by: dict[str, dict], *, entrada: bool = False) -> dict[str, Any]:
+    """Métricas de una sola definición. Real y reconstruido no se mezclan en el mismo número."""
+    purged = len(real_book) >= PROVISIONAL_PURGE_REAL_DAYS
     if purged:
         recon_book = {}
     real_hist = _book_history(real_book)
     recon_hist = _book_history(recon_book)
-    real_table, real_all, real_verde, real_dates, real_closes, real_spy = _metrics_bundle(real_hist)
-    recon_table, recon_all, _recon_verde, _recon_dates, _recon_closes, _recon_spy = _metrics_bundle(recon_hist)
+    real_table, real_all, real_verde, real_dates, real_closes, real_spy, universe_at = _metrics_bundle(real_hist, meta_by)
+    recon_table, recon_all, _recon_verde, recon_dates, _recon_closes, _recon_spy, _recon_u = _metrics_bundle(recon_hist, meta_by)
+    del _recon_u
     table: dict[str, dict[str, Any]] = {name: {} for name in ("verde", "ambar", "rojo", "universo")}
     horizons_meta: dict[str, dict[str, Any]] = {}
     any_provisional = False
@@ -997,7 +1210,7 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
             "real_closed": real_closed,
             "threshold": PROVISIONAL_MIN_CLOSED_SIGNALS,
             "label": "Provisorio (reconstruido)" if provisional else "",
-            "note": _provisional_note(real_closed) if provisional else "",
+            "note": _provisional_note(real_closed, entrada=entrada) if provisional else "",
         }
     twenty_provisional = bool(horizons_meta["20"]["provisional"])
     shown_20 = table["verde"]["20"]
@@ -1006,15 +1219,15 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
     todos_sentence = None
     if todos.get("n") and todos.get("avg") is not None and todos.get("spy_avg") is not None:
         todos_sentence = (
-            f"Si se cuenta cada día en verde y no solo el primero de la racha, son {todos['n']} señales, "
-            f"con un retorno medio de {_fmt_pct(todos['avg'])} en 20 ruedas contra {_fmt_pct(todos['spy_avg'])} de SPY."
+            f"Si se cuenta cada día {'en verde' if entrada else 'sin alerta'} y no solo el primero de la racha, son {todos['n']} señales, "
+            f"con un retorno medio de {_fmt_pct(todos['avg'])} en 20 ruedas {_vs_benchmarks(todos)}."
         )
         if twenty_provisional:
             todos_sentence = "Provisorio (reconstruido). " + todos_sentence
     recent: list[dict[str, Any]] = []
     for sig in reversed(real_verde):
         series = real_closes.get(sig["symbol"]) or []
-        outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20))
+        outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20, universe_at))
         recent.append(
             {
                 "date": sig["date"],
@@ -1035,7 +1248,7 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
         if len(pack["signals"]) >= FICHA_LIMIT:
             continue
         series = real_closes.get(sig["symbol"]) or []
-        outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20))
+        outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20, universe_at))
         pack["signals"].append({"date": sig["date"], **outcome})
     last_i = len(real_dates) - 1
     closed_today: list[dict[str, Any]] = []
@@ -1044,13 +1257,13 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
             if int(sig["index"]) + 20 != last_i:
                 continue
             series = real_closes.get(sig["symbol"]) or []
-            outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20))
+            outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20, universe_at))
             if outcome.get("status") != "cerrada":
                 continue
             closed_today.append({"date": sig["date"], "symbol": sig["symbol"], **outcome})
     real_snaps = _sorted_snaps(real_hist)
     latest = real_snaps[-1] if real_snaps else None
-    span = real_dates or (_recon_dates if not purged else [])
+    span = real_dates or (recon_dates if not purged else [])
     return {
         "real_days": len(real_book),
         "reconstructed_days": 0 if purged else len(recon_book),
@@ -1067,9 +1280,10 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
         "horizons": list(HORIZONS),
         "horizons_meta": horizons_meta,
         "dedup": DEDUP_RULE,
+        "universe_benchmark": UNIVERSE_BENCHMARK,
         "disclaimer": DISCLAIMER,
         "earnings_note": EARNINGS_NOTE if any_provisional else "",
-        "sentence": panel_sentence(shown_20, provisional=twenty_provisional),
+        "sentence": panel_sentence(shown_20, provisional=twenty_provisional, entrada=entrada),
         "todos_los_dias_sentence": todos_sentence,
         "table": table,
         "verde_20": shown_20,
@@ -1078,6 +1292,35 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
         "closed_today": closed_today,
         "equity": equity_curve(real_hist, meta_by),
     }
+
+
+def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[str, Any]:
+    """Informe para la UI. Cada horizonte sale de una sola fuente y de una sola definición."""
+    meta_by = meta_by or {}
+    real_book = history.get("snapshots") if isinstance(history.get("snapshots"), dict) else {}
+    recon_book = history.get("reconstructed") if isinstance(history.get("reconstructed"), dict) else {}
+    real_cur, real_old = _split_by_rules(real_book)
+    recon_cur, recon_old = _split_by_rules(recon_book)
+    report = _assemble_slice(real_cur, recon_cur, meta_by)
+    report["rules_version"] = signals.SEMAFORO_RULES_VERSION
+    report["rules_label"] = signals.SEMAFORO_RULES_LABEL
+    legacy = None
+    if real_old or recon_old:
+        legacy = _assemble_slice(real_old, recon_old, meta_by, entrada=True)
+        legacy["rules_version"] = 1
+        legacy["label"] = "Definición anterior (semáforo de entrada)"
+        legacy["note"] = (
+            "Estas fotos se armaron cuando el verde era una lectura de entrada. "
+            "No se promedian con la alerta de riesgo."
+        )
+        if not (report.get("verde_20") or {}).get("n"):
+            report["sentence"] = (
+                "Con esta definición (alerta de riesgo) todavía no hay señales con la ventana de 20 ruedas cerrada. "
+                "Lo de abajo es la definición anterior y no se mezcla con esta."
+            )
+    report["legacy"] = legacy
+    report["definition_note"] = legacy["note"] if legacy else ""
+    return report
 
 
 def _note(loaded: LoadResult, history: dict, *, did_backfill: bool, elapsed: float, saved: bool) -> str:
@@ -1126,10 +1369,11 @@ def publish(
         save_history(history_path, empty_history(), loaded, flag_path)
         return None, _note(loaded, empty_history(), did_backfill=False, elapsed=0.0, saved=False)
     history = loaded.history or empty_history()
+    retire_stale_reconstruction(history)
     maybe_purge_reconstructed(history)
     did_backfill = False
     elapsed = 0.0
-    if needs_backfill(history) and real_snapshot_count(history) < PROVISIONAL_PURGE_REAL_DAYS:
+    if needs_backfill(history) and current_real_snapshot_count(history) < PROVISIONAL_PURGE_REAL_DAYS:
         try:
             t0 = time.perf_counter()
             snaps = backfill_snapshots(meta_by, all_bars)

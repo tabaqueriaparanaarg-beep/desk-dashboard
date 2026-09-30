@@ -100,36 +100,24 @@ COMPARE_SPECS: list[tuple[str, str]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Semáforo de entrada. Informativo: no entra en el Desk Score ni reordena.
+# Semáforo de riesgo. Informativo: no entra en el Desk Score ni reordena.
 # ---------------------------------------------------------------------------
-# Verde solo si pasan todos los chequeos críticos. Rojo si falla el gate de
-# tendencia o un bloqueo duro (cruce bajista reciente de la EMA200). El resto
-# de los fallos deja el semáforo en ámbar.
-ENTRY_MIN_DESK_SCORE = 65.0
-# Estirado antes de que salte la penalización del score (esa usa 25% / RSI 78).
-ENTRY_MAX_DIST_EMA200 = 18.0
-ENTRY_MAX_DIST_SMA50 = 12.0
-ENTRY_MAX_RSI = 75.0
+# No es una señal de compra. Verde = sin alertas de riesgo. Rojo si falla la
+# tendencia o hay un cruce bajista reciente de la EMA200. Resultados cerca
+# deja el semáforo en ámbar. No se mira estiramiento, Desk Score, patrón,
+# sector ni flags: un estudio de feb-2022 a sep-2026 no les encontró el signo
+# esperado, y las reglas de «muy estirado» no se invierten.
+# Versión 1 era el semáforo de entrada (esas reglas de más). Las fotos viejas
+# llevan rules_version 1 y no se mezclan con esta.
+SEMAFORO_RULES_VERSION = 2
+SEMAFORO_RULES_LABEL = "alerta de riesgo"
 ENTRY_EARNINGS_DAYS = 7
-# ETFs no tienen sector en la vista: se mira su propio RS semanal (misma
-# ventana y banda que la vista de sectores) o, si no, el percentil >= 50.
-ENTRY_RS_WEEKS = 4
-ENTRY_RS_FLAT_BAND = 1.0
-ENTRY_ETF_RS_TOP_HALF = 50.0
-ENTRY_CONSTRUCTIVE = ("pullback_sma50", "base", "breakout_52w")
 ENTRY_BEARISH_PATTERN = "ema200_cross_down"
-ENTRY_DISCLAIMER = "Lectura técnica automática. No es recomendación de compra."
+ENTRY_DISCLAIMER = "Alerta de riesgo automática. El verde no es una señal de compra."
 ENTRY_LABELS = {
-    "verde": "Verde: condiciones a favor",
-    "ambar": "Ámbar: revisar",
-    "rojo": "Rojo: no entrar por ahora",
-}
-ENTRY_FLAG_LABELS = {
-    "extendido_vs_ema200": "extendido",
-    "atr_elevado": "ATR alto",
-    "posible_distribucion": "posible distribución",
-    "rsi_sobrecompra": "RSI en sobrecompra",
-    "rsi_sobreventa": "RSI en sobreventa",
+    "verde": "Verde: sin alertas de riesgo",
+    "ambar": "Ámbar: resultados cerca",
+    "rojo": "Rojo: alerta de riesgo",
 }
 
 # Recomendaciones de analistas (Finnhub /stock/recommendation). Mensual.
@@ -769,7 +757,7 @@ def attach_sector_medians(rows: list[dict] | None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Semáforo de entrada
+# Semáforo de riesgo
 # ---------------------------------------------------------------------------
 
 def _pattern_ids(row: dict) -> list[str]:
@@ -780,52 +768,6 @@ def _pattern_ids(row: dict) -> list[str]:
         elif isinstance(pat, str):
             ids.append(pat)
     return ids
-
-
-def _sector_index(sectors: dict | None) -> dict[str, dict[str, Any]]:
-    rows = []
-    if isinstance(sectors, dict):
-        rows = [r for r in (sectors.get("rows") or []) if isinstance(r, dict)]
-    n = len(rows)
-    half = math.ceil(n / 2) if n else 0
-    out: dict[str, dict[str, Any]] = {}
-    for i, row in enumerate(rows, 1):
-        key = str(row.get("sector") or "").strip()
-        if not key or key in out:
-            continue
-        out[key] = {
-            "rank": i,
-            "n": n,
-            "half": half,
-            "trend": row.get("rs_trend"),
-            "label": str(row.get("label") or key),
-            "top_half": bool(half and i <= half),
-        }
-    return out
-
-
-def _rs_settings(sectors: dict | None) -> tuple[int, float]:
-    weeks = ENTRY_RS_WEEKS
-    band = ENTRY_RS_FLAT_BAND
-    if isinstance(sectors, dict):
-        raw_weeks = sectors.get("rs_trend_weeks")
-        raw_band = sectors.get("rs_flat_band")
-        if isinstance(raw_weeks, int) and raw_weeks > 0:
-            weeks = raw_weeks
-        if isinstance(raw_band, (int, float)) and not isinstance(raw_band, bool):
-            band = float(raw_band)
-    return weeks, band
-
-
-def _own_rs_delta(row: dict, weeks: int) -> float | None:
-    seq = row.get("rs_weekly")
-    if not isinstance(seq, list) or weeks < 1 or len(seq) <= weeks:
-        return None
-    now = _f(seq[-1])
-    prev = _f(seq[-1 - weeks])
-    if now is None or prev is None:
-        return None
-    return now - prev
 
 
 def _check(cid: str, label: str, ok: bool, reason: str, *, critical: bool = True, hard: bool = False) -> dict[str, Any]:
@@ -849,63 +791,6 @@ def _check_trend(row: dict) -> dict[str, Any]:
     if row.get("ema200_slope_up") is None:
         return _check("trend", "Tendencia", False, "Sin pendiente de la EMA200", hard=True)
     return _check("trend", "Tendencia", True, "Precio sobre la EMA200 y pendiente en alza", hard=True)
-
-
-def _check_sector(row: dict, sector_index: dict[str, dict[str, Any]], rs_weeks: int, rs_band: float) -> dict[str, Any]:
-    if _is_etf(row):
-        delta = _own_rs_delta(row, rs_weeks)
-        trend = None
-        if delta is not None:
-            if abs(delta) < rs_band:
-                trend = "flat"
-            else:
-                trend = "up" if delta > 0 else "down"
-        rs = _f(row.get("rs_score"))
-        top_half = rs is not None and rs >= ENTRY_ETF_RS_TOP_HALF
-        rs_txt = _fmt_es(rs, 1) if rs is not None else None
-        if trend == "up":
-            return _check("sector", "RS propio", True, "RS propio en alza")
-        if trend == "flat":
-            return _check("sector", "RS propio", True, "RS propio estable")
-        if top_half:
-            return _check("sector", "RS propio", True, f"RS propio {rs_txt} en la mitad alta")
-        if trend == "down":
-            return _check("sector", "RS propio", False, "RS propio en baja")
-        return _check("sector", "RS propio", False, "Sin RS propio")
-    info = sector_index.get(_sector_of(row))
-    if not info:
-        return _check("sector", "Sector", False, "Sin lectura de sector")
-    label = info["label"]
-    trend = info.get("trend")
-    if trend == "up":
-        return _check("sector", "Sector", True, f"Sector {label} en alza")
-    if trend == "flat":
-        return _check("sector", "Sector", True, f"Sector {label} estable")
-    if info.get("top_half"):
-        return _check("sector", "Sector", True, f"Sector {label} en la mitad alta")
-    if trend == "down":
-        return _check("sector", "Sector", False, "Sector en baja")
-    return _check("sector", "Sector", False, "Sin tendencia de sector y fuera de la mitad alta")
-
-
-def _check_score(row: dict) -> dict[str, Any]:
-    score = _f(row.get("desk_score"))
-    bar = _fmt_es(ENTRY_MIN_DESK_SCORE, 0)
-    if score is None:
-        return _check("score", "Desk Score", False, "Sin Desk Score")
-    shown = _fmt_es(score, 1)
-    if score >= ENTRY_MIN_DESK_SCORE:
-        return _check("score", "Desk Score", True, f"Desk Score {shown}, en el umbral o arriba")
-    return _check("score", "Desk Score", False, f"Desk Score {shown}, debajo de {bar}")
-
-
-def _check_pattern(row: dict) -> dict[str, Any]:
-    ids = _pattern_ids(row)
-    hits = [pid for pid in ENTRY_CONSTRUCTIVE if pid in ids]
-    if hits:
-        names = [PATTERN_LABELS.get(pid, pid) for pid in hits]
-        return _check("pattern", "Patrón", True, "Marca " + _es_join(names))
-    return _check("pattern", "Patrón", False, "Sin pullback, base ni máximo de 52 semanas")
 
 
 def _parse_iso_date(value: Any) -> date | None:
@@ -973,35 +858,6 @@ def _check_earnings(
     return _check("earnings", "Resultados", True, f"Sin resultados en los próximos {ENTRY_EARNINGS_DAYS} días")
 
 
-def _fmt_stretch(value: float) -> str:
-    digits = 0 if abs(value - round(value)) < 0.05 else 1
-    return "+" + _fmt_es(abs(value), digits) + "%"
-
-
-def _check_extension(row: dict) -> dict[str, Any]:
-    bits: list[str] = []
-    dist_ema = _f(row.get("dist_ema200_pct"))
-    dist_sma = _f(row.get("dist_sma50_pct"))
-    rsi = _f(row.get("rsi14"))
-    if dist_ema is not None and dist_ema > ENTRY_MAX_DIST_EMA200:
-        bits.append(f"{_fmt_stretch(dist_ema)} sobre la EMA200")
-    if dist_sma is not None and dist_sma > ENTRY_MAX_DIST_SMA50:
-        bits.append(f"{_fmt_stretch(dist_sma)} sobre la SMA50")
-    if rsi is not None and rsi > ENTRY_MAX_RSI:
-        bits.append(f"RSI14 en {_fmt_es(rsi, 0)}")
-    if bits:
-        return _check("extension", "Estiramiento", False, "Muy estirado: " + ", ".join(bits))
-    return _check("extension", "Estiramiento", True, "Sin estiramiento excesivo")
-
-
-def _check_flags(row: dict) -> dict[str, Any]:
-    flags = [str(f) for f in (row.get("flags") or []) if f]
-    if not flags:
-        return _check("flags", "Penalizaciones", True, "Sin penalizaciones activas")
-    labels = [ENTRY_FLAG_LABELS.get(f, f) for f in flags]
-    return _check("flags", "Penalizaciones", False, "Hay penalizaciones: " + _es_join(labels))
-
-
 def _check_bearish(row: dict) -> dict[str, Any]:
     if ENTRY_BEARISH_PATTERN in _pattern_ids(row):
         return _check(
@@ -1029,15 +885,18 @@ def entry_verdict(
     earnings_known: bool = False,
     earnings_through: date | None = None,
     earnings_backfill: bool = False,
-    rs_weeks: int = ENTRY_RS_WEEKS,
-    rs_band: float = ENTRY_RS_FLAT_BAND,
+    rs_weeks: int | None = None,
+    rs_band: float | None = None,
 ) -> dict[str, Any]:
-    """Veredicto verde / ámbar / rojo. No lee ni escribe el Desk Score."""
+    """Alerta de riesgo: verde / ámbar / rojo. No lee ni escribe el Desk Score.
+
+    `sector_index`, `rs_weeks` y `rs_band` se aceptan para no romper llamadas
+    viejas. Ya no cambian el color.
+    """
+    del sector_index, rs_weeks, rs_band
     checks = [
         _check_trend(row),
-        _check_sector(row, sector_index or {}, rs_weeks, rs_band),
-        _check_score(row),
-        _check_pattern(row),
+        _check_bearish(row),
         _check_earnings(
             row,
             earnings,
@@ -1046,9 +905,6 @@ def entry_verdict(
             earnings_through=earnings_through,
             earnings_backfill=earnings_backfill,
         ),
-        _check_extension(row),
-        _check_flags(row),
-        _check_bearish(row),
     ]
     hard_fail = any(c["hard"] and not c["ok"] for c in checks)
     critical_ok = all(c["ok"] for c in checks if c["critical"])
@@ -1062,6 +918,7 @@ def entry_verdict(
         "verdict": verdict,
         "label": ENTRY_LABELS[verdict],
         "disclaimer": ENTRY_DISCLAIMER,
+        "rules_version": SEMAFORO_RULES_VERSION,
         "checks": checks,
     }
 
@@ -1077,21 +934,17 @@ def attach_entry_lights(
     earnings_backfill: bool = False,
 ) -> None:
     """Escribe row['entry']. No toca desk_score, rank ni el orden de la lista."""
-    index = _sector_index(sectors)
-    weeks, band = _rs_settings(sectors)
+    del sectors
     for row in rows or []:
         if not isinstance(row, dict):
             continue
         row["entry"] = entry_verdict(
             row,
-            sector_index=index,
             earnings=earnings,
             today=today,
             earnings_known=earnings_known,
             earnings_through=earnings_through,
             earnings_backfill=earnings_backfill,
-            rs_weeks=weeks,
-            rs_band=band,
         )
 
 
@@ -1605,9 +1458,9 @@ def _sentence_entry(snap: dict) -> str | None:
     greens = [str(s) for s in (snap.get("entry_green") or []) if s]
     n = len(greens)
     if n == 0:
-        return "Hoy no hay acciones en verde."
+        return "Hoy no hay acciones sin alertas de riesgo."
     noun = "acción" if n == 1 else "acciones"
-    return f"Hoy hay {n} {noun} en verde: {_cap_names(greens)}."
+    return f"Hoy hay {n} {noun} sin alertas de riesgo: {_cap_names(greens)}."
 
 
 def _sentence_insiders(snap: dict) -> str:
