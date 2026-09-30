@@ -374,6 +374,11 @@ class EntryResumenTests(unittest.TestCase):
         self.assertEqual(snap["entry_green"], ["LLY", "XOM", "ITUB"])
         text = s.compose_resumen(snap, None)["text"]
         self.assertIn("Hoy hay 3 acciones en verde: LLY, XOM y ITUB.", text)
+        many = dict(snap)
+        many["entry_green"] = ["LLY", "MA", "ABBV", "V", "DIS", "ITUB", "JNJ", "XOM", "CVX"]
+        many_text = s.compose_resumen(many, None)["text"]
+        self.assertIn("Hoy hay 9 acciones en verde: LLY, MA, ABBV, V y 5 más.", many_text)
+        self.assertNotIn("y V y", many_text)
         self.assertNotIn("SPY", text.split("verde")[1][:40])
 
     def test_old_payload_does_not_invent_a_green_count(self):

@@ -214,7 +214,8 @@ def _cap_names(items: list[str], cap: int = RESUMEN_NAME_CAP) -> str:
         return _es_join(items)
     head = items[:cap]
     extra = len(items) - cap
-    return _es_join(head) + f" y {extra} más"
+    # Comas en la lista y un solo «y» antes del resto, para no decir «A y B y 2 más».
+    return ", ".join(head) + f" y {extra} más"
 
 
 # ---------------------------------------------------------------------------
