@@ -13,6 +13,8 @@ __pycache__/
 # Build de GitHub Pages
 _site/
 resumen.txt
+.historial_fetch_failed
+*.json.tmp
 
 # SO / editores
 .DS_Store

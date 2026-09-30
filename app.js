@@ -22,6 +22,7 @@
     listScroll: 0,
     baseTitle: "",
     walkforward: null,
+    historial: null,
     patternTab: "breakout_52w",
     patternScan: null,
   };
@@ -1178,6 +1179,7 @@
       '<span class="dd-entry-light" data-verdict="' + escapeHtml(entry.verdict) +
       '" role="img" aria-label="' + escapeHtml(entry.label || "") + '"></span>' +
       '<p class="dd-entry-label">' + escapeHtml(entry.label || "") + "</p></div>" +
+      historialFichaLine(row.symbol) +
       '<ul class="dd-entry-checks">' + items + "</ul>" +
       '<p class="dd-entry-disclaimer">' + escapeHtml(disclaimer) + "</p></section>"
     );
@@ -1245,6 +1247,174 @@
     );
   }
 
+  function fmtIsoFull(iso) {
+    var s = String(iso || "");
+    if (s.length < 10) return "—";
+    return s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4);
+  }
+
+  function histSvg(curve) {
+    if (!curve || curve.length < 2) return "";
+    var w = 640;
+    var h = 168;
+    var padL = 40;
+    var padR = 12;
+    var padT = 14;
+    var padB = 22;
+    var vals = [];
+    curve.forEach(function (p) {
+      vals.push(Number(p.stocks), Number(p.spy));
+    });
+    var minV = Math.min.apply(null, vals);
+    var maxV = Math.max.apply(null, vals);
+    if (!isFinite(minV) || !isFinite(maxV)) return "";
+    if (minV === maxV) {
+      minV -= 1;
+      maxV += 1;
+    }
+    var span = maxV - minV;
+    minV -= span * 0.08;
+    maxV += span * 0.08;
+    function xAt(i) {
+      return padL + (i / (curve.length - 1)) * (w - padL - padR);
+    }
+    function yAt(v) {
+      return padT + (1 - (v - minV) / (maxV - minV)) * (h - padT - padB);
+    }
+    function path(key) {
+      return curve
+        .map(function (p, i) {
+          return (i ? "L" : "M") + xAt(i).toFixed(1) + " " + yAt(Number(p[key])).toFixed(1);
+        })
+        .join(" ");
+    }
+    return (
+      '<svg class="dd-hist-svg" viewBox="0 0 ' + w + " " + h +
+      '" role="img" aria-label="Curva de las acciones en verde contra SPY, base 100">' +
+      '<path d="' + path("spy") + '" fill="none" stroke="#A0A0A0" stroke-width="2"/>' +
+      '<path d="' + path("stocks") + '" fill="none" stroke="#FF8C42" stroke-width="2.4"/>' +
+      "</svg>"
+    );
+  }
+
+  function histCell(stat) {
+    if (!stat || !stat.n) {
+      return '<p class="dd-hist-empty">Sin ventana cerrada</p>';
+    }
+    var hit = stat.hit_pct == null ? "—" : fmtEsSmart(stat.hit_pct, 1) + "% en positivo";
+    var beat = stat.beat_pct == null ? "—" : fmtEsSmart(stat.beat_pct, 1) + "%";
+    return (
+      '<p class="dd-hist-n">' + stat.n + (stat.n === 1 ? " señal" : " señales") + "</p>" +
+      '<p class="dd-hist-avg">' + escapeHtml(fmtEsSignedPct(stat.avg, 2)) + "</p>" +
+      '<p class="dd-hist-vs">exceso vs SPY ' + escapeHtml(fmtEsSignedPct(stat.excess, 2)) + "</p>" +
+      '<p class="dd-hist-hit">' + escapeHtml(hit) + "</p>" +
+      '<p class="dd-hist-more">Mediana ' + escapeHtml(fmtEsSignedPct(stat.median, 2)) +
+      " · le gana a SPY el " + escapeHtml(beat) +
+      " · mejor " + escapeHtml(fmtEsSignedPct(stat.best, 2)) +
+      " · peor " + escapeHtml(fmtEsSignedPct(stat.worst, 2)) + "</p>"
+    );
+  }
+
+  function historialFichaLine(symbol) {
+    var block = state.historial;
+    if (!block || !symbol) return "";
+    var pack = block.by_symbol && block.by_symbol[String(symbol).toUpperCase()];
+    if (!pack || !pack.count) {
+      return '<p class="dd-hist-ficha">Sin señales verdes anteriores en el historial.</p>';
+    }
+    var bits = (pack.signals || []).map(function (item) {
+      var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
+      var vs = item.excess_pct == null ? "" : " (vs SPY " + fmtEsSignedPct(item.excess_pct, 1) + ")";
+      var status = item.status === "cerrada" ? "cerrada" : "en curso";
+      var flag = item.reconstruido ? ", reconstruida" : "";
+      return fmtDayMonth(item.date) + " " + ret + vs + ", " + status + flag;
+    });
+    var extra = pack.count > (pack.signals || []).length ? " Hay " + pack.count + " en total." : "";
+    return '<p class="dd-hist-ficha">Señales verdes: ' + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
+  }
+
+  function renderHistorial(block) {
+    var root = document.getElementById("hist-root");
+    if (!root) return;
+    if (!block || !block.table) {
+      root.innerHTML = '<p class="dd-empty">Sin historial en esta publicación. Se arma al correr build.py.</p>';
+      return;
+    }
+    var labels = [
+      ["verde", "Verde"],
+      ["ambar", "Ámbar"],
+      ["rojo", "Rojo"],
+      ["universo", "Universo"],
+    ];
+    var horizons = block.horizons || [5, 10, 20];
+    var groups = labels
+      .map(function (pair) {
+        var id = pair[0];
+        var cols = horizons
+          .map(function (h) {
+            var stat = block.table[id] && block.table[id][String(h)];
+            return (
+              '<div class="dd-hist-h"><p class="dd-kpi-label">' + h + " ruedas</p>" +
+              histCell(stat) + "</div>"
+            );
+          })
+          .join("");
+        return (
+          '<article class="dd-hist-group" data-group="' + id + '">' +
+          '<h3><span class="dd-hist-dot" aria-hidden="true"></span>' + pair[1] + "</h3>" +
+          '<div class="dd-hist-horizons">' + cols + "</div></article>"
+        );
+      })
+      .join("");
+    var real = block.real_days || 0;
+    var recon = block.reconstructed_days || 0;
+    var latest = "";
+    if (block.latest && block.latest.date) {
+      latest =
+        " Última foto: " + fmtIsoFull(block.latest.date) + ", " +
+        (block.latest.after_close ? "después del cierre." : "con la rueda todavía abierta.");
+    }
+    var sample = block.sample
+      ? '<p class="dd-hist-sample">Muestra de ejemplo para la vista. No son precios reales.</p>'
+      : "";
+    var recent = (block.recent || [])
+      .map(function (item) {
+        var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
+        var vs = item.excess_pct == null ? "vs SPY —" : "vs SPY " + fmtEsSignedPct(item.excess_pct, 1);
+        var status = item.status === "cerrada" ? "cerrada" : "en curso";
+        var tag = item.reconstruido ? '<span class="dd-hist-tag">reconstruida</span>' : "";
+        return (
+          '<a class="dd-hist-signal" href="#/t/' + encodeURIComponent(item.symbol) + '">' +
+          "<span>" + escapeHtml(fmtIsoFull(item.date)) + "</span>" +
+          '<span class="dd-hist-sym">' + escapeHtml(item.symbol) + "</span>" +
+          '<span class="dd-hist-ret">' + escapeHtml(ret + " · " + vs) + "</span>" +
+          "<span>" + escapeHtml(status) + (tag ? " " : "") + tag + "</span></a>"
+        );
+      })
+      .join("");
+    var equity = block.equity || {};
+    var eqText = "";
+    if (equity.stocks_return_pct != null) {
+      eqText =
+        '<p class="dd-hist-sentence">Acciones en verde: ' + escapeHtml(fmtEsSignedPct(equity.stocks_return_pct, 2)) +
+        " · con ETF: " + escapeHtml(fmtEsSignedPct(equity.all_return_pct, 2)) +
+        " · SPY: " + escapeHtml(fmtEsSignedPct(equity.spy_return_pct, 2)) + ".</p>" +
+        histSvg(equity.curve) +
+        '<p class="dd-hist-legend"><span><i class="is-stocks"></i>Acciones en verde</span><span><i class="is-spy"></i>SPY</span></p>' +
+        '<p class="dd-hist-equity-note">' + escapeHtml(equity.note || "") + "</p>";
+    }
+    root.innerHTML =
+      sample +
+      '<p class="dd-hist-meta">' + real + " ruedas reales y " + recon + " reconstruidas." + escapeHtml(latest) + "</p>" +
+      '<p class="dd-hist-sentence">' + escapeHtml(block.sentence || "") + "</p>" +
+      (block.split_sentence ? '<p class="dd-hist-split">' + escapeHtml(block.split_sentence) + "</p>" : "") +
+      (block.todos_los_dias_sentence ? '<p class="dd-hist-alt">' + escapeHtml(block.todos_los_dias_sentence) + "</p>" : "") +
+      '<div class="dd-hist-groups">' + groups + "</div>" +
+      '<p class="dd-hist-rule">' + escapeHtml(block.dedup || "") + " " + escapeHtml(block.earnings_note || "") + "</p>" +
+      (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales verdes en el historial.</p>') +
+      eqText;
+  }
+
   function renderSampleNotice(data) {
     var el = document.getElementById("sample-notice");
     if (!el) return;
@@ -1260,6 +1430,7 @@
 
   function applyData(data) {
     state.ranking = data.ranking || [];
+    state.historial = data.historial_semaforo || null;
     state.logos = data.logos || {};
     state.earnings = data.earnings || [];
     state.rsWeekly = data.rs_weekly || null;
@@ -1269,6 +1440,7 @@
     renderResumen(data);
     renderTop10(data.top10_return);
     renderWalkforward(data.top10_walkforward);
+    renderHistorial(data.historial_semaforo);
     renderEarnings(data.earnings);
     renderSectors(data.sectors);
     renderInsiders(data.insider_buys);
