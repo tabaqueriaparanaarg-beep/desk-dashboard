@@ -2340,6 +2340,28 @@ def main() -> None:
         and r["entry"].get("verdict") == "verde"
     )
     notes.append(f"Semáforo: {green_n} acciones en verde. No modifica el Desk Score.")
+    historial_public = None
+    hist_min_closed = 10
+    hist_purge_days = 60
+    try:
+        import historial
+
+        hist_min_closed = historial.PROVISIONAL_MIN_CLOSED_SIGNALS
+        hist_purge_days = historial.PROVISIONAL_PURGE_REAL_DAYS
+
+        t_hist = time.perf_counter()
+        historial_public, hist_note = historial.publish(
+            rows=rows,
+            meta_by=meta_by,
+            all_bars=full_bars,
+            now=datetime.now(timezone.utc),
+        )
+        if hist_note:
+            notes.append(hist_note)
+        print(f"  historial: {time.perf_counter() - t_hist:.2f}s")
+    except Exception as e:
+        print(f"  historial del semáforo falló (soft): {type(e).__name__}")
+        notes.append(f"Historial del semáforo: fallo soft ({type(e).__name__}).")
     insider_buys = signals.insider_panel(rows)
     pattern_scan = {"source": "alpaca_bars", "groups": signals.pattern_groups(rows)}
     pat_bits = [
@@ -2373,6 +2395,7 @@ def main() -> None:
         "top10_return": top10_return,
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
+        "historial_semaforo": historial_public,
         "sectors": sectors,
         "insider_buys": insider_buys,
         "patterns": pattern_scan,
@@ -2423,6 +2446,20 @@ def main() -> None:
                 "en el universo (mínimo 3 nombres, ETF afuera)."
             ),
             "resumen": "Texto plantilla comparado con la publicación anterior. Sin modelo de lenguaje.",
+            "historial_semaforo": (
+                "Una foto por fecha de rueda (veredicto, Desk Score, puesto y cierre). "
+                "La corrida posterior del mismo día pisa esa foto. "
+                "El archivo historial_semaforo.json se publica con el sitio y, si se puede, "
+                "vuelve al repo. Si no se puede leer la historia anterior, no se reescribe vacía. "
+                "La reconstrucción de unos 6 meses corre una sola vez, solo con precios hasta esa fecha, "
+                "y queda en una clave aparte, nunca mezclada con las fotos reales. "
+                f"Cada horizonte la muestra como provisoria mientras haya menos de {hist_min_closed} "
+                "señales verdes reales cerradas. "
+                f"A las {hist_purge_days} ruedas reales se borra. "
+                "El chequeo de resultados reconstruido se tomó como aprobado. "
+                "Una señal nueva es el primer día en ese color después de una rueda que no lo tenía. "
+                "El retorno a 5, 10 y 20 ruedas solo entra cuando la ventana ya cerró; si no, queda en curso."
+            ),
             "entry": (
                 "Semáforo informativo, no entra en el Desk Score ni cambia el orden. "
                 f"Verde si pasan todos los chequeos. Rojo si el precio no está sobre la EMA200 "
@@ -2453,6 +2490,10 @@ def main() -> None:
     try:
         prev_snap = signals.snapshot_from_payload(previous_payload) if previous_payload else None
         resumen = signals.compose_resumen(signals.snapshot_from_payload(payload), prev_snap)
+        if historial_public is not None:
+            import historial
+
+            historial.append_resumen_sentence(resumen, historial_public)
     except Exception as e:
         print(f"  resumen falló (soft): {type(e).__name__}")
         resumen = {

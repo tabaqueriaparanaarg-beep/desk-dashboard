@@ -925,7 +925,20 @@ def _check_earnings(
     *,
     earnings_known: bool,
     earnings_through: date | None,
+    earnings_backfill: bool = False,
 ) -> dict[str, Any]:
+    if earnings_backfill:
+        # El calendario de resultados no se puede reconstruir hacia atrás.
+        # El chequeo se toma como aprobado y queda marcado para no mezclarlo
+        # con una lectura que sí vio el calendario.
+        check = _check(
+            "earnings",
+            "Resultados",
+            True,
+            "Reconstruido: no hay calendario de resultados de ese día; se toma como aprobado",
+        )
+        check["reconstructed"] = True
+        return check
     sym = str(row.get("symbol") or "").upper()
     horizon = today + timedelta(days=ENTRY_EARNINGS_DAYS)
     upcoming: list[date] = []
@@ -1015,6 +1028,7 @@ def entry_verdict(
     today: date,
     earnings_known: bool = False,
     earnings_through: date | None = None,
+    earnings_backfill: bool = False,
     rs_weeks: int = ENTRY_RS_WEEKS,
     rs_band: float = ENTRY_RS_FLAT_BAND,
 ) -> dict[str, Any]:
@@ -1030,6 +1044,7 @@ def entry_verdict(
             today,
             earnings_known=earnings_known,
             earnings_through=earnings_through,
+            earnings_backfill=earnings_backfill,
         ),
         _check_extension(row),
         _check_flags(row),
@@ -1059,6 +1074,7 @@ def attach_entry_lights(
     today: date,
     earnings_known: bool = False,
     earnings_through: date | None = None,
+    earnings_backfill: bool = False,
 ) -> None:
     """Escribe row['entry']. No toca desk_score, rank ni el orden de la lista."""
     index = _sector_index(sectors)
@@ -1073,6 +1089,7 @@ def attach_entry_lights(
             today=today,
             earnings_known=earnings_known,
             earnings_through=earnings_through,
+            earnings_backfill=earnings_backfill,
             rs_weeks=weeks,
             rs_band=band,
         )

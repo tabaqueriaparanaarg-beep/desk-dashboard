@@ -3,6 +3,9 @@ name: Update data & deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # El commit del historial no vuelve a disparar el workflow.
+    paths-ignore:
+      - historial_semaforo.json
   workflow_dispatch:
   schedule:
     # Lunes a viernes 21:30 UTC = 18:30 Buenos Aires (UTC-3),
@@ -11,7 +14,7 @@ on:
     - cron: "30 21 * * 1-5"
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -43,6 +46,20 @@ jobs:
       - name: Test Top 10 entry streaks, ficha math and walk-forward (mock bars)
         run: python -m unittest discover -s . -p 'test_*.py'
 
+      - name: Recuperar historial publicado
+        continue-on-error: true
+        run: |
+          if [ -f historial_semaforo.json ]; then
+            exit 0
+          fi
+          curl -fsSL -o historial_semaforo.json \
+            "https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/historial_semaforo.json" \
+            || rm -f historial_semaforo.json
+          if [ -f historial_semaforo.json ]; then
+            python -c "import json; json.load(open('historial_semaforo.json'))" \
+              || rm -f historial_semaforo.json
+          fi
+
       - name: Build datos.json (Alpaca + Finnhub)
         # Si falla (API caída, keys faltantes), se publica el datos.json existente del repo.
         continue-on-error: true
@@ -52,11 +69,21 @@ jobs:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: python build.py
 
+      - name: No pisar el historial publicado
+        # Si no se pudo leer la historia anterior, frenar antes del deploy
+        # para que Pages no reemplace el sitio y borre el archivo viejo.
+        run: |
+          if [ -f .historial_fetch_failed ]; then
+            echo "No se pudo leer el historial anterior. Se cancela el deploy para no borrarlo de Pages."
+            exit 1
+          fi
+
       - name: Assemble _site (solo archivos del sitio)
         run: |
           rm -rf _site
           mkdir -p _site
           cp index.html app.js styles.css sw.js manifest.webmanifest datos.json _site/
+          if [ -f historial_semaforo.json ]; then cp historial_semaforo.json _site/; fi
           if [ -f resumen.txt ]; then cp resumen.txt _site/resumen.txt; else printf '%s\n' 'Sin resumen en esta publicación.' > _site/resumen.txt; fi
           cp -r assets _site/assets
           touch _site/.nojekyll
@@ -73,3 +100,21 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Guardar historial en el repositorio
+        if: success()
+        continue-on-error: true
+        run: |
+          if [ ! -f historial_semaforo.json ]; then
+            echo "Sin archivo de historial para commitear."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add historial_semaforo.json
+          if git diff --cached --quiet; then
+            echo "El historial no cambió."
+            exit 0
+          fi
+          git commit -m "Actualiza el historial del semáforo [skip ci]"
+          git push origin HEAD:main

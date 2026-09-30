@@ -2345,3 +2345,209 @@ body.is-ficha .dd-footer {
   .dd-entry-checks li { font-size: 0.82rem; }
   .dd-an-legend { font-size: 0.7rem; }
 }
+
+/* ── Historial del semáforo ── */
+
+.dd-hist {
+  min-width: 0;
+}
+
+.dd-hist-meta,
+.dd-hist-sentence,
+.dd-hist-split,
+.dd-hist-alt,
+.dd-hist-rule,
+.dd-hist-equity-note,
+.dd-hist-disclaimer,
+.dd-hist-ficha {
+  margin: 0.35rem 0 0;
+  color: var(--dd-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.dd-hist-sentence {
+  color: var(--dd-fg);
+  font-size: 1.02rem;
+  margin-top: 0.8rem;
+}
+
+.dd-hist-sample {
+  margin: 0 0 0.8rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--dd-warn);
+  font-size: 0.85rem;
+}
+
+.dd-hist-groups {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.dd-hist-group {
+  border: 1px solid var(--dd-border);
+  border-radius: 14px;
+  padding: 0.85rem 0.9rem;
+  background: var(--dd-bg-elevated);
+  min-width: 0;
+}
+
+.dd-hist-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+}
+
+.dd-hist-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--dd-muted);
+  flex: 0 0 auto;
+}
+
+.dd-hist-group[data-group="verde"] .dd-hist-dot { background: var(--dd-ok); }
+.dd-hist-group[data-group="ambar"] .dd-hist-dot { background: var(--dd-warn); }
+.dd-hist-group[data-group="rojo"] .dd-hist-dot { background: var(--dd-bad); }
+
+.dd-hist-horizons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.dd-hist-h {
+  min-width: 0;
+}
+
+.dd-hist-h .dd-kpi-label {
+  margin-bottom: 0.2rem;
+}
+
+.dd-hist-prov {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  color: var(--dd-warn);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dd-hist-prov-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  color: var(--dd-warn);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.dd-hist-n,
+.dd-hist-vs,
+.dd-hist-hit,
+.dd-hist-more,
+.dd-hist-empty {
+  margin: 0.12rem 0 0;
+  font-size: 0.78rem;
+  color: var(--dd-muted);
+  line-height: 1.35;
+}
+
+.dd-hist-avg {
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-hist-more {
+  font-size: 0.72rem;
+}
+
+.dd-hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.dd-hist-signal {
+  display: grid;
+  grid-template-columns: 6.4rem minmax(3.2rem, auto) minmax(0, 1fr) auto;
+  gap: 0.25rem 0.7rem;
+  align-items: baseline;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dd-hist-signal:hover,
+.dd-hist-signal:focus-visible {
+  background: var(--dd-card-hover);
+  outline: none;
+}
+
+.dd-hist-sym {
+  font-weight: 700;
+}
+
+.dd-hist-tag {
+  color: var(--dd-warn);
+  font-size: 0.75rem;
+}
+
+.dd-hist-svg {
+  width: 100%;
+  height: auto;
+  margin-top: 0.6rem;
+  display: block;
+}
+
+.dd-hist-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--dd-muted);
+}
+
+.dd-hist-legend i {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.18rem;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.dd-hist-legend .is-stocks { background: #ff8c42; }
+.dd-hist-legend .is-spy { background: #a0a0a0; }
+
+.dd-hist-ficha {
+  margin: 0.55rem 0 0.15rem;
+}
+
+@media (max-width: 720px) {
+  .dd-hist-horizons {
+    grid-template-columns: 1fr;
+  }
+
+  .dd-hist-signal {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dd-hist-signal .dd-hist-ret {
+    grid-column: 1 / -1;
+  }
+}

@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=25" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -191,6 +191,17 @@
       </div>
     </section>
 
+    <section class="dd-hist dd-panel" id="historial" data-section="historial" aria-label="Historial del semáforo">
+      <div class="dd-top10-head">
+        <h2 class="dd-section-title">Historial del semáforo</h2>
+        <p class="dd-section-sub">Qué pasó después de cada luz. Tocá un nombre para abrir la ficha.</p>
+      </div>
+      <div id="hist-root">
+        <p class="dd-empty">Cargando…</p>
+      </div>
+      <p class="dd-hist-disclaimer" id="hist-disclaimer">Resultados pasados no garantizan resultados futuros.</p>
+    </section>
+
     <section class="dd-earnings dd-panel" data-section="earnings" aria-label="Calendario de resultados">
       <h2 class="dd-section-title">Earnings (semana actual)</h2>
       <div id="earnings-strip" class="dd-earnings-strip" data-role="earnings-strip">
@@ -309,6 +320,6 @@
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=19" defer></script>
+  <script src="app.js?v=21" defer></script>
 </body>
 </html>
