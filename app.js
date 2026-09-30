@@ -1329,8 +1329,7 @@
       var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
       var vs = item.excess_pct == null ? "" : " (vs SPY " + fmtEsSignedPct(item.excess_pct, 1) + ")";
       var status = item.status === "cerrada" ? "cerrada" : "en curso";
-      var flag = item.reconstruido ? ", reconstruida" : "";
-      return fmtDayMonth(item.date) + " " + ret + vs + ", " + status + flag;
+      return fmtDayMonth(item.date) + " " + ret + vs + ", " + status;
     });
     var extra = pack.count > (pack.signals || []).length ? " Hay " + pack.count + " en total." : "";
     return '<p class="dd-hist-ficha">' + sample + "Señales verdes: " + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
@@ -1356,9 +1355,17 @@
         var cols = horizons
           .map(function (h) {
             var stat = block.table[id] && block.table[id][String(h)];
+            var meta = block.horizons_meta && block.horizons_meta[String(h)];
+            var badge = "";
+            if (meta && meta.provisional) {
+              badge = '<p class="dd-hist-prov">' + escapeHtml(meta.label || "Provisorio (reconstruido)") + "</p>";
+              if (id === "verde" && meta.note) {
+                badge += '<p class="dd-hist-prov-note">' + escapeHtml(meta.note) + "</p>";
+              }
+            }
             return (
               '<div class="dd-hist-h"><p class="dd-kpi-label">' + h + " ruedas</p>" +
-              histCell(stat) + "</div>"
+              badge + histCell(stat) + "</div>"
             );
           })
           .join("");
@@ -1371,11 +1378,20 @@
       .join("");
     var real = block.real_days || 0;
     var recon = block.reconstructed_days || 0;
+    var anyProv = horizons.some(function (h) {
+      var meta = block.horizons_meta && block.horizons_meta[String(h)];
+      return meta && meta.provisional;
+    });
     var latest = "";
     if (block.latest && block.latest.date) {
       latest =
         " Última foto: " + fmtIsoFull(block.latest.date) + ", " +
         (block.latest.after_close ? "después del cierre." : "con la rueda todavía abierta.");
+    }
+    var daysLine = real + (real === 1 ? " rueda real." : " ruedas reales.");
+    if (anyProv && recon) {
+      var purgeAt = block.purge_real_days || 60;
+      daysLine += " Reconstrucción provisoria: " + recon + " ruedas. Se borra al llegar a " + purgeAt + " ruedas reales.";
     }
     var sample = block.sample
       ? '<p class="dd-hist-sample">Muestra de ejemplo para la vista. No son precios reales.</p>'
@@ -1385,13 +1401,12 @@
         var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
         var vs = item.excess_pct == null ? "vs SPY —" : "vs SPY " + fmtEsSignedPct(item.excess_pct, 1);
         var status = item.status === "cerrada" ? "cerrada" : "en curso";
-        var tag = item.reconstruido ? '<span class="dd-hist-tag">reconstruida</span>' : "";
         return (
           '<a class="dd-hist-signal" href="#/t/' + encodeURIComponent(item.symbol) + '">' +
           "<span>" + escapeHtml(fmtIsoFull(item.date)) + "</span>" +
           '<span class="dd-hist-sym">' + escapeHtml(item.symbol) + "</span>" +
           '<span class="dd-hist-ret">' + escapeHtml(ret + " · " + vs) + "</span>" +
-          "<span>" + escapeHtml(status) + (tag ? " " : "") + tag + "</span></a>"
+          "<span>" + escapeHtml(status) + "</span></a>"
         );
       })
       .join("");
@@ -1406,15 +1421,20 @@
         '<p class="dd-hist-legend"><span><i class="is-stocks"></i>Acciones en verde</span><span><i class="is-spy"></i>SPY</span></p>' +
         '<p class="dd-hist-equity-note">' + escapeHtml(equity.note || "") + "</p>";
     }
+    var fine = document.getElementById("hist-disclaimer");
+    if (fine) {
+      var legal = block.disclaimer || "Resultados pasados no garantizan resultados futuros.";
+      if (anyProv && block.earnings_note) legal += " " + block.earnings_note;
+      fine.textContent = legal;
+    }
     root.innerHTML =
       sample +
-      '<p class="dd-hist-meta">' + real + " ruedas reales y " + recon + " reconstruidas." + escapeHtml(latest) + "</p>" +
+      '<p class="dd-hist-meta">' + daysLine + escapeHtml(latest) + "</p>" +
       '<p class="dd-hist-sentence">' + escapeHtml(block.sentence || "") + "</p>" +
-      (block.split_sentence ? '<p class="dd-hist-split">' + escapeHtml(block.split_sentence) + "</p>" : "") +
       (block.todos_los_dias_sentence ? '<p class="dd-hist-alt">' + escapeHtml(block.todos_los_dias_sentence) + "</p>" : "") +
       '<div class="dd-hist-groups">' + groups + "</div>" +
-      '<p class="dd-hist-rule">' + escapeHtml(block.dedup || "") + " " + escapeHtml(block.earnings_note || "") + "</p>" +
-      (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales verdes en el historial.</p>') +
+      '<p class="dd-hist-rule">' + escapeHtml(block.dedup || "") + "</p>" +
+      (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales verdes reales en el historial.</p>') +
       eqText;
   }
 

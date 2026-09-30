@@ -64,9 +64,10 @@ class UpsertTests(unittest.TestCase):
         self.assertFalse(day["reconstruido"])
         self.assertEqual(day["earnings_check"], "publicado")
         other = history["snapshots"]["2026-01-05"]
-        self.assertTrue(other["reconstruido"])
-        self.assertEqual(other["earnings_check"], "omitido")
+        self.assertFalse(other["reconstruido"])
+        self.assertEqual(other["earnings_check"], "publicado")
         self.assertEqual(other["rows"][0]["close"], 9.0)
+        self.assertNotIn("2026-01-05", history.get("reconstructed") or {})
 
     def test_after_close_follows_new_york_session(self) -> None:
         session = "2026-09-30"
@@ -389,16 +390,156 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(flag.exists())
             self.assertIn("base local", note)
 
-    def test_merge_backfill_does_not_replace_a_live_snapshot(self) -> None:
-        history = _history([_snap("2026-06-01", [("AAA", "verde", 5)], reconstruido=False)])
+    def test_merge_backfill_stays_out_of_real_history(self) -> None:
+        history = _history([_snap("2026-06-01", [("AAA", "verde", 5)])])
         recon = _snap("2026-06-01", [("AAA", "rojo", 99)], reconstruido=True)
         other = _snap("2026-05-28", [("AAA", "ambar", 4)], reconstruido=True)
         added = historial.apply_backfill(history, [recon, other])
         self.assertEqual(added, 1)
+        self.assertEqual(list(history["snapshots"]), ["2026-06-01"])
         self.assertEqual(history["snapshots"]["2026-06-01"]["rows"][0]["close"], 5)
         self.assertFalse(history["snapshots"]["2026-06-01"]["reconstruido"])
-        self.assertTrue(history["snapshots"]["2026-05-28"]["reconstruido"])
+        self.assertNotIn("2026-06-01", history["reconstructed"])
+        self.assertTrue(history["reconstructed"]["2026-05-28"]["reconstruido"])
+        self.assertEqual(history["reconstructed"]["2026-05-28"]["rows"][0]["close"], 4)
         self.assertTrue(history["backfill"]["done"])
+
+    def test_normalize_splits_legacy_mixed_snapshots(self) -> None:
+        raw = {
+            "version": 1,
+            "snapshots": [
+                _snap("2026-07-01", [("AAA", "verde", 1)]),
+                _snap("2026-07-02", [("BBB", "verde", 2)], reconstruido=True),
+            ],
+        }
+        loaded = historial.normalize(raw)
+        assert loaded is not None
+        self.assertEqual(list(loaded["snapshots"]), ["2026-07-01"])
+        self.assertEqual(list(loaded["reconstructed"]), ["2026-07-02"])
+        self.assertFalse(loaded["snapshots"]["2026-07-01"]["reconstruido"])
+        self.assertTrue(loaded["reconstructed"]["2026-07-02"]["reconstruido"])
+
+
+def _days(n: int, start: str) -> list[str]:
+    cursor = date.fromisoformat(start)
+    out: list[str] = []
+    while len(out) < n:
+        out.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+    return out
+
+
+class ProvisionalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.assertEqual(historial.PROVISIONAL_MIN_CLOSED_SIGNALS, 10)
+        self.assertEqual(historial.PROVISIONAL_PURGE_REAL_DAYS, 60)
+
+    def _reconstructed(self) -> list[dict]:
+        snaps = []
+        for i, day in enumerate(_days(21, "2024-01-01")):
+            color = "verde" if i == 0 else "rojo"
+            snaps.append(_snap(day, [("ZZZ", color, 100 + i), ("SPY", "rojo", 100)], reconstruido=True))
+        return snaps
+
+    def _real(self, names: int, sessions: int = 6) -> list[dict]:
+        snaps = []
+        tickers = [f"T{i:02d}" for i in range(names)]
+        for i, day in enumerate(_days(sessions, "2025-06-01")):
+            pairs = [("SPY", "rojo", 100.0)]
+            for ticker in tickers:
+                color = "verde" if i == 0 else "rojo"
+                pairs.append((ticker, color, 100.0 if i == 0 else 90.0))
+            snaps.append(_snap(day, pairs))
+        return snaps
+
+    def _load(self, names: int) -> dict:
+        history = historial.empty_history()
+        for snap in self._real(names):
+            historial.upsert_snapshot(history, snap)
+        historial.apply_backfill(history, self._reconstructed())
+        return history
+
+    def test_below_ten_closed_signals_shows_only_reconstructed_metrics(self) -> None:
+        report = historial.build_report(self._load(9), {})
+        meta = report["horizons_meta"]["5"]
+        self.assertTrue(meta["provisional"])
+        self.assertEqual(meta["real_closed"], 9)
+        self.assertEqual(meta["label"], "Provisorio (reconstruido)")
+        self.assertIn("9 señales verdes reales", meta["note"])
+        self.assertIn("10", meta["note"])
+        self.assertEqual(report["table"]["verde"]["5"]["n"], 1)
+        self.assertEqual(report["table"]["verde"]["5"]["avg"], 5.0)
+        symbols = [row["symbol"] for row in report["recent"]]
+        self.assertNotIn("ZZZ", symbols)
+        self.assertNotIn("ZZZ", report["by_symbol"])
+        self.assertTrue(any(sym.startswith("T") for sym in symbols))
+
+    def test_ten_closed_signals_switch_that_horizon_without_mixing(self) -> None:
+        report = historial.build_report(self._load(10), {})
+        five = report["horizons_meta"]["5"]
+        self.assertFalse(five["provisional"])
+        self.assertEqual(five["real_closed"], historial.PROVISIONAL_MIN_CLOSED_SIGNALS)
+        self.assertEqual(five["label"], "")
+        self.assertEqual(report["table"]["verde"]["5"]["n"], 10)
+        self.assertEqual(report["table"]["verde"]["5"]["avg"], -10.0)
+        twenty = report["horizons_meta"]["20"]
+        self.assertTrue(twenty["provisional"])
+        self.assertEqual(twenty["real_closed"], 0)
+        self.assertEqual(report["table"]["verde"]["20"]["avg"], 20.0)
+        self.assertTrue(report["sentence"].startswith("Provisorio (reconstruido)."))
+        self.assertNotIn("ZZZ", report["by_symbol"])
+
+    def test_reconstructed_window_does_not_borrow_real_closes(self) -> None:
+        history = historial.empty_history()
+        for i, day in enumerate(_days(3, "2024-02-01")):
+            color = "verde" if i == 0 else "rojo"
+            historial.apply_backfill(
+                history,
+                [_snap(day, [("AAA", color, 100), ("SPY", "rojo", 100)], reconstruido=True)],
+            )
+        for i, day in enumerate(_days(6, "2025-08-01")):
+            color = "verde" if i == 0 else "rojo"
+            close = 100 if i == 0 else 200
+            historial.upsert_snapshot(history, _snap(day, [("AAA", color, close), ("SPY", "rojo", 100)]))
+        report = historial.build_report(history, {"AAA": {"kind": "us"}, "SPY": {"kind": "etf"}})
+        self.assertTrue(report["horizons_meta"]["5"]["provisional"])
+        self.assertEqual(report["horizons_meta"]["5"]["real_closed"], 1)
+        self.assertEqual(report["table"]["verde"]["5"]["n"], 0)
+        self.assertIn("AAA", [row["symbol"] for row in report["recent"]])
+
+    def test_sixty_real_days_purge_reconstructed_storage_and_ui(self) -> None:
+        history = historial.empty_history()
+        limit = historial.PROVISIONAL_PURGE_REAL_DAYS
+        for day in _days(limit - 1, "2026-01-01"):
+            historial.upsert_snapshot(history, _snap(day, [("AAA", "rojo", 1), ("SPY", "rojo", 1)]))
+        historial.apply_backfill(
+            history,
+            [_snap("2025-06-01", [("ZZZ", "verde", 10), ("SPY", "rojo", 10)], reconstruido=True)],
+        )
+        self.assertFalse(historial.maybe_purge_reconstructed(history))
+        self.assertIn("2025-06-01", history["reconstructed"])
+        historial.upsert_snapshot(history, _snap("2026-04-15", [("AAA", "rojo", 1), ("SPY", "rojo", 1)]))
+        self.assertEqual(historial.real_snapshot_count(history), limit)
+        hidden = historial.build_report(history, {})
+        self.assertEqual(hidden["reconstructed_days"], 0)
+        self.assertFalse(hidden["provisional"])
+        self.assertTrue(all(not hidden["horizons_meta"][key]["provisional"] for key in ("5", "10", "20")))
+        self.assertTrue(historial.maybe_purge_reconstructed(history))
+        self.assertEqual(history["reconstructed"], {})
+        self.assertTrue(history["backfill"]["purged"])
+        self.assertTrue(history["backfill"]["done"])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "historial_semaforo.json"
+            flag = Path(tmp) / "flag"
+            loaded = historial.LoadResult(history, "nuevo", True, False)
+            self.assertTrue(historial.save_history(path, history, loaded, flag))
+            raw = historial.json.loads(path.read_text(encoding="utf-8"))
+        self.assertNotIn("reconstructed", raw)
+        self.assertEqual(len(raw["snapshots"]), limit)
+        report = historial.build_report(history, {})
+        self.assertEqual(report["reconstructed_days"], 0)
+        self.assertEqual(report["earnings_note"], "")
+        self.assertNotIn("ZZZ", report["by_symbol"])
 
 
 if __name__ == "__main__":

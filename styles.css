@@ -2429,6 +2429,27 @@ body.is-ficha .dd-footer {
   margin-bottom: 0.2rem;
 }
 
+.dd-hist-prov {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  color: var(--dd-warn);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dd-hist-prov-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  color: var(--dd-warn);
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .dd-hist-n,
 .dd-hist-vs,
 .dd-hist-hit,

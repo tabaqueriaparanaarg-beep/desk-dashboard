@@ -12,10 +12,11 @@ Si no se puede leer ninguna copia usable, no se reescribe el archivo: mejor
 perder la foto de hoy que pisar la historia con una vacía. La primera vez, si
 el publicado responde 404 y no hay copia local, se crea el archivo.
 
-La reconstrucción de ~6 meses corre una sola vez (`backfill.done`) y queda en
-el mismo archivo. Usa solo barras hasta esa fecha. El chequeo de resultados no
-se puede armar hacia atrás: se toma como aprobado y la foto queda
-`reconstruido: true`.
+La reconstrucción de ~6 meses corre una sola vez y se guarda aparte, en la
+clave `reconstructed`, nunca mezclada con las fotos reales. Es provisoria:
+cada horizonte (5, 10 o 20 ruedas) la muestra solo mientras haya menos de
+PROVISIONAL_MIN_CLOSED_SIGNALS señales verdes reales ya cerradas. A las
+PROVISIONAL_PURGE_REAL_DAYS ruedas reales se borra del archivo y de lo publicado.
 """
 from __future__ import annotations
 
@@ -44,12 +45,14 @@ BACKFILL_CALENDAR_DAYS = 183
 BACKFILL_WARMUP_SESSIONS = 200
 RECENT_LIMIT = 25
 FICHA_LIMIT = 8
+# Por horizonte: con menos señales verdes reales ya cerradas, se muestran
+# las métricas reconstruidas, marcadas como provisorias.
+PROVISIONAL_MIN_CLOSED_SIGNALS = 10
+# A esta cantidad de ruedas reales la reconstrucción se borra del archivo y del sitio.
+PROVISIONAL_PURGE_REAL_DAYS = 60
 VERDICTS = ("verde", "ambar", "rojo")
 
-DISCLAIMER = (
-    "Resultados pasados no garantizan resultados futuros. "
-    "La reconstrucción no considera fechas de resultados."
-)
+DISCLAIMER = "Resultados pasados no garantizan resultados futuros."
 EARNINGS_NOTE = (
     "En los días reconstruidos el chequeo de resultados se tomó como aprobado, "
     "porque ese calendario no se puede armar hacia atrás."
@@ -75,6 +78,7 @@ def empty_history() -> dict[str, Any]:
         "updated_at": None,
         "backfill": {"done": False},
         "snapshots": {},
+        "reconstructed": {},
     }
 
 
@@ -222,14 +226,26 @@ def taken_after_close(session: str, now: datetime) -> bool:
 
 
 def upsert_snapshot(history: dict, snapshot: dict | None) -> dict:
-    """Una foto por fecha. La última escritura de ese día gana."""
+    """Una foto real por fecha. La última escritura de ese día gana.
+
+    Nunca entra en la reconstrucción. Si esa fecha estaba ahí, se saca.
+    """
     if not snapshot or not snapshot.get("date"):
         return history
     snaps = history.setdefault("snapshots", {})
     if not isinstance(snaps, dict):
         history["snapshots"] = {}
         snaps = history["snapshots"]
-    snaps[str(snapshot["date"])] = snapshot
+    stored = dict(snapshot)
+    stored["reconstruido"] = False
+    stored["earnings_check"] = "publicado"
+    day = str(stored["date"])
+    snaps[day] = stored
+    recon = history.get("reconstructed")
+    if isinstance(recon, dict):
+        recon.pop(day, None)
+    else:
+        history["reconstructed"] = {}
     return history
 
 
@@ -239,15 +255,26 @@ def needs_backfill(history: dict) -> bool:
 
 
 def apply_backfill(history: dict, snaps: list[dict]) -> int:
-    """Suma fotos reconstruidas sin pisar una fecha que ya existe (la real gana)."""
+    """Guarda la reconstrucción aparte. No toca las fotos reales ni las pisa."""
     added = 0
-    book = history.setdefault("snapshots", {})
+    real = history.setdefault("snapshots", {})
+    if not isinstance(real, dict):
+        history["snapshots"] = {}
+        real = history["snapshots"]
+    book = history.get("reconstructed")
+    if not isinstance(book, dict):
+        history["reconstructed"] = {}
+        book = history["reconstructed"]
     ordered = [s for s in snaps if isinstance(s, dict) and s.get("date")]
     ordered.sort(key=lambda s: s["date"])
     for snap in ordered:
-        if snap["date"] in book:
+        day = str(snap["date"])
+        if day in real:
             continue
-        book[snap["date"]] = snap
+        stored = dict(snap)
+        stored["reconstruido"] = True
+        stored["earnings_check"] = "omitido"
+        book[day] = stored
         added += 1
     if ordered:
         history["backfill"] = {
@@ -257,14 +284,62 @@ def apply_backfill(history: dict, snaps: list[dict]) -> int:
             "sessions": len(ordered),
             "added": added,
             "earnings": "omitido",
+            "provisional": True,
             "note": (
-                "Reconstruido solo con precios hasta esa fecha. "
-                "El chequeo de resultados se tomó como aprobado."
+                "Reconstruido solo con precios hasta esa fecha, en un bloque aparte. "
+                "El chequeo de resultados se tomó como aprobado. "
+                "Se borra al llegar a "
+                f"{PROVISIONAL_PURGE_REAL_DAYS} ruedas reales."
             ),
         }
     else:
         history["backfill"] = {"done": False, "reason": "sin_sesiones"}
     return added
+
+
+def real_snapshot_count(history: dict) -> int:
+    snaps = history.get("snapshots")
+    if isinstance(snaps, dict):
+        return len(snaps)
+    if isinstance(snaps, list):
+        return len([s for s in snaps if isinstance(s, dict)])
+    return 0
+
+
+def maybe_purge_reconstructed(history: dict) -> bool:
+    """Borra la reconstrucción al llegar a PROVISIONAL_PURGE_REAL_DAYS ruedas reales."""
+    if real_snapshot_count(history) < PROVISIONAL_PURGE_REAL_DAYS:
+        return False
+    history["reconstructed"] = {}
+    backfill = history.get("backfill") if isinstance(history.get("backfill"), dict) else {}
+    backfill = dict(backfill)
+    backfill["done"] = True
+    backfill["purged"] = True
+    backfill["provisional"] = False
+    backfill["reason"] = "ruedas_reales"
+    history["backfill"] = backfill
+    return True
+
+
+def _raw_items(raw: Any) -> list[dict] | None:
+    if isinstance(raw, dict):
+        return [item for item in raw.values() if isinstance(item, dict)]
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    return None
+
+
+def _snap_from_item(item: dict, *, reconstruido: bool) -> dict[str, Any] | None:
+    day = _iso(item.get("date"))
+    rows = item.get("rows")
+    if day is None or not isinstance(rows, list):
+        return None
+    return make_snapshot(
+        day,
+        [r for r in rows if isinstance(r, dict)],
+        after_close=bool(item.get("after_close")),
+        reconstruido=reconstruido,
+    )
 
 
 def normalize(data: Any) -> dict | None:
@@ -273,41 +348,41 @@ def normalize(data: Any) -> dict | None:
     version = data.get("version")
     if version not in (1, None):
         return None
-    raw = data.get("snapshots")
-    if isinstance(raw, dict):
-        items = list(raw.values())
-    elif isinstance(raw, list):
-        items = raw
-    else:
+    real_items = _raw_items(data.get("snapshots"))
+    recon_items = _raw_items(data.get("reconstructed"))
+    if real_items is None and recon_items is None:
         return None
     snaps: dict[str, dict] = {}
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        day = _iso(item.get("date"))
-        rows = item.get("rows")
-        if day is None or not isinstance(rows, list):
-            continue
-        snap = make_snapshot(
-            day,
-            [r for r in rows if isinstance(r, dict)],
-            after_close=bool(item.get("after_close")),
-            reconstruido=bool(item.get("reconstruido")),
-        )
+    reconstructed: dict[str, dict] = {}
+    for item in real_items or []:
+        snap = _snap_from_item(item, reconstruido=bool(item.get("reconstruido")))
         if snap is None:
             continue
-        snaps[day] = snap
+        if snap["reconstruido"]:
+            reconstructed[snap["date"]] = snap
+        else:
+            snaps[snap["date"]] = snap
+    for item in recon_items or []:
+        snap = _snap_from_item(item, reconstruido=True)
+        if snap is None or snap["date"] in snaps:
+            continue
+        reconstructed[snap["date"]] = snap
+    for day in snaps:
+        reconstructed.pop(day, None)
     backfill = data.get("backfill") if isinstance(data.get("backfill"), dict) else {"done": False}
     return {
         "version": 1,
         "updated_at": data.get("updated_at"),
         "backfill": dict(backfill),
         "snapshots": snaps,
+        "reconstructed": reconstructed,
     }
 
 
 def _usable(history: dict | None) -> bool:
-    return isinstance(history, dict) and bool(history.get("snapshots"))
+    if not isinstance(history, dict):
+        return False
+    return bool(history.get("snapshots")) or bool(history.get("reconstructed"))
 
 
 def resolve_load(
@@ -385,18 +460,26 @@ def save_history(
     loaded: LoadResult,
     flag_path: Path = FLAG_PATH,
 ) -> bool:
-    """Escribe el archivo solo si hay fotos y la carga anterior lo permite."""
+    """Escribe el archivo solo si hay fotos y la carga anterior lo permite.
+
+    La reconstrucción va en otra clave. Si está vacía, no se publica.
+    """
     snaps = history.get("snapshots") if isinstance(history, dict) else None
-    if not loaded.write or not isinstance(snaps, dict) or not snaps:
+    recon = history.get("reconstructed") if isinstance(history, dict) else None
+    has_real = isinstance(snaps, dict) and bool(snaps)
+    has_recon = isinstance(recon, dict) and bool(recon)
+    if not loaded.write or not (has_real or has_recon):
         if loaded.block_deploy or (path.is_file() and not loaded.write):
             flag_path.write_text(loaded.source + "\n", encoding="utf-8")
         return False
-    payload = {
+    payload: dict[str, Any] = {
         "version": 1,
         "updated_at": history.get("updated_at"),
         "backfill": history.get("backfill") or {"done": False},
-        "snapshots": [snaps[key] for key in sorted(snaps)],
+        "snapshots": [snaps[key] for key in sorted(snaps or {})],
     }
+    if has_recon:
+        payload["reconstructed"] = [recon[key] for key in sorted(recon or {})]
     flag_path.unlink(missing_ok=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -802,12 +885,27 @@ def _ddmm(iso: str | None) -> str:
     return text
 
 
-def panel_sentence(stats: dict | None) -> str:
+def panel_sentence(stats: dict | None, *, provisional: bool = False) -> str:
     if not stats or not stats.get("n") or stats.get("avg") is None or stats.get("spy_avg") is None:
-        return "Todavía no hay señales verdes con la ventana de 20 ruedas cerrada."
+        base = "Todavía no hay señales verdes con la ventana de 20 ruedas cerrada."
+    else:
+        base = (
+            f"En las últimas {stats['n']} señales, las verdes rindieron {_fmt_pct(stats['avg'])} "
+            f"en 20 ruedas contra {_fmt_pct(stats['spy_avg'])} de SPY."
+        )
+    if provisional:
+        return "Provisorio (reconstruido). " + base
+    return base
+
+
+def _provisional_note(real_closed: int) -> str:
+    if real_closed == 1:
+        cuantas = "Hay 1 señal verde real con esta ventana cerrada."
+    else:
+        cuantas = f"Hay {real_closed} señales verdes reales con esta ventana cerrada."
     return (
-        f"En las últimas {stats['n']} señales, las verdes rindieron {_fmt_pct(stats['avg'])} "
-        f"en 20 ruedas contra {_fmt_pct(stats['spy_avg'])} de SPY."
+        cuantas
+        + f" El provisorio desaparece al llegar a {PROVISIONAL_MIN_CLOSED_SIGNALS}."
     )
 
 
@@ -849,8 +947,8 @@ def _round_outcome(outcome: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[str, Any]:
-    meta_by = meta_by or {}
+def _metrics_bundle(history: dict) -> tuple[dict[str, dict[str, Any]], dict[str, Any], list[dict[str, Any]], list[str], dict[str, list[float | None]], list[float | None]]:
+    """Tabla, variante de todos los días, señales verdes deduplicadas, fechas, cierres y SPY."""
     dates, closes = _close_matrix(history)
     spy = closes.get("SPY") or [None] * len(dates)
     groups = {
@@ -863,21 +961,64 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
     for name, signals_ in groups.items():
         table[name] = {str(h): _stats(signals_, closes, spy, h) for h in HORIZONS}
     verde_all = iter_signals(history, "verde", dedup=False)
-    verde_20 = {
-        "dedup": table["verde"]["20"],
-        "real": _stats(groups["verde"], closes, spy, 20, reconstructed=False),
-        "reconstruido": _stats(groups["verde"], closes, spy, 20, reconstructed=True),
-        "todos_los_dias": _stats(verde_all, closes, spy, 20),
-    }
+    all_days = {str(h): _stats(verde_all, closes, spy, h) for h in HORIZONS}
+    return table, all_days, groups["verde"], dates, closes, spy
+
+
+def _book_history(book: dict) -> dict:
+    return {"snapshots": book, "reconstructed": {}}
+
+
+def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[str, Any]:
+    """Informe para la UI. Cada horizonte sale de una sola fuente, real o reconstruida."""
+    meta_by = meta_by or {}
+    real_book = history.get("snapshots") if isinstance(history.get("snapshots"), dict) else {}
+    recon_book = history.get("reconstructed") if isinstance(history.get("reconstructed"), dict) else {}
+    purged = real_snapshot_count({"snapshots": real_book}) >= PROVISIONAL_PURGE_REAL_DAYS
+    if purged:
+        recon_book = {}
+    real_hist = _book_history(real_book)
+    recon_hist = _book_history(recon_book)
+    real_table, real_all, real_verde, real_dates, real_closes, real_spy = _metrics_bundle(real_hist)
+    recon_table, recon_all, _recon_verde, _recon_dates, _recon_closes, _recon_spy = _metrics_bundle(recon_hist)
+    table: dict[str, dict[str, Any]] = {name: {} for name in ("verde", "ambar", "rojo", "universo")}
+    horizons_meta: dict[str, dict[str, Any]] = {}
+    any_provisional = False
+    for horizon in HORIZONS:
+        key = str(horizon)
+        real_closed = int(real_table["verde"][key]["n"])
+        provisional = bool(recon_book) and real_closed < PROVISIONAL_MIN_CLOSED_SIGNALS
+        source = recon_table if provisional else real_table
+        for name in table:
+            table[name][key] = source[name][key]
+        any_provisional = any_provisional or provisional
+        horizons_meta[key] = {
+            "provisional": provisional,
+            "real_closed": real_closed,
+            "threshold": PROVISIONAL_MIN_CLOSED_SIGNALS,
+            "label": "Provisorio (reconstruido)" if provisional else "",
+            "note": _provisional_note(real_closed) if provisional else "",
+        }
+    twenty_provisional = bool(horizons_meta["20"]["provisional"])
+    shown_20 = table["verde"]["20"]
+    all_source = recon_all if twenty_provisional else real_all
+    todos = all_source["20"]
+    todos_sentence = None
+    if todos.get("n") and todos.get("avg") is not None and todos.get("spy_avg") is not None:
+        todos_sentence = (
+            f"Si se cuenta cada día en verde y no solo el primero de la racha, son {todos['n']} señales, "
+            f"con un retorno medio de {_fmt_pct(todos['avg'])} en 20 ruedas contra {_fmt_pct(todos['spy_avg'])} de SPY."
+        )
+        if twenty_provisional:
+            todos_sentence = "Provisorio (reconstruido). " + todos_sentence
     recent: list[dict[str, Any]] = []
-    for sig in reversed(groups["verde"]):
-        series = closes.get(sig["symbol"]) or []
-        outcome = _round_outcome(signal_outcome(series, spy, int(sig["index"]), 20))
+    for sig in reversed(real_verde):
+        series = real_closes.get(sig["symbol"]) or []
+        outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20))
         recent.append(
             {
                 "date": sig["date"],
                 "symbol": sig["symbol"],
-                "reconstruido": sig["reconstruido"],
                 "desk_score": sig.get("desk_score"),
                 "rank": sig.get("rank"),
                 **outcome,
@@ -886,77 +1027,62 @@ def build_report(history: dict, meta_by: dict[str, dict] | None = None) -> dict[
         if len(recent) >= RECENT_LIMIT:
             break
     by_symbol: dict[str, dict[str, Any]] = {}
-    for sig in groups["verde"]:
+    for sig in real_verde:
         pack = by_symbol.setdefault(sig["symbol"], {"count": 0, "signals": []})
         pack["count"] += 1
-    for sig in reversed(groups["verde"]):
+    for sig in reversed(real_verde):
         pack = by_symbol[sig["symbol"]]
         if len(pack["signals"]) >= FICHA_LIMIT:
             continue
-        series = closes.get(sig["symbol"]) or []
-        outcome = _round_outcome(signal_outcome(series, spy, int(sig["index"]), 20))
-        pack["signals"].append({"date": sig["date"], "reconstruido": sig["reconstruido"], **outcome})
-    last_i = len(dates) - 1
+        series = real_closes.get(sig["symbol"]) or []
+        outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20))
+        pack["signals"].append({"date": sig["date"], **outcome})
+    last_i = len(real_dates) - 1
     closed_today: list[dict[str, Any]] = []
     if last_i >= 20:
-        for sig in groups["verde"]:
+        for sig in real_verde:
             if int(sig["index"]) + 20 != last_i:
                 continue
-            series = closes.get(sig["symbol"]) or []
-            outcome = _round_outcome(signal_outcome(series, spy, int(sig["index"]), 20))
+            series = real_closes.get(sig["symbol"]) or []
+            outcome = _round_outcome(signal_outcome(series, real_spy, int(sig["index"]), 20))
             if outcome.get("status") != "cerrada":
                 continue
             closed_today.append({"date": sig["date"], "symbol": sig["symbol"], **outcome})
-    snaps = _sorted_snaps(history)
-    real_days = sum(1 for s in snaps if not s.get("reconstruido"))
-    recon_days = sum(1 for s in snaps if s.get("reconstruido"))
-    latest = snaps[-1] if snaps else None
-    todos = verde_20["todos_los_dias"]
-    todos_sentence = None
-    if todos.get("n") and todos.get("avg") is not None and todos.get("spy_avg") is not None:
-        todos_sentence = (
-            f"Si se cuenta cada día en verde y no solo el primero de la racha, son {todos['n']} señales, "
-            f"con un retorno medio de {_fmt_pct(todos['avg'])} en 20 ruedas contra {_fmt_pct(todos['spy_avg'])} de SPY."
-        )
-    real = verde_20["real"]
-    recon = verde_20["reconstruido"]
-    split_bits: list[str] = []
-    if real.get("n") and real.get("avg") is not None:
-        split_bits.append(f"las reales ({real['n']}) rindieron {_fmt_pct(real['avg'])} en 20 ruedas")
-    else:
-        split_bits.append("todavía no hay señales reales con la ventana de 20 ruedas cerrada")
-    if recon.get("n") and recon.get("avg") is not None:
-        split_bits.append(f"las reconstruidas ({recon['n']}) rindieron {_fmt_pct(recon['avg'])}")
+    real_snaps = _sorted_snaps(real_hist)
+    latest = real_snaps[-1] if real_snaps else None
+    span = real_dates or (_recon_dates if not purged else [])
     return {
-        "real_days": real_days,
-        "reconstructed_days": recon_days,
-        "from": dates[0] if dates else None,
-        "to": dates[-1] if dates else None,
+        "real_days": len(real_book),
+        "reconstructed_days": 0 if purged else len(recon_book),
+        "provisional": any_provisional,
+        "purge_real_days": PROVISIONAL_PURGE_REAL_DAYS,
+        "provisional_min_closed": PROVISIONAL_MIN_CLOSED_SIGNALS,
+        "from": span[0] if span else None,
+        "to": span[-1] if span else None,
         "latest": (
             {"date": latest.get("date"), "after_close": bool(latest.get("after_close"))}
             if latest
             else None
         ),
         "horizons": list(HORIZONS),
+        "horizons_meta": horizons_meta,
         "dedup": DEDUP_RULE,
         "disclaimer": DISCLAIMER,
-        "earnings_note": EARNINGS_NOTE,
-        "sentence": panel_sentence(verde_20["dedup"]),
+        "earnings_note": EARNINGS_NOTE if any_provisional else "",
+        "sentence": panel_sentence(shown_20, provisional=twenty_provisional),
         "todos_los_dias_sentence": todos_sentence,
-        "split_sentence": "Por separado, " + " y ".join(split_bits) + ".",
         "table": table,
-        "verde_20": verde_20,
+        "verde_20": shown_20,
         "recent": recent,
         "by_symbol": by_symbol,
         "closed_today": closed_today,
-        "equity": equity_curve(history, meta_by),
+        "equity": equity_curve(real_hist, meta_by),
     }
 
 
 def _note(loaded: LoadResult, history: dict, *, did_backfill: bool, elapsed: float, saved: bool) -> str:
-    snaps = _sorted_snaps(history)
-    real_days = sum(1 for s in snaps if not s.get("reconstruido"))
-    recon_days = sum(1 for s in snaps if s.get("reconstruido"))
+    real_days = real_snapshot_count(history)
+    recon = history.get("reconstructed") if isinstance(history.get("reconstructed"), dict) else {}
     if not saved:
         if loaded.block_deploy:
             return (
@@ -967,15 +1093,19 @@ def _note(loaded: LoadResult, history: dict, *, did_backfill: bool, elapsed: flo
     base = {"publicado": "base publicada", "local": "base local", "nuevo": "arranque"}.get(
         loaded.source, loaded.source
     )
-    text = (
-        f"Historial del semáforo ({base}): {len(snaps)} ruedas, "
-        f"{real_days} reales y {recon_days} reconstruidas."
-    )
+    text = f"Historial del semáforo ({base}): {real_days} ruedas reales"
+    purged = bool((history.get("backfill") or {}).get("purged")) if isinstance(history.get("backfill"), dict) else False
+    if purged:
+        text += ". Reconstrucción provisoria borrada."
+    elif recon:
+        text += f" y {len(recon)} reconstruidas, aparte, hasta las {PROVISIONAL_PURGE_REAL_DAYS} ruedas reales."
+    else:
+        text += "."
     if did_backfill:
-        text += f" Reconstrucción en {elapsed:.1f}s; queda guardada y no se rehace en cada corrida."
+        text += f" Reconstrucción en {elapsed:.1f}s; queda guardada aparte y no se rehace en cada corrida."
     elif needs_backfill(history):
         text += " La reconstrucción no quedó cerrada; se reintenta en la próxima corrida."
-    else:
+    elif not purged:
         text += " Reconstrucción reutilizada."
     return text
 
@@ -996,9 +1126,10 @@ def publish(
         save_history(history_path, empty_history(), loaded, flag_path)
         return None, _note(loaded, empty_history(), did_backfill=False, elapsed=0.0, saved=False)
     history = loaded.history or empty_history()
+    maybe_purge_reconstructed(history)
     did_backfill = False
     elapsed = 0.0
-    if needs_backfill(history):
+    if needs_backfill(history) and real_snapshot_count(history) < PROVISIONAL_PURGE_REAL_DAYS:
         try:
             t0 = time.perf_counter()
             snaps = backfill_snapshots(meta_by, all_bars)
@@ -1018,6 +1149,7 @@ def publish(
             reconstruido=False,
         )
         upsert_snapshot(history, live)
+    maybe_purge_reconstructed(history)
     history["updated_at"] = _stamp(now)
     saved = save_history(history_path, history, loaded, flag_path)
     if not saved:

@@ -2341,8 +2341,13 @@ def main() -> None:
     )
     notes.append(f"Semáforo: {green_n} acciones en verde. No modifica el Desk Score.")
     historial_public = None
+    hist_min_closed = 10
+    hist_purge_days = 60
     try:
         import historial
+
+        hist_min_closed = historial.PROVISIONAL_MIN_CLOSED_SIGNALS
+        hist_purge_days = historial.PROVISIONAL_PURGE_REAL_DAYS
 
         t_hist = time.perf_counter()
         historial_public, hist_note = historial.publish(
@@ -2447,7 +2452,11 @@ def main() -> None:
                 "El archivo historial_semaforo.json se publica con el sitio y, si se puede, "
                 "vuelve al repo. Si no se puede leer la historia anterior, no se reescribe vacía. "
                 "La reconstrucción de unos 6 meses corre una sola vez, solo con precios hasta esa fecha, "
-                "y marca reconstruido. El chequeo de resultados reconstruido se toma como aprobado. "
+                "y queda en una clave aparte, nunca mezclada con las fotos reales. "
+                f"Cada horizonte la muestra como provisoria mientras haya menos de {hist_min_closed} "
+                "señales verdes reales cerradas. "
+                f"A las {hist_purge_days} ruedas reales se borra. "
+                "El chequeo de resultados reconstruido se tomó como aprobado. "
                 "Una señal nueva es el primer día en ese color después de una rueda que no lo tenía. "
                 "El retorno a 5, 10 y 20 ruedas solo entra cuando la ventana ya cerró; si no, queda en curso."
             ),
