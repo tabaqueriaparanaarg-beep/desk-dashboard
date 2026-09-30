@@ -1803,13 +1803,13 @@
       '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
       "</div></header>" +
       entryBlock(row) +
+      analystBlock(row) +
       '<section class="dd-ficha-card" aria-label="Patrones">' +
       '<h2 class="dd-ficha-kicker">Patrones</h2>' +
       patternChips(row) +
       "</section>" +
       healthBlock(row) +
       insiderFichaBlock(row) +
-      analystBlock(row) +
       '<section class="dd-ficha-card" aria-label="Desk Score">' +
       '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
