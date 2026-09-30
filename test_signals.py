@@ -474,23 +474,40 @@ class SlowFetchPlanTests(unittest.TestCase):
         self.assertEqual(budget, build.SLOW_BUDGET_COLD)
         self.assertEqual(len(plan), build.SLOW_BUDGET_COLD)
         self.assertEqual(plan[0], ("S00", "insiders"))
-        self.assertEqual(plan[1], ("S00", "fundamentals"))
+        self.assertEqual(plan[1], ("S00", "analysts"))
+        self.assertEqual(plan[2], ("S00", "fundamentals"))
 
     def test_warm_budget_refreshes_only_stale_blocks(self):
         today = date(2026, 9, 29)
         prev = {
             "AAA": {
                 "insiders": {"fetched_on": "2026-09-20"},
+                "analysts": {"fetched_on": "2026-09-28"},
                 "fundamentals": {"fetched_on": "2026-09-01"},
             },
             "BBB": {
                 "insiders": {"fetched_on": "2026-09-28"},
+                "analysts": {"fetched_on": "2026-09-28"},
                 "fundamentals": {"fetched_on": "2026-09-28"},
             },
         }
         plan, budget = build._plan_slow_fetches(["AAA", "BBB"], prev, today)
         self.assertEqual(budget, build.SLOW_BUDGET_WARM)
         self.assertEqual(plan, [("AAA", "fundamentals"), ("AAA", "insiders")])
+
+    def test_missing_analysts_go_out_before_stale_blocks(self):
+        today = date(2026, 9, 29)
+        prev = {
+            "AAA": {
+                "insiders": {"fetched_on": "2026-09-28"},
+                "fundamentals": {"fetched_on": "2026-09-01"},
+            },
+        }
+        plan, budget = build._plan_slow_fetches(["AAA"], prev, today)
+        self.assertEqual(budget, build.SLOW_BUDGET_WARM)
+        self.assertEqual(plan[0], ("AAA", "analysts"))
+        self.assertIn(("AAA", "fundamentals"), plan)
+        self.assertNotIn(("AAA", "insiders"), plan)
 
 
 class ScoreUntouchedTests(unittest.TestCase):
@@ -508,7 +525,20 @@ class ScoreUntouchedTests(unittest.TestCase):
             {"metric": {"peTTM": 10}}, fetched_on=date(2026, 9, 29)
         )
         s.attach_sector_medians(scored)
+        s.attach_entry_lights(
+            scored,
+            {"rows": [{"sector": "Technology", "label": "Tecnología", "rs_trend": "up"}]},
+            [],
+            today=date(2026, 9, 29),
+            earnings_known=True,
+            earnings_through=date(2026, 10, 6),
+        )
+        scored[0]["analysts"] = s.parse_recommendations(
+            [{"period": "2026-09-01", "strongBuy": 1, "buy": 2, "hold": 1, "sell": 0, "strongSell": 0}],
+            fetched_on=date(2026, 9, 29),
+        )
         self.assertEqual(scored[0]["desk_score"], score)
+        self.assertEqual(scored[0]["rank"], 1)
 
 
 if __name__ == "__main__":

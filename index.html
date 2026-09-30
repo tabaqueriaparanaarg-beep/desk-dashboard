@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=23" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -43,6 +43,7 @@
   </header>
 
   <main class="dd-main">
+    <p id="sample-notice" class="dd-sample-notice" hidden></p>
     <section class="dd-resumen dd-panel" data-section="resumen" aria-label="Resumen diario">
       <div class="dd-resumen-head">
         <h2 class="dd-section-title">Resumen del día</h2>
@@ -255,6 +256,7 @@
         <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="rs_gt_70" aria-pressed="false">RS &gt; 70</button>
+          <button type="button" class="dd-chip dd-chip-toggle" data-flag="solo_verdes" aria-pressed="false">Solo verdes</button>
         </div>
         <div class="dd-filter-search">
           <label class="dd-sr-only" for="filter-search">Buscar ticker</label>
@@ -268,6 +270,8 @@
             <tr>
               <th scope="col" class="dd-sticky-col dd-col-rank">#</th>
               <th scope="col" class="dd-sticky-col dd-col-ticker">Ticker</th>
+              <th scope="col" class="dd-col-luz" title="Semáforo de entrada. No entra en el Desk Score.">Luz</th>
+              <th scope="col" class="dd-col-compra" title="Porcentaje de analistas en compra fuerte o compra. No entra en el Desk Score.">Compra</th>
               <th scope="col">Score</th>
               <th scope="col" title="Fecha en que entró al Top 10 en la racha actual">Entró</th>
               <th scope="col">Flags</th>
@@ -305,6 +309,6 @@
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=18" defer></script>
+  <script src="app.js?v=19" defer></script>
 </body>
 </html>

@@ -1131,7 +1131,7 @@ body {
 
   .dd-table {
     font-size: 0.8rem;
-    min-width: 640px;
+    min-width: 760px;
   }
 
   .dd-table th,
@@ -2170,4 +2170,178 @@ body.is-ficha .dd-footer {
   .dd-ins-date {
     margin-left: 0;
   }
+}
+
+/* ── Semáforo de entrada y analistas ── */
+
+.dd-sample-notice {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.dd-col-luz,
+.dd-col-compra {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.dd-luz {
+  display: inline-block;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--dd-muted-dim);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+
+.dd-luz[data-verdict="verde"] {
+  background: var(--dd-ok);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18), 0 0 10px rgba(52, 211, 153, 0.55);
+}
+
+.dd-luz[data-verdict="ambar"] {
+  background: var(--dd-warn);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.18), 0 0 10px rgba(251, 191, 36, 0.45);
+}
+
+.dd-luz[data-verdict="rojo"] {
+  background: var(--dd-bad);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18), 0 0 10px rgba(248, 113, 113, 0.45);
+}
+
+.dd-buy-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.dd-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dd-entry-light {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--dd-muted-dim);
+}
+
+.dd-entry-light[data-verdict="verde"] {
+  background: var(--dd-ok);
+  box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.16), 0 0 16px rgba(52, 211, 153, 0.65);
+}
+
+.dd-entry-light[data-verdict="ambar"] {
+  background: var(--dd-warn);
+  box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.16), 0 0 16px rgba(251, 191, 36, 0.55);
+}
+
+.dd-entry-light[data-verdict="rojo"] {
+  background: var(--dd-bad);
+  box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.16), 0 0 16px rgba(248, 113, 113, 0.55);
+}
+
+.dd-entry-card[data-verdict="verde"]::before { background: var(--dd-ok); }
+.dd-entry-card[data-verdict="ambar"]::before { background: var(--dd-warn); }
+.dd-entry-card[data-verdict="rojo"]::before { background: var(--dd-bad); }
+
+.dd-entry-label {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.dd-entry-checks {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+
+.dd-entry-checks li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.dd-entry-mark {
+  flex: 0 0 auto;
+  width: 1.1rem;
+  font-weight: 700;
+}
+
+.dd-entry-checks .is-ok .dd-entry-mark { color: var(--dd-ok); }
+.dd-entry-checks .is-bad .dd-entry-mark { color: var(--dd-bad); }
+
+.dd-entry-disclaimer {
+  margin: 0.85rem 0 0;
+  font-size: 0.75rem;
+  color: var(--dd-muted);
+  line-height: 1.4;
+}
+
+.dd-an-bar {
+  display: flex;
+  height: 14px;
+  margin-top: 0.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dd-an-seg { display: block; height: 100%; }
+.dd-an-sb { background: #16a34a; }
+.dd-an-b { background: #34d399; }
+.dd-an-h { background: #fbbf24; }
+.dd-an-s { background: #fb923c; }
+.dd-an-ss { background: #f87171; }
+
+.dd-an-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.55rem;
+  font-size: 0.75rem;
+  color: var(--dd-muted);
+}
+
+.dd-an-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.dd-an-key i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.dd-an-target {
+  margin: 0.7rem 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 420px) {
+  .dd-entry-label { font-size: 1.02rem; }
+  .dd-entry-checks li { font-size: 0.82rem; }
+  .dd-an-legend { font-size: 0.7rem; }
 }
