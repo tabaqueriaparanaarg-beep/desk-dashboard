@@ -61,17 +61,16 @@ Símbolos sin barras suficientes se omiten y quedan en `failures`.
 
 | Pieza | Peso / definición |
 |--------|-------------------|
-| **Desk Score** | `0.25·Tendencia + 0.30·Fuerza_RS + 0.30·Contracción + 0.15·Setup` (pilares 0–100) |
+| **Desk Score** | `0.30·Tendencia + 0.35·Fuerza_RS + 0.35·Contracción` (pilares 0–100). Setup no entra |
 | **Entró (Top 10)** | Fecha en que el ticker entró al Top 10 en la racha actual, más las ruedas de esa racha |
 | **Walk-forward Top 10** | Cada último cierre semanal, Top 10 equiponderado con datos solo hasta ese cierre, vs SPY comprar y mantener |
-| **Tendencia (~25%)** | Precio vs SMA50 / EMA200, pendientes ~5d, estructura SMA50&gt;EMA200 |
-| **Fuerza RS (~30%)** | Percentil del *relative performance* vs SPY (~126d / 6m; fallback 63d) + bonus por aceleración 1m |
+| **Tendencia (30)** | Precio vs SMA50 / EMA200, pendientes ~5d, estructura SMA50&gt;EMA200 |
+| **Fuerza RS (35)** | Percentil del *relative performance* vs SPY (~126d / 6m; fallback 63d) + bonus por aceleración 1m |
 | **RS Score** | Percentil 0–100 de `(retorno_ticker − retorno_SPY)` en el universo scored |
-| **Contracción (~30%)** | Proxy VCP: ATR actual / ATR~60d, vol realizada 20 vs 60, RSI no extremo, dry-up de volumen |
-| **Setup (~15%)** | Cercanía a EMA200/SMA50 + dry-up + RSI neutro |
+| **Contracción (35)** | Proxy VCP: ATR actual / ATR~60d, vol realizada 20 vs 60, RSI no extremo, dry-up de volumen |
 | **Vol rel** | Volumen último día / media 20 sesiones |
 | **Dist EMA200** | `(close / EMA200 − 1) × 100` |
-| **Puntos de pilar (ficha)** | score 0–100 del pilar × peso: Tendencia /25, Fuerza RS /30, Contracción /30, Setup /15 (antes de penalizaciones) |
+| **Puntos de pilar (ficha)** | score 0–100 del pilar × peso: Tendencia /30, Fuerza RS /35, Contracción /35 (antes de penalizaciones) |
 | **Rango 52 semanas** | mín/máx de high-low en las últimas 252 sesiones; posición % = (cierre − mín) / (máx − mín) |
 | **RS semanal (ficha)** | mismo percentil de RS Score, recalculado al último cierre de cada una de las últimas 16 semanas ISO. El último punto es el RS Score publicado |
 
@@ -83,7 +82,22 @@ Detalle completo también en `datos.json` → clave `formulas`.
 
 - Español, estructura semántica + clases `dd-*` y `data-*` para que puedas restylear.
 - Dark fintech (#FF6B35), responsive (KPIs 2-col en móvil, filtros wrap, tabla con scroll y columnas sticky).
-- **Disclaimer:** no es recomendación de compra.
+- **Disclaimer:** no es recomendación de compra. El Desk Score, el Top 10 y el semáforo son un filtro de lectura y de riesgo, no una ventaja de compra.
+
+### Semáforo de riesgo
+
+Luz informativa. No entra en el Desk Score ni reordena el ranking.
+
+- **Verde:** sin alertas de riesgo (precio sobre la EMA200 con pendiente en alza, sin cruce bajista reciente de la EMA200, y sin resultados en los próximos 7 días del calendario que ya baja Angus).
+- **Ámbar:** resultados cerca.
+- **Rojo:** la tendencia no acompaña o hay un cruce bajista reciente de la EMA200.
+- No se usa estiramiento, Desk Score, patrón, sector ni penalizaciones. Esas reglas no se invierten: se sacan.
+
+El filtro del ranking se llama **Sin alertas**. El verde no es una compra.
+
+### Barrick Gold
+
+En Alpaca el ticker `GOLD` pasó a ser Gold.com (ex A-Mark). Barrick cotiza como **`B`** desde 2025. El universo usa `B` y el nombre Barrick Gold.
 
 ### UI refresh vs datos
 
@@ -154,7 +168,7 @@ Es una lectura del tablero, no una recomendación.
 
 Al tocar una fila del ranking o del Top 10 se abre `#/t/TICKER` (el botón atrás y el retroceso del navegador vuelven al ranking). La ficha usa datos que `build.py` ya calcula:
 
-- **Desk Score** en un gauge, y los cuatro pilares en puntos reales (Tendencia 25, Fuerza RS 30, Contracción 30, Setup 15). Es el mismo score 0–100 × peso, antes de las penalizaciones suaves (−5 extendido, −4 distribución, −3 ATR alto).
+- **Desk Score** en un gauge, y los tres pilares en puntos reales (Tendencia 30, Fuerza RS 35, Contracción 35). Es el mismo score 0–100 × peso, antes de las penalizaciones suaves (−5 extendido, −4 distribución, −3 ATR alto). Setup no entra en el score.
 - **Rango de 52 semanas**: mínimo, máximo y posición % del cierre sobre las últimas 252 sesiones (o las que haya).
 - **Gate de tendencia**: precio frente a la EMA200 y si la EMA200 sube o baja contra su valor de ~5 sesiones atrás, con la distancia en %.
 - **Penalizaciones**: los mismos `flags`. Si no hay, «Sin penalizaciones activas».

@@ -2532,7 +2532,26 @@ body.is-ficha .dd-footer {
 }
 
 .dd-hist-legend .is-stocks { background: #ff8c42; }
+.dd-hist-legend .is-universe { background: #5b8def; }
 .dd-hist-legend .is-spy { background: #a0a0a0; }
+
+.dd-hist-legacy {
+  margin-top: 1.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dd-hist-legacy > h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.dd-hist-legacy-note,
+.dd-hist-def {
+  margin: 0 0 0.7rem;
+  color: var(--dd-warn, #e0b15a);
+  font-size: 0.86rem;
+}
 
 .dd-hist-ficha {
   margin: 0.55rem 0 0.15rem;

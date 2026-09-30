@@ -121,6 +121,9 @@ class ForwardReturnTests(unittest.TestCase):
         self.assertEqual(five["beat_pct"], 50.0)
         self.assertEqual(five["best"], 50.0)
         self.assertEqual(five["worst"], -50.0)
+        self.assertEqual(five["universe_avg"], 0.0)
+        self.assertEqual(five["excess_universe"], 0.0)
+        self.assertEqual(five["beat_universe_pct"], 50.0)
         self.assertEqual(report["table"]["verde"]["10"]["n"], 0)
         self.assertEqual(report["table"]["verde"]["20"]["n"], 0)
         self.assertEqual(report["table"]["universo"]["5"]["n"], 4)
@@ -130,7 +133,9 @@ class ForwardReturnTests(unittest.TestCase):
         self.assertEqual(by_sym["AAA"]["return_pct"], 60.0)
         self.assertEqual(by_sym["BBB"]["return_pct"], -60.0)
         self.assertEqual(by_sym["AAA"]["spy_return_pct"], 6.0)
-        self.assertIn("Todavía no hay señales verdes", report["sentence"])
+        self.assertIn("Todavía no hay señales sin alertas de riesgo", report["sentence"])
+        self.assertIn("equiponderado", report["universe_benchmark"])
+        self.assertIn("SPY", report["universe_benchmark"])
 
     def test_closed_twenty_uses_that_window_not_the_last_bar(self) -> None:
         snaps = []
@@ -152,6 +157,8 @@ class ForwardReturnTests(unittest.TestCase):
         self.assertEqual(twenty["avg"], 20.0)
         self.assertEqual(twenty["spy_avg"], 10.0)
         self.assertEqual(twenty["excess"], 10.0)
+        self.assertEqual(twenty["universe_avg"], 20.0)
+        self.assertEqual(twenty["excess_universe"], 0.0)
         recent = report["recent"][0]
         self.assertEqual(recent["status"], "cerrada")
         self.assertEqual(recent["sessions"], 20)
@@ -339,7 +346,13 @@ class PersistenceTests(unittest.TestCase):
                     _snap("2026-05-04", [("AAA", "rojo", 11), ("SPY", "rojo", 101)]),
                 ]
             )
-            history["backfill"] = {"done": True, "from": "2026-05-01", "to": "2026-05-04", "sessions": 2}
+            history["backfill"] = {
+                "done": True,
+                "from": "2026-05-01",
+                "to": "2026-05-04",
+                "sessions": 2,
+                "rules_version": historial.signals.SEMAFORO_RULES_VERSION,
+            }
             loaded = historial.LoadResult(history, "nuevo", True, False)
             self.assertTrue(historial.save_history(path, history, loaded, flag))
             calls: list[int] = []
@@ -465,7 +478,7 @@ class ProvisionalTests(unittest.TestCase):
         self.assertTrue(meta["provisional"])
         self.assertEqual(meta["real_closed"], 9)
         self.assertEqual(meta["label"], "Provisorio (reconstruido)")
-        self.assertIn("9 señales verdes reales", meta["note"])
+        self.assertIn("9 señales reales sin alertas", meta["note"])
         self.assertIn("10", meta["note"])
         self.assertEqual(report["table"]["verde"]["5"]["n"], 1)
         self.assertEqual(report["table"]["verde"]["5"]["avg"], 5.0)
@@ -540,6 +553,52 @@ class ProvisionalTests(unittest.TestCase):
         self.assertEqual(report["reconstructed_days"], 0)
         self.assertEqual(report["earnings_note"], "")
         self.assertNotIn("ZZZ", report["by_symbol"])
+
+
+class DefinitionSplitTests(unittest.TestCase):
+    def test_missing_rules_version_loads_as_the_old_entry_light(self) -> None:
+        loaded = historial.normalize(
+            {
+                "version": 1,
+                "snapshots": [
+                    {
+                        "date": "2026-01-02",
+                        "after_close": True,
+                        "rows": [{"symbol": "AAA", "verdict": "verde", "close": 10}],
+                    }
+                ],
+            }
+        )
+        assert loaded is not None
+        self.assertEqual(loaded["snapshots"]["2026-01-02"]["rules_version"], 1)
+
+    def test_old_and_new_definitions_are_not_averaged_together(self) -> None:
+        old = historial.make_snapshot(
+            "2026-01-02",
+            _rows([("OLD", "verde", 100), ("SPY", "rojo", 100)]),
+            after_close=True,
+            reconstruido=False,
+            rules_version=1,
+        )
+        new = _snap("2026-01-05", [("NEW", "verde", 20), ("SPY", "rojo", 101)])
+        history = historial.empty_history()
+        historial.upsert_snapshot(history, old)
+        historial.upsert_snapshot(history, new)
+        report = historial.build_report(
+            history,
+            {"OLD": {"kind": "us"}, "NEW": {"kind": "us"}, "SPY": {"kind": "etf"}},
+        )
+        self.assertEqual(report["rules_version"], s.SEMAFORO_RULES_VERSION)
+        self.assertEqual([row["symbol"] for row in report["recent"]], ["NEW"])
+        self.assertNotIn("OLD", report["by_symbol"])
+        legacy = report["legacy"]
+        self.assertIsNotNone(legacy)
+        assert legacy is not None
+        self.assertEqual(legacy["rules_version"], 1)
+        self.assertIn("OLD", legacy["by_symbol"])
+        self.assertNotIn("NEW", legacy["by_symbol"])
+        self.assertIn("No se promedian", report["definition_note"])
+        self.assertIn("alerta de riesgo", report["sentence"])
 
 
 if __name__ == "__main__":

@@ -446,14 +446,21 @@ def clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 
 # Pesos del Desk Score. En la ficha se muestran como puntos sobre el máximo
-# (pilar 0–100 × peso): Tendencia 25, Fuerza RS 30, Contracción 30, Setup 15.
+# (pilar 0–100 × peso): Tendencia 30, Fuerza RS 35, Contracción 35.
+# Setup salió: en un estudio feb-2022 a sep-2026 un Setup alto iba con peor
+# retorno a 20 ruedas, dentro y fuera de muestra. Sus 15 puntos se reparten
+# de a 5 entre los tres pilares que quedan. Contracción se mantiene.
+# La escala sigue siendo 0–100.
 PILLAR_WEIGHTS = {
-    "tendencia": 0.25,
-    "fuerza_rs": 0.30,
-    "contraccion": 0.30,
-    "setup": 0.15,
+    "tendencia": 0.30,
+    "fuerza_rs": 0.35,
+    "contraccion": 0.35,
 }
 PILLAR_MAX_POINTS = {k: int(round(w * 100)) for k, w in PILLAR_WEIGHTS.items()}
+DESK_SCORE_FORMULA = (
+    "0.30*Tendencia + 0.35*Fuerza_RS + 0.35*Contracción "
+    "(cada pilar 0–100; Setup no entra)"
+)
 
 # Rango de 52 semanas ≈ 252 sesiones. La serie de Alpaca trae ~250–280 barras.
 RANGE_52W_SESSIONS = 252
@@ -490,7 +497,7 @@ def score_tendencia(
     sma50_prev: float | None,
     ema200_prev: float | None,
 ) -> float:
-    """~25 pts pillar. Above MA + slopes."""
+    """Pilar 0–100. Precio sobre las medias y pendientes."""
     score = 0.0
     if sma50 is not None:
         if close > sma50:
@@ -512,7 +519,7 @@ def score_tendencia(
 
 
 def score_fuerza_rs(rs_score: float, rs_accel: float | None) -> float:
-    """~30 pts. RS level + acceleration."""
+    """Pilar 0–100. Nivel de RS más aceleración."""
     base = rs_score  # already 0-100
     bonus = 0.0
     if rs_accel is not None:
@@ -528,7 +535,7 @@ def score_contraccion(
     rv20: float | None,
     rv60: float | None,
 ) -> float:
-    """~30 pts. Lower vol / ATR compression / RSI not extreme — VCP proxy."""
+    """Pilar 0–100. Menos volatilidad, ATR comprimido, RSI no extremo. Proxy de VCP."""
     score = 50.0
     if atr_ratio is not None:
         # atr_ratio = ATR14 / ATR14_60d_avg; <1 = compression
@@ -560,57 +567,21 @@ def score_contraccion(
     return clamp(score)
 
 
-def score_setup(
-    dist_ema200: float | None,
-    dist_sma50: float | None,
-    vol_ratio: float | None,
-    rsi_val: float | None,
-) -> float:
-    """~15 pts. Near pullback / dry-up conditions."""
-    score = 30.0
-    # Ideal: near EMA200 from above (pullback), or near SMA50
-    if dist_ema200 is not None:
-        d = abs(dist_ema200)
-        if 0 <= dist_ema200 <= 5:
-            score += 35  # just above / at EMA200
-        elif -3 <= dist_ema200 < 0:
-            score += 25  # slight undercut
-        elif d <= 8:
-            score += 15
-        elif dist_ema200 > 20:
-            score -= 20  # extended
-    if dist_sma50 is not None:
-        if -2 <= dist_sma50 <= 4:
-            score += 20
-        elif dist_sma50 > 12:
-            score -= 10
-    if vol_ratio is not None:
-        if vol_ratio < 0.8:
-            score += 15
-        elif vol_ratio > 1.8:
-            score -= 10
-    if rsi_val is not None and 45 <= rsi_val <= 60:
-        score += 10
-    return clamp(score)
-
-
-def desk_score(tend: float, fuerza: float, contr: float, setup: float) -> float:
-    """Weights: Tendencia 25, Fuerza RS 30, Contracción 30, Setup 15."""
+def desk_score(tend: float, fuerza: float, contr: float) -> float:
+    """Tendencia 30, Fuerza RS 35, Contracción 35. Setup no entra."""
     return clamp(
         tend * PILLAR_WEIGHTS["tendencia"]
         + fuerza * PILLAR_WEIGHTS["fuerza_rs"]
         + contr * PILLAR_WEIGHTS["contraccion"]
-        + setup * PILLAR_WEIGHTS["setup"]
     )
 
 
-def pillar_points_block(tend: float, fuerza: float, contr: float, setup: float) -> dict[str, dict]:
+def pillar_points_block(tend: float, fuerza: float, contr: float) -> dict[str, dict]:
     """Puntos de cada pilar (0–máximo) a partir del score 0–100, antes de penalizaciones."""
     raw = {
         "tendencia": tend,
         "fuerza_rs": fuerza,
         "contraccion": contr,
-        "setup": setup,
     }
     out: dict[str, dict] = {}
     for key, value in raw.items():
@@ -838,7 +809,6 @@ def compute_symbol(
     tend = score_tendencia(close, sma50_v, ema200_v, sma50_prev, ema200_prev)
     # fuerza uses placeholder RS; filled after percentile
     contr = score_contraccion(rsi_v, atr_ratio, vol_rel, rv20, rv60)
-    setup = score_setup(dist_ema200, dist_sma50, vol_rel, rsi_v)
     flags = penalty_flags(dist_ema200, atr_pct, vol_rel, rsi_v, close, sma50_v)
 
     return {
@@ -872,7 +842,6 @@ def compute_symbol(
             "tendencia": safe_round(tend, 1),
             "fuerza_rs": None,
             "contraccion": safe_round(contr, 1),
-            "setup": safe_round(setup, 1),
         },
         "desk_score": None,
         "above_ema200": bool(ema200_v is not None and close > ema200_v),
@@ -881,7 +850,6 @@ def compute_symbol(
         "_rel_perf_raw": rel_perf,
         "_tend": tend,
         "_contr": contr,
-        "_setup": setup,
         "_rs_accel": rs_accel,
     }
 
@@ -909,8 +877,8 @@ def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
         r["rs_score"] = safe_round(rs, 1)
         fuerza = score_fuerza_rs(rs, r["_rs_accel"])
         r["pillars"]["fuerza_rs"] = safe_round(fuerza, 1)
-        r["pillar_points"] = pillar_points_block(r["_tend"], fuerza, r["_contr"], r["_setup"])
-        ds = desk_score(r["_tend"], fuerza, r["_contr"], r["_setup"])
+        r["pillar_points"] = pillar_points_block(r["_tend"], fuerza, r["_contr"])
+        ds = desk_score(r["_tend"], fuerza, r["_contr"])
         # Soft penalty for flags
         if "extendido_vs_ema200" in r["flags"]:
             ds = clamp(ds - 5)
@@ -1370,8 +1338,8 @@ def walkforward_note(weeks: int, start: str | None, end: str | None, warmup: int
         "solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada "
         "nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a "
         "ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia "
-        "atrás. Sin comisiones. Es una simulación, no una recomendación. Los resultados pasados "
-        "no garantizan resultados futuros."
+        "atrás. Sin comisiones. Es una simulación de un filtro, no una ventaja de compra ni una "
+        "recomendación. Los resultados pasados no garantizan resultados futuros."
         + ventana
     )
 
@@ -2406,19 +2374,18 @@ def main() -> None:
         "failures": failures,
         "notes": notes,
         "formulas": {
-            "desk_score": "0.25*Tendencia + 0.30*Fuerza_RS + 0.30*Contracción + 0.15*Setup (cada pilar 0–100)",
+            "desk_score": DESK_SCORE_FORMULA,
             "rs_score": "Percentil 0–100 de (retorno_stock − retorno_SPY) en ~126 sesiones (6m; fallback 63d/3m)",
             "tendencia": "Precio vs SMA50/EMA200 + pendientes (~5d) + SMA50>EMA200",
             "fuerza_rs": "0.75*RS_score + bonus por aceleración relativa 1m",
             "contraccion": "Proxy VCP: ratio ATR actual/ATR~60d, vol realizada 20/60, RSI no extremo, dry-up volumen",
-            "setup": "Cercanía a EMA200/SMA50 + dry-up volumen + RSI neutro",
             "vol_rel_20d": "Volumen último día / media 20 sesiones",
             "dist_ema200_pct": "(close/EMA200 − 1) * 100",
             "regime": rule,
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
             "top10_entry": TOP10_ENTRY_NOTE,
             "top10_walkforward": TOP10_WALKFORWARD_FORMULA,
-            "pillar_points": "Puntos del pilar = score 0–100 × peso (Tendencia 0.25, Fuerza RS 0.30, Contracción 0.30, Setup 0.15), antes de las penalizaciones suaves del Desk Score",
+            "pillar_points": "Puntos del pilar = score 0–100 × peso (Tendencia 0.30, Fuerza RS 0.35, Contracción 0.35), antes de las penalizaciones suaves del Desk Score. Setup no entra.",
             "range_52w": f"Mínimo y máximo de high/low en las últimas {RANGE_52W_SESSIONS} sesiones (o las disponibles). position_pct = (close − mín) / (máx − mín) × 100",
             "change_pct": "(close / close anterior − 1) × 100",
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
@@ -2447,34 +2414,31 @@ def main() -> None:
             ),
             "resumen": "Texto plantilla comparado con la publicación anterior. Sin modelo de lenguaje.",
             "historial_semaforo": (
-                "Una foto por fecha de rueda (veredicto, Desk Score, puesto y cierre). "
+                "Una foto por fecha de rueda (veredicto, Desk Score, puesto, cierre y versión de la definición). "
                 "La corrida posterior del mismo día pisa esa foto. "
                 "El archivo historial_semaforo.json se publica con el sitio y, si se puede, "
                 "vuelve al repo. Si no se puede leer la historia anterior, no se reescribe vacía. "
-                "La reconstrucción de unos 6 meses corre una sola vez, solo con precios hasta esa fecha, "
+                "La reconstrucción de unos 6 meses corre una sola vez por definición, solo con precios hasta esa fecha, "
                 "y queda en una clave aparte, nunca mezclada con las fotos reales. "
                 f"Cada horizonte la muestra como provisoria mientras haya menos de {hist_min_closed} "
-                "señales verdes reales cerradas. "
-                f"A las {hist_purge_days} ruedas reales se borra. "
+                "señales reales cerradas de la definición vigente. "
+                f"A las {hist_purge_days} ruedas reales de esa definición se borra. "
                 "El chequeo de resultados reconstruido se tomó como aprobado. "
                 "Una señal nueva es el primer día en ese color después de una rueda que no lo tenía. "
-                "El retorno a 5, 10 y 20 ruedas solo entra cuando la ventana ya cerró; si no, queda en curso."
+                "El retorno a 5, 10 y 20 ruedas se compara con SPY y con el promedio equiponderado "
+                "de las acciones (sin ETFs). "
+                f"La definición vigente es la versión {signals.SEMAFORO_RULES_VERSION} (alerta de riesgo). "
+                "Las fotos de una versión anterior no se promedian junto con las nuevas."
             ),
             "entry": (
-                "Semáforo informativo, no entra en el Desk Score ni cambia el orden. "
-                f"Verde si pasan todos los chequeos. Rojo si el precio no está sobre la EMA200 "
-                f"con pendiente en alza, o si hay cruce bajista de la EMA200 en las últimas "
-                f"{signals.PATTERN_EMA_CROSS_SESSIONS} sesiones. Si no, ámbar. "
-                f"Desk Score >= {signals.ENTRY_MIN_DESK_SCORE:g}. "
-                f"Estirado si dist EMA200 > {signals.ENTRY_MAX_DIST_EMA200:g}%, "
-                f"dist SMA50 > {signals.ENTRY_MAX_DIST_SMA50:g}% o RSI14 > {signals.ENTRY_MAX_RSI:g}. "
-                "Patrón constructivo: pullback a la SMA50, base lateral o máximo de 52 semanas. "
-                f"Resultados: ninguno en los próximos {signals.ENTRY_EARNINGS_DAYS} días dentro "
-                "del calendario que ya baja Angus (semana en curso); si esa ventana no cubre "
-                "los 7 días, el motivo lo dice. "
-                "Sector: la tendencia de RS del sector no está en baja, o el sector queda en la "
-                "mitad alta de la vista. En ETFs se usa el RS propio (misma idea, percentil >= "
-                f"{signals.ENTRY_ETF_RS_TOP_HALF:g} cuenta como mitad alta)."
+                "Alerta de riesgo, no es una señal de compra ni entra en el Desk Score. "
+                f"Definición versión {signals.SEMAFORO_RULES_VERSION}. "
+                "Verde: sin alertas (precio sobre la EMA200 con pendiente en alza, "
+                f"sin cruce bajista de la EMA200 en las últimas {signals.PATTERN_EMA_CROSS_SESSIONS} sesiones, "
+                f"y sin resultados en los próximos {signals.ENTRY_EARNINGS_DAYS} días del calendario que ya baja Angus). "
+                "Ámbar: resultados cerca. Rojo: la tendencia no acompaña o hay cruce bajista reciente. "
+                "No se usa estiramiento, Desk Score, patrón, sector ni flags. "
+                "Las fotos del historial con otra versión no se mezclan con esta."
             ),
             "analysts": (
                 "Finnhub /stock/recommendation, solo acciones. Se guarda el mes vigente y hasta "

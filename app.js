@@ -42,10 +42,9 @@
   ];
 
   var PILLAR_SPEC = [
-    { key: "tendencia", label: "Tendencia", max: 25 },
-    { key: "fuerza_rs", label: "Fuerza RS", max: 30 },
-    { key: "contraccion", label: "Contracción", max: 30 },
-    { key: "setup", label: "Setup", max: 15 },
+    { key: "tendencia", label: "Tendencia", max: 30 },
+    { key: "fuerza_rs", label: "Fuerza RS", max: 35 },
+    { key: "contraccion", label: "Contracción", max: 35 },
   ];
 
   var SCORE_PENALTY = {
@@ -631,7 +630,6 @@
         fmtNum(p.tendencia, 1),
         fmtNum(r.rs_score, 1),
         fmtNum(p.contraccion, 1),
-        fmtNum(p.setup, 1),
         '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>",
         fmtNum(r.vol_rel_20d, 2),
         '<span class="dd-kind" data-kind="' + escapeHtml(r.kind || "") + '">' + escapeHtml(r.kind || "") + "</span>",
@@ -662,10 +660,9 @@
         if (i === 7) td.setAttribute("data-col", "tendencia");
         if (i === 8) td.setAttribute("data-col", "rs");
         if (i === 9) td.setAttribute("data-col", "contraccion");
-        if (i === 10) td.setAttribute("data-col", "setup");
-        if (i === 11) td.setAttribute("data-col", "dist_ema200");
-        if (i === 12) td.setAttribute("data-col", "vol_rel");
-        if (i === 13) td.setAttribute("data-col", "kind");
+        if (i === 10) td.setAttribute("data-col", "dist_ema200");
+        if (i === 11) td.setAttribute("data-col", "vol_rel");
+        if (i === 12) td.setAttribute("data-col", "kind");
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
@@ -1157,8 +1154,8 @@
     var entry = row && row.entry;
     if (!entry || !entry.verdict) {
       return (
-        '<section class="dd-ficha-card dd-entry-card" aria-label="Semáforo de entrada">' +
-        '<h2 class="dd-ficha-kicker">Semáforo de entrada</h2>' +
+        '<section class="dd-ficha-card dd-entry-card" aria-label="Semáforo de riesgo">' +
+        '<h2 class="dd-ficha-kicker">Semáforo de riesgo</h2>' +
         '<p class="dd-ficha-empty">Sin semáforo en esta publicación. Se calcula al correr build.py.</p>' +
         historialFichaLine(row && row.symbol) +
         "</section>"
@@ -1172,11 +1169,11 @@
         '<span><strong>' + escapeHtml(c.label || "") + ".</strong> " + escapeHtml(c.reason || "") + "</span></li>"
       );
     }).join("");
-    var disclaimer = entry.disclaimer || "Lectura técnica automática. No es recomendación de compra.";
+    var disclaimer = entry.disclaimer || "Alerta de riesgo automática. El verde no es una señal de compra.";
     return (
       '<section class="dd-ficha-card dd-entry-card" data-verdict="' + escapeHtml(entry.verdict) +
-      '" aria-label="Semáforo de entrada">' +
-      '<h2 class="dd-ficha-kicker">Semáforo de entrada</h2>' +
+      '" aria-label="Semáforo de riesgo">' +
+      '<h2 class="dd-ficha-kicker">Semáforo de riesgo</h2>' +
       '<div class="dd-entry-head">' +
       '<span class="dd-entry-light" data-verdict="' + escapeHtml(entry.verdict) +
       '" role="img" aria-label="' + escapeHtml(entry.label || "") + '"></span>' +
@@ -1266,6 +1263,7 @@
     var vals = [];
     curve.forEach(function (p) {
       vals.push(Number(p.stocks), Number(p.spy));
+      if (p.universe != null) vals.push(Number(p.universe));
     });
     var minV = Math.min.apply(null, vals);
     var maxV = Math.max.apply(null, vals);
@@ -1292,8 +1290,11 @@
     }
     return (
       '<svg class="dd-hist-svg" viewBox="0 0 ' + w + " " + h +
-      '" role="img" aria-label="Curva de las acciones en verde contra SPY, base 100">' +
+      '" role="img" aria-label="Curva de sin alertas contra el universo y SPY, base 100">' +
       '<path d="' + path("spy") + '" fill="none" stroke="#A0A0A0" stroke-width="2"/>' +
+      (curve[0] && curve[0].universe != null
+        ? '<path d="' + path("universe") + '" fill="none" stroke="#5B8DEF" stroke-width="2"/>'
+        : "") +
       '<path d="' + path("stocks") + '" fill="none" stroke="#FF8C42" stroke-width="2.4"/>' +
       "</svg>"
     );
@@ -1305,13 +1306,18 @@
     }
     var hit = stat.hit_pct == null ? "—" : fmtEsSmart(stat.hit_pct, 1) + "% en positivo";
     var beat = stat.beat_pct == null ? "—" : fmtEsSmart(stat.beat_pct, 1) + "%";
+    var beatU = stat.beat_universe_pct == null ? "" : " · le gana al universo el " + fmtEsSmart(stat.beat_universe_pct, 1) + "%";
+    var vsU = stat.excess_universe == null
+      ? ""
+      : '<p class="dd-hist-vs">exceso vs universo ' + escapeHtml(fmtEsSignedPct(stat.excess_universe, 2)) + "</p>";
     return (
       '<p class="dd-hist-n">' + stat.n + (stat.n === 1 ? " señal" : " señales") + "</p>" +
       '<p class="dd-hist-avg">' + escapeHtml(fmtEsSignedPct(stat.avg, 2)) + "</p>" +
       '<p class="dd-hist-vs">exceso vs SPY ' + escapeHtml(fmtEsSignedPct(stat.excess, 2)) + "</p>" +
+      vsU +
       '<p class="dd-hist-hit">' + escapeHtml(hit) + "</p>" +
       '<p class="dd-hist-more">Mediana ' + escapeHtml(fmtEsSignedPct(stat.median, 2)) +
-      " · le gana a SPY el " + escapeHtml(beat) +
+      " · le gana a SPY el " + escapeHtml(beat) + escapeHtml(beatU) +
       " · mejor " + escapeHtml(fmtEsSignedPct(stat.best, 2)) +
       " · peor " + escapeHtml(fmtEsSignedPct(stat.worst, 2)) + "</p>"
     );
@@ -1323,39 +1329,31 @@
     var pack = block.by_symbol && block.by_symbol[String(symbol).toUpperCase()];
     var sample = block.sample ? "Muestra. " : "";
     if (!pack || !pack.count) {
-      return '<p class="dd-hist-ficha">' + sample + "Sin señales verdes anteriores en el historial.</p>";
+      return '<p class="dd-hist-ficha">' + sample + "Sin alertas de riesgo anteriores en el historial.</p>";
     }
     var bits = (pack.signals || []).map(function (item) {
       var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
-      var vs = item.excess_pct == null ? "" : " (vs SPY " + fmtEsSignedPct(item.excess_pct, 1) + ")";
+      var vs = item.excess_pct == null ? "" : " (vs SPY " + fmtEsSignedPct(item.excess_pct, 1);
+      if (item.excess_universe_pct != null) {
+        vs += (vs ? ", " : " (") + "vs universo " + fmtEsSignedPct(item.excess_universe_pct, 1);
+      }
+      if (vs) vs += ")";
       var status = item.status === "cerrada" ? "cerrada" : "en curso";
       return fmtDayMonth(item.date) + " " + ret + vs + ", " + status;
     });
     var extra = pack.count > (pack.signals || []).length ? " Hay " + pack.count + " en total." : "";
-    return '<p class="dd-hist-ficha">' + sample + "Señales verdes: " + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
+    return '<p class="dd-hist-ficha">' + sample + "Sin alertas: " + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
   }
 
-  function renderHistorial(block) {
-    var root = document.getElementById("hist-root");
-    if (!root) return;
-    if (!block || !block.table) {
-      root.innerHTML = '<p class="dd-empty">Sin historial en esta publicación. Se arma al correr build.py.</p>';
-      return;
-    }
-    var labels = [
-      ["verde", "Verde"],
-      ["ambar", "Ámbar"],
-      ["rojo", "Rojo"],
-      ["universo", "Universo"],
-    ];
-    var horizons = block.horizons || [5, 10, 20];
-    var groups = labels
+  function histGroups(source, groupLabels) {
+    var horizons = (source && source.horizons) || [5, 10, 20];
+    return groupLabels
       .map(function (pair) {
         var id = pair[0];
         var cols = horizons
           .map(function (h) {
-            var stat = block.table[id] && block.table[id][String(h)];
-            var meta = block.horizons_meta && block.horizons_meta[String(h)];
+            var stat = source.table && source.table[id] && source.table[id][String(h)];
+            var meta = source.horizons_meta && source.horizons_meta[String(h)];
             var badge = "";
             if (meta && meta.provisional) {
               badge = '<p class="dd-hist-prov">' + escapeHtml(meta.label || "Provisorio (reconstruido)") + "</p>";
@@ -1376,8 +1374,44 @@
         );
       })
       .join("");
+  }
+
+  function histEquity(equity, stockLabel) {
+    if (!equity || equity.stocks_return_pct == null) return "";
+    var uni = equity.universe_return_pct == null
+      ? ""
+      : " · universo: " + escapeHtml(fmtEsSignedPct(equity.universe_return_pct, 2));
+    var hasUni = equity.curve && equity.curve.length && equity.curve[0].universe != null;
+    return (
+      '<p class="dd-hist-sentence">' + escapeHtml(stockLabel) + ": " +
+      escapeHtml(fmtEsSignedPct(equity.stocks_return_pct, 2)) +
+      " · con ETF: " + escapeHtml(fmtEsSignedPct(equity.all_return_pct, 2)) +
+      uni +
+      " · SPY: " + escapeHtml(fmtEsSignedPct(equity.spy_return_pct, 2)) + ".</p>" +
+      histSvg(equity.curve) +
+      '<p class="dd-hist-legend"><span><i class="is-stocks"></i>' + escapeHtml(stockLabel) + "</span>" +
+      (hasUni ? '<span><i class="is-universe"></i>Universo</span>' : "") +
+      '<span><i class="is-spy"></i>SPY</span></p>' +
+      '<p class="dd-hist-equity-note">' + escapeHtml(equity.note || "") + "</p>"
+    );
+  }
+
+  function renderHistorial(block) {
+    var root = document.getElementById("hist-root");
+    if (!root) return;
+    if (!block || !block.table) {
+      root.innerHTML = '<p class="dd-empty">Sin historial en esta publicación. Se arma al correr build.py.</p>';
+      return;
+    }
+    var groups = histGroups(block, [
+      ["verde", "Sin alertas"],
+      ["ambar", "Ámbar"],
+      ["rojo", "Alerta"],
+      ["universo", "Universo"],
+    ]);
     var real = block.real_days || 0;
     var recon = block.reconstructed_days || 0;
+    var horizons = block.horizons || [5, 10, 20];
     var anyProv = horizons.some(function (h) {
       var meta = block.horizons_meta && block.horizons_meta[String(h)];
       return meta && meta.provisional;
@@ -1400,6 +1434,7 @@
       .map(function (item) {
         var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
         var vs = item.excess_pct == null ? "vs SPY —" : "vs SPY " + fmtEsSignedPct(item.excess_pct, 1);
+        if (item.excess_universe_pct != null) vs += " · vs universo " + fmtEsSignedPct(item.excess_universe_pct, 1);
         var status = item.status === "cerrada" ? "cerrada" : "en curso";
         return (
           '<a class="dd-hist-signal" href="#/t/' + encodeURIComponent(item.symbol) + '">' +
@@ -1410,32 +1445,45 @@
         );
       })
       .join("");
-    var equity = block.equity || {};
-    var eqText = "";
-    if (equity.stocks_return_pct != null) {
-      eqText =
-        '<p class="dd-hist-sentence">Acciones en verde: ' + escapeHtml(fmtEsSignedPct(equity.stocks_return_pct, 2)) +
-        " · con ETF: " + escapeHtml(fmtEsSignedPct(equity.all_return_pct, 2)) +
-        " · SPY: " + escapeHtml(fmtEsSignedPct(equity.spy_return_pct, 2)) + ".</p>" +
-        histSvg(equity.curve) +
-        '<p class="dd-hist-legend"><span><i class="is-stocks"></i>Acciones en verde</span><span><i class="is-spy"></i>SPY</span></p>' +
-        '<p class="dd-hist-equity-note">' + escapeHtml(equity.note || "") + "</p>";
+    var eqText = histEquity(block.equity, "Sin alertas");
+    var legacy = block.legacy;
+    var legacyHtml = "";
+    if (legacy && legacy.table) {
+      legacyHtml =
+        '<section class="dd-hist-legacy">' +
+        "<h3>" + escapeHtml(legacy.label || "Definición anterior") + "</h3>" +
+        '<p class="dd-hist-legacy-note">' + escapeHtml(legacy.note || block.definition_note || "") + "</p>" +
+        '<p class="dd-hist-sentence">' + escapeHtml(legacy.sentence || "") + "</p>" +
+        '<div class="dd-hist-groups">' + histGroups(legacy, [
+          ["verde", "Verde (entrada)"],
+          ["ambar", "Ámbar"],
+          ["rojo", "Rojo"],
+          ["universo", "Universo"],
+        ]) + "</div>" +
+        histEquity(legacy.equity, "Verdes (entrada)") +
+        "</section>";
     }
     var fine = document.getElementById("hist-disclaimer");
     if (fine) {
-      var legal = block.disclaimer || "Resultados pasados no garantizan resultados futuros.";
+      var legal = block.disclaimer || "El verde es «sin alertas de riesgo», no una compra. Resultados pasados no garantizan resultados futuros.";
       if (anyProv && block.earnings_note) legal += " " + block.earnings_note;
       fine.textContent = legal;
     }
+    var defNote = !legacy && block.definition_note
+      ? '<p class="dd-hist-def">' + escapeHtml(block.definition_note) + "</p>"
+      : "";
     root.innerHTML =
       sample +
+      defNote +
       '<p class="dd-hist-meta">' + daysLine + escapeHtml(latest) + "</p>" +
       '<p class="dd-hist-sentence">' + escapeHtml(block.sentence || "") + "</p>" +
       (block.todos_los_dias_sentence ? '<p class="dd-hist-alt">' + escapeHtml(block.todos_los_dias_sentence) + "</p>" : "") +
       '<div class="dd-hist-groups">' + groups + "</div>" +
       '<p class="dd-hist-rule">' + escapeHtml(block.dedup || "") + "</p>" +
-      (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales verdes reales en el historial.</p>') +
-      eqText;
+      (block.universe_benchmark ? '<p class="dd-hist-rule">' + escapeHtml(block.universe_benchmark) + "</p>" : "") +
+      (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales reales de esta definición.</p>') +
+      eqText +
+      legacyHtml;
   }
 
   function renderSampleNotice(data) {

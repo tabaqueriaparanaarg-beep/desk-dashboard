@@ -198,8 +198,9 @@
     "sector": "Financials"
   },
   {
-    "symbol": "GOLD",
+    "symbol": "B",
     "name": "Barrick Gold",
+    "former_symbol": "GOLD",
     "kind": "cedear_proxy",
     "sector": "Materials"
   },
