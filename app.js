@@ -12,7 +12,7 @@
     sector: "",
     sectorLabel: "",
     sectors: null,
-    flags: { above_ema200: false, rs_gt_70: false },
+    flags: { above_ema200: false, rs_gt_70: false, solo_verdes: false },
     search: "",
     autoTimer: null,
     loading: false,
@@ -533,6 +533,7 @@
       }
       if (state.flags.above_ema200 && !r.above_ema200) return false;
       if (state.flags.rs_gt_70 && !((r.rs_score || 0) > 70)) return false;
+      if (state.flags.solo_verdes && !(r.entry && r.entry.verdict === "verde")) return false;
       if (q && String(r.symbol || "").toUpperCase().indexOf(q) === -1) return false;
       return true;
     });
@@ -557,6 +558,29 @@
     if (!ins || !ins.notable) return "";
     return (
       '<span class="dd-flag dd-flag-insider" data-flag="insider_buy" title="Compras netas de insiders, últimos 90 días">Insiders</span>'
+    );
+  }
+
+  function luzHtml(row) {
+    var entry = row && row.entry;
+    if (!entry || !entry.verdict) return '<span class="dd-flags-empty">—</span>';
+    var label = entry.label || entry.verdict;
+    return (
+      '<span class="dd-luz" data-verdict="' + escapeHtml(entry.verdict) +
+      '" title="' + escapeHtml(label) + '" role="img" aria-label="' + escapeHtml(label) + '"></span>'
+    );
+  }
+
+  function buyPctHtml(row) {
+    if (String((row && row.kind) || "").toLowerCase() === "etf") {
+      return '<span class="dd-flags-empty" title="Los ETF no tienen recomendaciones de analistas">—</span>';
+    }
+    var a = row && row.analysts;
+    if (!a || a.buy_pct == null) return '<span class="dd-flags-empty">—</span>';
+    var tip = (a.total != null ? a.total + " analistas. " : "") + (a.trend_label || "");
+    return (
+      '<span class="dd-buy-pct" title="' + escapeHtml(tip.trim()) + '">' +
+      escapeHtml(fmtEsSmart(a.buy_pct, 1)) + "%</span>"
     );
   }
 
@@ -598,6 +622,8 @@
       var cells = [
         r.rank != null ? r.rank : "",
         tickerWithLogo(r, "dd-ticker"),
+        luzHtml(r),
+        buyPctHtml(r),
         '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>",
         entroInline(r.entro),
         formatFlags(r.flags, insiderBadgeHtml(r)),
@@ -621,16 +647,24 @@
           td.setAttribute("data-col", "ticker");
           td.className = "dd-sticky-col dd-col-ticker";
         }
-        if (i === 2) td.setAttribute("data-col", "score");
-        if (i === 3) td.setAttribute("data-col", "entro");
-        if (i === 4) td.setAttribute("data-col", "flags");
-        if (i === 5) td.setAttribute("data-col", "tendencia");
-        if (i === 6) td.setAttribute("data-col", "rs");
-        if (i === 7) td.setAttribute("data-col", "contraccion");
-        if (i === 8) td.setAttribute("data-col", "setup");
-        if (i === 9) td.setAttribute("data-col", "dist_ema200");
-        if (i === 10) td.setAttribute("data-col", "vol_rel");
-        if (i === 11) td.setAttribute("data-col", "kind");
+        if (i === 2) {
+          td.setAttribute("data-col", "luz");
+          td.className = "dd-col-luz";
+        }
+        if (i === 3) {
+          td.setAttribute("data-col", "compra");
+          td.className = "dd-col-compra";
+        }
+        if (i === 4) td.setAttribute("data-col", "score");
+        if (i === 5) td.setAttribute("data-col", "entro");
+        if (i === 6) td.setAttribute("data-col", "flags");
+        if (i === 7) td.setAttribute("data-col", "tendencia");
+        if (i === 8) td.setAttribute("data-col", "rs");
+        if (i === 9) td.setAttribute("data-col", "contraccion");
+        if (i === 10) td.setAttribute("data-col", "setup");
+        if (i === 11) td.setAttribute("data-col", "dist_ema200");
+        if (i === 12) td.setAttribute("data-col", "vol_rel");
+        if (i === 13) td.setAttribute("data-col", "kind");
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
@@ -1110,6 +1144,120 @@
     return head + '<p class="dd-ficha-entro">' + escapeHtml(summary) + "</p>" + list + excluded + "</section>";
   }
 
+  var ANALYST_SEGS = [
+    { key: "strong_buy", label: "Compra fuerte", cls: "dd-an-sb" },
+    { key: "buy", label: "Compra", cls: "dd-an-b" },
+    { key: "hold", label: "Mantener", cls: "dd-an-h" },
+    { key: "sell", label: "Venta", cls: "dd-an-s" },
+    { key: "strong_sell", label: "Venta fuerte", cls: "dd-an-ss" },
+  ];
+
+  function entryBlock(row) {
+    var entry = row && row.entry;
+    if (!entry || !entry.verdict) {
+      return (
+        '<section class="dd-ficha-card dd-entry-card" aria-label="Semáforo de entrada">' +
+        '<h2 class="dd-ficha-kicker">Semáforo de entrada</h2>' +
+        '<p class="dd-ficha-empty">Sin semáforo en esta publicación. Se calcula al correr build.py.</p></section>'
+      );
+    }
+    var items = (entry.checks || []).map(function (c) {
+      var ok = !!c.ok;
+      return (
+        '<li class="' + (ok ? "is-ok" : "is-bad") + '">' +
+        '<span class="dd-entry-mark" aria-hidden="true">' + (ok ? "✓" : "✗") + "</span>" +
+        '<span><strong>' + escapeHtml(c.label || "") + ".</strong> " + escapeHtml(c.reason || "") + "</span></li>"
+      );
+    }).join("");
+    var disclaimer = entry.disclaimer || "Lectura técnica automática. No es recomendación de compra.";
+    return (
+      '<section class="dd-ficha-card dd-entry-card" data-verdict="' + escapeHtml(entry.verdict) +
+      '" aria-label="Semáforo de entrada">' +
+      '<h2 class="dd-ficha-kicker">Semáforo de entrada</h2>' +
+      '<div class="dd-entry-head">' +
+      '<span class="dd-entry-light" data-verdict="' + escapeHtml(entry.verdict) +
+      '" role="img" aria-label="' + escapeHtml(entry.label || "") + '"></span>' +
+      '<p class="dd-entry-label">' + escapeHtml(entry.label || "") + "</p></div>" +
+      '<ul class="dd-entry-checks">' + items + "</ul>" +
+      '<p class="dd-entry-disclaimer">' + escapeHtml(disclaimer) + "</p></section>"
+    );
+  }
+
+  function analystPeriod(iso) {
+    var s = String(iso || "");
+    if (s.length < 10) return "—";
+    return s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4);
+  }
+
+  function analystBlock(row) {
+    var head = '<section class="dd-ficha-card" aria-label="Opinión de los analistas"><h2 class="dd-ficha-kicker">Opinión de los analistas</h2>';
+    var note = '<p class="dd-ficha-note">Los analistas suelen ser optimistas y reaccionan tarde. Es contexto, no señal.</p>';
+    if (String((row && row.kind) || "").toLowerCase() === "etf") {
+      return head + '<p class="dd-ficha-empty">Sin datos. Los ETF no tienen recomendaciones de analistas.</p></section>';
+    }
+    var a = row && row.analysts;
+    if (!a) {
+      return head + '<p class="dd-ficha-empty">Sin datos todavía. Se completa de a poco para no pasarnos del límite de Finnhub.</p></section>';
+    }
+    var latest = a.latest;
+    if (!latest || !latest.total) {
+      return head + '<p class="dd-ficha-empty">Sin recomendaciones publicadas para este nombre.</p>' + note + "</section>";
+    }
+    var total = Number(latest.total) || 0;
+    var bar = ANALYST_SEGS.map(function (seg) {
+      var n = Number(latest[seg.key]) || 0;
+      if (!n || !total) return "";
+      var pct = (n / total) * 100;
+      return (
+        '<span class="dd-an-seg ' + seg.cls + '" style="width:' + pct.toFixed(2) +
+        '%" title="' + escapeHtml(seg.label + ": " + n) + '"></span>'
+      );
+    }).join("");
+    var legend = ANALYST_SEGS.map(function (seg) {
+      var n = Number(latest[seg.key]) || 0;
+      return (
+        '<span class="dd-an-key"><i class="' + seg.cls + '" aria-hidden="true"></i>' +
+        escapeHtml(seg.label) + " " + escapeHtml(String(n)) + "</span>"
+      );
+    }).join("");
+    var pct = a.buy_pct == null ? "—" : fmtEsSmart(a.buy_pct, 1) + "%";
+    var trend = a.trend_label
+      ? '<p class="dd-ficha-note">' + escapeHtml(a.trend_label) + "</p>"
+      : "";
+    var target = "";
+    var pt = a.price_target;
+    if (pt && (pt.mean != null || pt.median != null || pt.low != null || pt.high != null)) {
+      var bits = [];
+      if (pt.mean != null) bits.push("Objetivo medio USD " + fmtEsNum(pt.mean, 2));
+      else if (pt.median != null) bits.push("Objetivo mediano USD " + fmtEsNum(pt.median, 2));
+      if (pt.low != null && pt.high != null) {
+        bits.push("rango " + fmtEsNum(pt.low, 2) + "–" + fmtEsNum(pt.high, 2));
+      }
+      target = '<p class="dd-an-target">' + escapeHtml(bits.join(" · ")) + "</p>";
+    }
+    return (
+      head +
+      '<p class="dd-ficha-entro">' + escapeHtml(String(total)) + " analistas · " +
+      escapeHtml(pct) + " compra · " + escapeHtml(analystPeriod(latest.period)) + "</p>" +
+      '<div class="dd-an-bar" role="img" aria-label="Distribución de recomendaciones">' + bar + "</div>" +
+      '<div class="dd-an-legend">' + legend + "</div>" +
+      trend + target + note + "</section>"
+    );
+  }
+
+  function renderSampleNotice(data) {
+    var el = document.getElementById("sample-notice");
+    if (!el) return;
+    var msg = data && data.sample_notice;
+    if (msg) {
+      el.hidden = false;
+      el.textContent = msg;
+    } else {
+      el.hidden = true;
+      el.textContent = "";
+    }
+  }
+
   function applyData(data) {
     state.ranking = data.ranking || [];
     state.logos = data.logos || {};
@@ -1127,6 +1275,7 @@
     renderPatterns(data.patterns);
     applyFilters();
     renderNotes(data.notes);
+    renderSampleNotice(data);
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
     document.title = state.baseTitle;
     renderRoute();
@@ -1653,12 +1802,14 @@
       '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
       '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
       "</div></header>" +
+      entryBlock(row) +
       '<section class="dd-ficha-card" aria-label="Patrones">' +
       '<h2 class="dd-ficha-kicker">Patrones</h2>' +
       patternChips(row) +
       "</section>" +
       healthBlock(row) +
       insiderFichaBlock(row) +
+      analystBlock(row) +
       '<section class="dd-ficha-card" aria-label="Desk Score">' +
       '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +

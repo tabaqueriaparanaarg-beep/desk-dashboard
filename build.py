@@ -723,12 +723,13 @@ def week_range(today: date | None = None) -> tuple[str, str]:
     return monday.isoformat(), sunday.isoformat()
 
 
-def fetch_earnings(symbols: set[str], finnhub_key: str) -> tuple[list[dict], list[str]]:
+def fetch_earnings(symbols: set[str], finnhub_key: str) -> tuple[list[dict], list[str], dict[str, Any]]:
     notes: list[str] = []
+    frm, to = week_range()
+    meta: dict[str, Any] = {"known": False, "from": frm, "through": to}
     if not finnhub_key:
         notes.append("Finnhub: sin API key — earnings omitidos")
-        return [], notes
-    frm, to = week_range()
+        return [], notes, meta
     url = (
         "https://finnhub.io/api/v1/calendar/earnings?"
         + urllib.parse.urlencode({"from": frm, "to": to, "token": finnhub_key})
@@ -737,7 +738,7 @@ def fetch_earnings(symbols: set[str], finnhub_key: str) -> tuple[list[dict], lis
         data = http_get_json(url, timeout=45)
     except Exception as e:
         notes.append(f"Finnhub earnings falló (soft): {type(e).__name__}")
-        return [], notes
+        return [], notes, meta
     raw = (data or {}).get("earningsCalendar") or (data or {}).get("earnings") or []
     out = []
     for row in raw:
@@ -764,7 +765,8 @@ def fetch_earnings(symbols: set[str], finnhub_key: str) -> tuple[list[dict], lis
         )
     out.sort(key=lambda x: (x.get("date") or "", x.get("symbol") or ""))
     notes.append(f"Finnhub: {len(out)} earnings en universo ({frm} → {to})")
-    return out, notes
+    meta["known"] = True
+    return out, notes, meta
 
 
 def compute_symbol(
@@ -1827,11 +1829,16 @@ def compute_sector_view(
 # refresca un cupo, para quedarse debajo de ~60 llamadas/minuto de Finnhub.
 FINNHUB_MIN_INTERVAL_S = 1.05
 INSIDER_MAX_AGE_DAYS = 4
+ANALYST_MAX_AGE_DAYS = 7
 FUNDAMENTALS_MAX_AGE_DAYS = 10
 SLOW_BUDGET_WARM = 36
 SLOW_BUDGET_COLD = 80
 PUBLISHED_DATOS_URL = "https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/datos.json"
 RESUMEN_PATH = ROOT / "resumen.txt"
+
+
+class FinnhubAccessError(Exception):
+    """El plan de Finnhub no deja ver ese recurso. Sin URL ni token en el mensaje."""
 
 
 class _FinnhubPacer:
@@ -1898,6 +1905,9 @@ def _copy_cached_company(row: dict, prev: dict) -> None:
     ins = prev.get("insiders")
     if isinstance(ins, dict) and ins.get("fetched_on"):
         row["insiders"] = ins
+    analysts = prev.get("analysts")
+    if isinstance(analysts, dict) and analysts.get("fetched_on"):
+        row["analysts"] = analysts
     fund = prev.get("fundamentals")
     if isinstance(fund, dict) and fund.get("fetched_on"):
         row["fundamentals"] = {
@@ -1915,7 +1925,8 @@ def _plan_slow_fetches(symbols: list[str], prev: dict[str, dict], today: date) -
         cached = prev.get(sym) or {}
         for kind, field, max_age, order in (
             ("insiders", "insiders", INSIDER_MAX_AGE_DAYS, 0),
-            ("fundamentals", "fundamentals", FUNDAMENTALS_MAX_AGE_DAYS, 1),
+            ("analysts", "analysts", ANALYST_MAX_AGE_DAYS, 1),
+            ("fundamentals", "fundamentals", FUNDAMENTALS_MAX_AGE_DAYS, 2),
         ):
             age = _fetched_age_days(cached.get(field), today)
             if age is None:
@@ -1929,6 +1940,14 @@ def _plan_slow_fetches(symbols: list[str], prev: dict[str, dict], today: date) -
     return plan, budget
 
 
+def _access_error_text(value: Any) -> bool:
+    text = str(value or "").lower()
+    if not text:
+        return False
+    markers = ("access", "premium", "subscribe", "permission", "forbidden", "don't have access", "do not have access")
+    return any(m in text for m in markers)
+
+
 def _finnhub_get(path: str, params: dict[str, str], key: str, pacer: _FinnhubPacer) -> Any:
     """GET a Finnhub. El token va en la query y no se imprime ni se relanza."""
     pacer.wait()
@@ -1937,11 +1956,40 @@ def _finnhub_get(path: str, params: dict[str, str], key: str, pacer: _FinnhubPac
     url = "https://finnhub.io/api/v1/" + path.lstrip("/") + "?" + urllib.parse.urlencode(query)
     try:
         data = http_get_json(url, timeout=30)
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 402, 403):
+            raise FinnhubAccessError() from None
+        raise RuntimeError("HTTPError") from None
     except Exception as e:
         raise RuntimeError(type(e).__name__) from None
+    if isinstance(data, dict) and _access_error_text(data.get("error")):
+        raise FinnhubAccessError() from None
     if isinstance(data, dict) and data.get("error"):
         raise RuntimeError("finnhub_error")
     return data
+
+
+class _PriceTargetGate:
+    """Prueba /stock/price-target. Sin acceso, o si la prueba falla, no se vuelve a llamar."""
+
+    def __init__(self) -> None:
+        # untested | on | off (sin acceso) | error (fallo de red, una sola vez)
+        self.state = "untested"
+
+    def fetch(self, symbol: str, key: str, pacer: _FinnhubPacer) -> dict | None:
+        if self.state in ("off", "error"):
+            return None
+        try:
+            raw = _finnhub_get("stock/price-target", {"symbol": symbol}, key, pacer)
+        except FinnhubAccessError:
+            self.state = "off"
+            return None
+        except Exception:
+            self.state = "error"
+            return None
+        parsed = signals.parse_price_target(raw)
+        self.state = "on"
+        return parsed
 
 
 def enrich_company_data(
@@ -1949,9 +1997,15 @@ def enrich_company_data(
     finnhub_key: str,
     prev: dict[str, dict],
     today: date,
-) -> list[str]:
-    """Insiders + fundamentos. Falla por símbolo, nunca corta el build."""
+) -> tuple[list[str], dict[str, Any]]:
+    """Insiders, analistas y fundamentos. Falla por símbolo, nunca corta el build."""
     notes: list[str] = []
+    feed = {
+        "price_target": "no_probado",
+        "cache_days": ANALYST_MAX_AGE_DAYS,
+        "budget": 0,
+        "planned": 0,
+    }
     by = {str(r.get("symbol") or ""): r for r in rows}
     stocks = [
         sym
@@ -1962,13 +2016,16 @@ def enrich_company_data(
         _copy_cached_company(by[sym], prev.get(sym) or {})
     if not finnhub_key:
         notes.append(
-            "Finnhub: sin API key — insiders y fundamentos quedan en lo ya publicado, si había."
+            "Finnhub: sin API key — insiders, analistas y fundamentos quedan en lo ya publicado, si había."
         )
         signals.attach_sector_medians(rows)
-        return notes
+        return notes, feed
     plan, budget = _plan_slow_fetches(stocks, prev, today)
+    feed["budget"] = budget
+    feed["planned"] = len(plan)
     pacer = _FinnhubPacer(FINNHUB_MIN_INTERVAL_S)
-    ok_i = ok_f = fail = 0
+    gate = _PriceTargetGate()
+    ok_i = ok_a = ok_f = fail = 0
     for sym, kind in plan:
         row = by[sym]
         try:
@@ -1982,6 +2039,15 @@ def enrich_company_data(
                     fetched_on=today,
                 )
                 ok_i += 1
+            elif kind == "analysts":
+                raw = _finnhub_get("stock/recommendation", {"symbol": sym}, finnhub_key, pacer)
+                target = gate.fetch(sym, finnhub_key, pacer)
+                row["analysts"] = signals.parse_recommendations(
+                    raw,
+                    fetched_on=today,
+                    price_target=target,
+                )
+                ok_a += 1
             else:
                 raw = _finnhub_get(
                     "stock/metric",
@@ -1998,12 +2064,29 @@ def enrich_company_data(
             fail += 1
             print(f"  finnhub {kind} {sym}: {type(e).__name__}")
     signals.attach_sector_medians(rows)
+    status = {"off": "omitido", "on": "incluido", "error": "no_probado"}.get(gate.state, "no_probado")
+    feed["price_target"] = status
+    if gate.state == "off":
+        pt_note = (
+            "Precio objetivo (/stock/price-target): el plan no dio acceso. "
+            "Se probó una sola vez y no se volvió a pedir. No hay targets inventados."
+        )
+    elif gate.state == "on":
+        pt_note = "Precio objetivo (/stock/price-target): incluido en los nombres de analistas refrescados."
+    elif gate.state == "error":
+        pt_note = (
+            "Precio objetivo (/stock/price-target): la prueba falló y no se repitió. "
+            "No hay targets inventados."
+        )
+    else:
+        pt_note = "Precio objetivo (/stock/price-target): no se probó porque no hubo refresco de analistas."
     notes.append(
         f"Finnhub lento: cupo {budget}, pedidos {len(plan)}, "
-        f"insiders {ok_i}, fundamentos {ok_f}, fallos {fail}. "
-        "Sin 13F (Finnhub lo tiene en plan pago; EDGAR no entra en el tiempo del build)."
+        f"insiders {ok_i}, analistas {ok_a}, fundamentos {ok_f}, fallos {fail}. "
+        "Sin 13F (Finnhub lo tiene en plan pago; EDGAR no entra en el tiempo del build). "
+        + pt_note
     )
-    return notes
+    return notes, feed
 
 
 def write_resumen_file(resumen: dict) -> None:
@@ -2148,7 +2231,7 @@ def main() -> None:
         regime_obj["override"] = override_note
 
     finnhub_key = load_finnhub_key()
-    earnings, e_notes = fetch_earnings(set(all_bars.keys()), finnhub_key)
+    earnings, e_notes, earnings_meta = fetch_earnings(set(all_bars.keys()), finnhub_key)
     notes.extend(e_notes)
     if failures:
         notes.append(f"Símbolos omitidos/fallidos: {len(failures)}")
@@ -2214,18 +2297,49 @@ def main() -> None:
             row["patterns"] = signals.detect_patterns(all_bars.get(row["symbol"]) or [])
         except Exception:
             row["patterns"] = []
+    earnings_through = None
+    if earnings_meta.get("known") and earnings_meta.get("through"):
+        try:
+            earnings_through = date.fromisoformat(str(earnings_meta["through"])[:10])
+        except ValueError:
+            earnings_through = None
     try:
-        notes.extend(
-            enrich_company_data(
-                rows,
-                finnhub_key,
-                _prev_by_symbol(previous_payload),
-                end_dt,
-            )
+        signals.attach_entry_lights(
+            rows,
+            sectors,
+            earnings,
+            today=end_dt,
+            earnings_known=bool(earnings_meta.get("known")),
+            earnings_through=earnings_through,
         )
     except Exception as e:
+        print(f"  semáforo falló (soft): {type(e).__name__}")
+        notes.append(f"Semáforo de entrada: fallo soft ({type(e).__name__}).")
+    analyst_feed = {
+        "price_target": "no_probado",
+        "cache_days": ANALYST_MAX_AGE_DAYS,
+        "budget": 0,
+        "planned": 0,
+    }
+    try:
+        company_notes, analyst_feed = enrich_company_data(
+            rows,
+            finnhub_key,
+            _prev_by_symbol(previous_payload),
+            end_dt,
+        )
+        notes.extend(company_notes)
+    except Exception as e:
         print(f"  insiders/fundamentos falló (soft): {type(e).__name__}")
-        notes.append(f"Insiders y fundamentos: fallo soft ({type(e).__name__}).")
+        notes.append(f"Insiders, analistas y fundamentos: fallo soft ({type(e).__name__}).")
+    green_n = sum(
+        1
+        for r in rows
+        if str(r.get("kind") or "").lower() != "etf"
+        and isinstance(r.get("entry"), dict)
+        and r["entry"].get("verdict") == "verde"
+    )
+    notes.append(f"Semáforo: {green_n} acciones en verde. No modifica el Desk Score.")
     insider_buys = signals.insider_panel(rows)
     pattern_scan = {"source": "alpaca_bars", "groups": signals.pattern_groups(rows)}
     pat_bits = [
@@ -2262,6 +2376,7 @@ def main() -> None:
         "sectors": sectors,
         "insider_buys": insider_buys,
         "patterns": pattern_scan,
+        "analyst_feed": analyst_feed,
         "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
@@ -2308,6 +2423,30 @@ def main() -> None:
                 "en el universo (mínimo 3 nombres, ETF afuera)."
             ),
             "resumen": "Texto plantilla comparado con la publicación anterior. Sin modelo de lenguaje.",
+            "entry": (
+                "Semáforo informativo, no entra en el Desk Score ni cambia el orden. "
+                f"Verde si pasan todos los chequeos. Rojo si el precio no está sobre la EMA200 "
+                f"con pendiente en alza, o si hay cruce bajista de la EMA200 en las últimas "
+                f"{signals.PATTERN_EMA_CROSS_SESSIONS} sesiones. Si no, ámbar. "
+                f"Desk Score >= {signals.ENTRY_MIN_DESK_SCORE:g}. "
+                f"Estirado si dist EMA200 > {signals.ENTRY_MAX_DIST_EMA200:g}%, "
+                f"dist SMA50 > {signals.ENTRY_MAX_DIST_SMA50:g}% o RSI14 > {signals.ENTRY_MAX_RSI:g}. "
+                "Patrón constructivo: pullback a la SMA50, base lateral o máximo de 52 semanas. "
+                f"Resultados: ninguno en los próximos {signals.ENTRY_EARNINGS_DAYS} días dentro "
+                "del calendario que ya baja Angus (semana en curso); si esa ventana no cubre "
+                "los 7 días, el motivo lo dice. "
+                "Sector: la tendencia de RS del sector no está en baja, o el sector queda en la "
+                "mitad alta de la vista. En ETFs se usa el RS propio (misma idea, percentil >= "
+                f"{signals.ENTRY_ETF_RS_TOP_HALF:g} cuenta como mitad alta)."
+            ),
+            "analysts": (
+                "Finnhub /stock/recommendation, solo acciones. Se guarda el mes vigente y hasta "
+                "4 meses anteriores. % compra = (strongBuy + buy) / total. La tendencia compara "
+                "esa cantidad de compras con el período de hace ~3 meses. "
+                f"Caché {ANALYST_MAX_AGE_DAYS} días, dentro del mismo cupo que insiders y fundamentos. "
+                "/stock/price-target se prueba una vez por corrida; si responde 403 o sin acceso, "
+                "no se vuelve a llamar y no se inventan objetivos. No entra en el Desk Score."
+            ),
         },
         "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
     }
