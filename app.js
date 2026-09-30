@@ -1159,7 +1159,9 @@
       return (
         '<section class="dd-ficha-card dd-entry-card" aria-label="Semáforo de entrada">' +
         '<h2 class="dd-ficha-kicker">Semáforo de entrada</h2>' +
-        '<p class="dd-ficha-empty">Sin semáforo en esta publicación. Se calcula al correr build.py.</p></section>'
+        '<p class="dd-ficha-empty">Sin semáforo en esta publicación. Se calcula al correr build.py.</p>' +
+        historialFichaLine(row && row.symbol) +
+        "</section>"
       );
     }
     var items = (entry.checks || []).map(function (c) {
@@ -1319,8 +1321,9 @@
     var block = state.historial;
     if (!block || !symbol) return "";
     var pack = block.by_symbol && block.by_symbol[String(symbol).toUpperCase()];
+    var sample = block.sample ? "Muestra. " : "";
     if (!pack || !pack.count) {
-      return '<p class="dd-hist-ficha">Sin señales verdes anteriores en el historial.</p>';
+      return '<p class="dd-hist-ficha">' + sample + "Sin señales verdes anteriores en el historial.</p>";
     }
     var bits = (pack.signals || []).map(function (item) {
       var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
@@ -1330,7 +1333,7 @@
       return fmtDayMonth(item.date) + " " + ret + vs + ", " + status + flag;
     });
     var extra = pack.count > (pack.signals || []).length ? " Hay " + pack.count + " en total." : "";
-    return '<p class="dd-hist-ficha">Señales verdes: ' + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
+    return '<p class="dd-hist-ficha">' + sample + "Señales verdes: " + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
   }
 
   function renderHistorial(block) {
