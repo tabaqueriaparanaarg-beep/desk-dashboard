@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import market_regime
 import signals
 
 ROOT = Path(__file__).resolve().parent
@@ -2343,6 +2344,49 @@ def main() -> None:
         "No incluye tenedores institucionales (13F)."
     )
 
+    market_regime_obj = None
+    try:
+        vix_closes = None
+        vix_source = None
+        vix_meta: dict[str, Any] = {}
+        try:
+            vix_closes = market_regime.fetch_cboe_vix_closes()
+            vix_source = "cboe"
+            vix_meta = {"url": market_regime.CBOE_VIX_URL, "sessions": len(vix_closes)}
+            notes.append(f"VIX: CBOE, último cierre {vix_closes[-1]}.")
+        except Exception as e:
+            print(f"  VIX CBOE falló (soft): {type(e).__name__}")
+            notes.append(f"VIX CBOE no disponible ({type(e).__name__}); se intenta VIXY.")
+            try:
+                # VIXY no se guarda en all_bars ni en el ranking: es solo sentimiento.
+                got_vixy = fetch_bars_batch(["VIXY"], start_s, end_s)
+                vixy_bars = got_vixy.get("VIXY") or []
+                if len(vixy_bars) >= 20:
+                    vix_closes = [float(b["c"]) for b in vixy_bars]
+                    vix_source = "vixy"
+                    vix_meta = {"symbol": "VIXY", "sessions": len(vixy_bars)}
+                    notes.append("VIX: fallback VIXY de Alpaca. No entra al universo ni al ranking.")
+                else:
+                    notes.append("VIX: sin CBOE y VIXY sin barras suficientes. El componente queda afuera.")
+            except Exception as e2:
+                print(f"  VIXY falló (soft): {type(e2).__name__}")
+                notes.append(f"VIXY falló ({type(e2).__name__}). Sentimiento fuera del puntaje.")
+        market_regime_obj = market_regime.build_market_regime(
+            rows,
+            all_bars,
+            generated_at=generated_at,
+            vix_closes=vix_closes,
+            vix_source=vix_source,
+            vix_meta=vix_meta,
+        )
+        notes.append(
+            f"Régimen de mercado: {market_regime_obj.get('score')}/100 "
+            f"({market_regime_obj.get('footer')})."
+        )
+    except Exception as e:
+        print(f"  régimen de mercado falló (soft): {type(e).__name__}")
+        notes.append(f"Régimen de mercado: fallo soft ({type(e).__name__}).")
+
     payload = {
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
@@ -2360,6 +2404,7 @@ def main() -> None:
         },
         "regime": regime_obj,
         "regime_stub": regime_obj,  # alias back-compat
+        "market_regime": market_regime_obj,
         "top10_return": top10_return,
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
@@ -2382,6 +2427,7 @@ def main() -> None:
             "vol_rel_20d": "Volumen último día / media 20 sesiones",
             "dist_ema200_pct": "(close/EMA200 − 1) * 100",
             "regime": rule,
+            "market_regime": market_regime.FORMULA,
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
             "top10_entry": TOP10_ENTRY_NOTE,
             "top10_walkforward": TOP10_WALKFORWARD_FORMULA,
@@ -2486,6 +2532,11 @@ def main() -> None:
 
     OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
     print(f"\nEscrito {OUT_PATH} — {n} tickers scored, régimen={label}")
+    if market_regime_obj:
+        print(
+            f"Régimen de mercado: {market_regime_obj.get('score')}/100 "
+            f"({market_regime_obj.get('footer')})"
+        )
     print("Top 5:")
     for r in rows[:5]:
         print(f"  #{r['rank']} {r['symbol']:6} desk={r['desk_score']} RS={r['rs_score']}")

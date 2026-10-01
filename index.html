@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=26" />
+  <link rel="stylesheet" href="styles.css?v=27" />
 </head>
 <body data-app="desk-dashboard">
   <header class="dd-header" data-section="header">
@@ -50,6 +50,15 @@
         <time id="resumen-when" class="dd-resumen-when">—</time>
       </div>
       <p id="resumen-text" class="dd-resumen-text">Cargando…</p>
+    </section>
+
+    <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
+      <h2 class="dd-regime-title">
+        <span class="dd-regime-accent" aria-hidden="true"></span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.2 1.6 3.4 13.2h6.3l-1.1 9.2 10.2-12.4h-6.4l1-8.4z"/></svg>
+        Régimen de mercado
+      </h2>
+      <div id="market-regime-body"></div>
     </section>
 
     <section class="dd-kpis" data-section="kpis" aria-label="KPIs del universo">
@@ -320,6 +329,6 @@
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=23" defer></script>
+  <script src="app.js?v=25" defer></script>
 </body>
 </html>
