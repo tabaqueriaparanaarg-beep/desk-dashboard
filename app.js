@@ -1588,9 +1588,15 @@
     var area = line + " L" + xAt(pts.length - 1).toFixed(1) + " " + base + " L" + xAt(0).toFixed(1) + " " + base + " Z";
     var grid = "";
     var yLabels = "";
-    var ticks = 4;
-    for (var t = 0; t <= ticks; t++) {
-      var val = lo + ((hi - lo) * t) / ticks;
+    var rawStep = (hi - lo) / 4;
+    var mag = Math.pow(10, Math.floor(Math.log10(Math.max(rawStep, 0.1))));
+    var err = rawStep / mag;
+    var nice = err < 1.5 ? 1 : err < 3.5 ? 2 : err < 7.5 ? 5 : 10;
+    var step = nice * mag;
+    var start = Math.ceil(lo / step) * step;
+    var guard = 0;
+    for (var val = start; val <= hi + step * 0.01 && guard < 8; val += step, guard++) {
+      if (val < lo - 0.01) continue;
       var yy = yAt(val);
       grid += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(255,255,255,0.07)"/>';
       yLabels += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" fill="#8d8d8d" font-size="12" font-family="Plus Jakarta Sans, Inter, sans-serif">' + Math.round(val) + "%</text>";

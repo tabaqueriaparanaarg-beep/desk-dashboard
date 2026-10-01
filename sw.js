@@ -13,7 +13,7 @@ var SHELL_ASSETS = [
   "./",
   "index.html",
   "styles.css?v=27",
-  "app.js?v=24",
+  "app.js?v=25",
   "manifest.webmanifest",
   "assets/logo.svg?v=7",
   "assets/favicon.ico?v=7",
