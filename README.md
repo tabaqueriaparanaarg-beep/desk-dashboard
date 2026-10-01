@@ -37,8 +37,9 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
    - `FINNHUB_API_KEY`
 3. **Settings → Pages → Build and deployment → Source: _GitHub Actions_**.
 4. El workflow `.github/workflows/update-and-deploy.yml` corre:
-   - en cada push a `main`,
+   - en cada push a `main` (con el mercado abierto no guarda el historial),
    - de lunes a viernes a las **21:30 UTC (18:30 Buenos Aires)**, después del cierre de EE.UU.,
+   - cada 30 minutos en la ventana 9:30–16:00 ET (verano e invierno); si Alpaca dice que está cerrado, esa corrida se saltea,
    - manualmente: **Actions → "Update data & deploy to GitHub Pages" → Run workflow**.
    
    Regenera `datos.json` con `python build.py` y publica solo los archivos del sitio (`_site/`). Si el build falla, se publica el `datos.json` que ya está en el repo. El `datos.json` actualizado **no** se commitea de vuelta (vive solo en el deploy).
@@ -214,7 +215,7 @@ Kind (Todos / US / CEDEAR proxy / ETF), sector (Todos más un chip por sector de
 - `index.html` / `app.js` / `styles.css` — front
 - `requirements.txt` — sin deps externas
 - `manifest.webmanifest` / `sw.js` / `assets/icon-*.png` — PWA
-- `.github/workflows/update-and-deploy.yml` — actualización diaria + deploy a Pages
+- `.github/workflows/update-and-deploy.yml` — cierre de las 18:30 ART, intradía cada 30 min con el mercado abierto, y deploy a Pages
 
 ## Seguridad
 

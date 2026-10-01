@@ -403,6 +403,48 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(flag.exists())
             self.assertIn("base local", note)
 
+    def test_publish_does_not_store_a_session_before_the_close(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "historial_semaforo.json"
+            flag = Path(tmp) / ".historial_fetch_failed"
+            history = _history(
+                [
+                    _snap("2026-09-30", [("AAA", "verde", 10), ("SPY", "rojo", 100)]),
+                    _snap("2026-10-01", [("AAA", "verde", 11), ("SPY", "rojo", 101)], after_close=False),
+                ]
+            )
+            history["backfill"] = {
+                "done": True,
+                "rules_version": historial.signals.SEMAFORO_RULES_VERSION,
+            }
+            loaded = historial.LoadResult(history, "local", True, False)
+            self.assertTrue(historial.save_history(path, history, loaded, flag))
+            ny = ZoneInfo("America/New_York")
+            public, note = historial.publish(
+                rows=[
+                    {
+                        "symbol": "AAA",
+                        "asof": "2026-10-01T14:00:00Z",
+                        "close": 12,
+                        "desk_score": 80,
+                        "rank": 1,
+                        "entry": {"verdict": "verde"},
+                    }
+                ],
+                meta_by={"AAA": {"kind": "us"}},
+                all_bars={},
+                now=datetime(2026, 10, 1, 11, 11, tzinfo=ny),
+                history_path=path,
+                flag_path=flag,
+                fetch=lambda: ("failed", None),
+            )
+            saved = historial.normalize(historial.json.loads(path.read_text(encoding="utf-8")))
+            assert saved is not None
+            self.assertIn("2026-09-30", saved["snapshots"])
+            self.assertNotIn("2026-10-01", saved["snapshots"])
+            self.assertIsNotNone(public)
+            self.assertNotIn("2026-10-01", note)
+
     def test_merge_backfill_stays_out_of_real_history(self) -> None:
         history = _history([_snap("2026-06-01", [("AAA", "verde", 5)])])
         recon = _snap("2026-06-01", [("AAA", "rojo", 99)], reconstruido=True)

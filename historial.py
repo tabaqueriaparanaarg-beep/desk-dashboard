@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Historial del semáforo de riesgo.
 
-Cada build guarda una foto por fecha de rueda (veredicto, Desk Score, puesto
-y cierre). Una corrida posterior del mismo día pisa esa foto, así el build de
-después del cierre se queda con el dato.
+Cada cierre guarda una foto por fecha de rueda (veredicto, Desk Score, puesto
+y cierre). Una corrida posterior del mismo día, ya con el mercado cerrado,
+pisa esa foto. Con la rueda abierta no se escribe este archivo: una foto
+parcial (after_close en falso) se descarta.
 
 Persistencia: archivo `historial_semaforo.json`, publicado junto al sitio y,
 si el workflow puede, commiteado de vuelta al repo. Al arrancar se lee primero
@@ -248,6 +249,26 @@ def taken_after_close(session: str, now: datetime) -> bool:
         return False
     close = datetime(sess.year, sess.month, sess.day, 16, 0, tzinfo=ny)
     return now_ny >= close
+
+
+def drop_intraday_snapshots(history: dict) -> list[str]:
+    """Saca fotos tomadas con el mercado todavía abierto.
+
+    Esas ruedas no son un cierre. Si se colaron (un push a mitad de la
+    sesión), se borran de la copia en memoria. El que llama decide si
+    reescribe el archivo.
+    """
+    snaps = history.get("snapshots") if isinstance(history, dict) else None
+    if not isinstance(snaps, dict):
+        return []
+    removed = sorted(
+        day
+        for day, snap in snaps.items()
+        if isinstance(snap, dict) and not snap.get("after_close")
+    )
+    for day in removed:
+        snaps.pop(day, None)
+    return removed
 
 
 def upsert_snapshot(history: dict, snapshot: dict | None) -> dict:
@@ -1384,15 +1405,20 @@ def publish(
         except Exception as e:
             print(f"  historial backfill falló (soft): {type(e).__name__}")
             history["backfill"] = {"done": False, "error": type(e).__name__}
+    dropped = drop_intraday_snapshots(history)
+    if dropped:
+        print(f"  historial: se descartan fotos en vivo ({', '.join(dropped)})")
     session = session_date_from_rows(rows)
-    if session:
+    if session and taken_after_close(session, now):
         live = snapshot_from_rows(
             rows,
             session,
-            after_close=taken_after_close(session, now),
+            after_close=True,
             reconstruido=False,
         )
         upsert_snapshot(history, live)
+    elif session:
+        print("  historial: la rueda todavía no cerró en Nueva York. No se guarda.")
     maybe_purge_reconstructed(history)
     history["updated_at"] = _stamp(now)
     saved = save_history(history_path, history, loaded, flag_path)
@@ -1405,3 +1431,35 @@ def publish(
         print(f"  historial informe falló (soft): {type(e).__name__}")
         return None, _note(loaded, history, did_backfill=did_backfill, elapsed=elapsed, saved=True) + " El informe no entró en esta publicación."
     return report, _note(loaded, history, did_backfill=did_backfill, elapsed=elapsed, saved=True)
+
+
+def publish_readonly(
+    *,
+    meta_by: dict[str, dict] | None = None,
+    history_path: Path = HISTORY_PATH,
+    fetch: Callable[[], tuple[str, Any]] | None = None,
+) -> tuple[dict[str, Any] | None, str]:
+    """Informe para la UI sin escribir el archivo ni agregar la rueda de hoy.
+
+    No corre el backfill, no purga y no toca el flag de deploy. Una foto
+    con el mercado abierto se omite solo en memoria.
+    """
+    loaded = load_previous(history_path, fetch=fetch)
+    history = loaded.history
+    if not isinstance(history, dict):
+        return None, (
+            "Historial del semáforo: corrida en vivo, no se escribe. "
+            "No había una copia para mostrar."
+        )
+    drop_intraday_snapshots(history)
+    try:
+        report = build_report(history, meta_by or {})
+    except Exception as e:
+        print(f"  historial informe falló (soft): {type(e).__name__}")
+        return None, (
+            "Historial del semáforo: corrida en vivo, no se escribe. "
+            "El informe no entró en esta publicación."
+        )
+    return report, (
+        "Historial del semáforo: corrida en vivo, no se escribe ni se agrega la rueda de hoy."
+    )

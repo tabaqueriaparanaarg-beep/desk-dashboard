@@ -741,6 +741,44 @@ def fetch_earnings(symbols: set[str], finnhub_key: str) -> tuple[list[dict], lis
     return out, notes, meta
 
 
+def cached_earnings(
+    previous: dict | None,
+    symbols: set[str],
+    today: date | None = None,
+) -> tuple[list[dict], list[str], dict[str, Any]]:
+    """Calendario ya publicado. La corrida en vivo no vuelve a llamar a Finnhub."""
+    notes: list[str] = []
+    if not isinstance(previous, dict) or "earnings" not in previous:
+        notes.append("Finnhub: corrida en vivo, sin calendario anterior. No se vuelve a pedir.")
+        return [], notes, {"known": False, "cached": True}
+    out: list[dict] = []
+    for row in previous.get("earnings") or []:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or "").upper()
+        if sym in symbols:
+            out.append(dict(row))
+    day = today or date.today()
+    frm, to = week_range(day)
+    raw = str(previous.get("generated_at") or "")[:10]
+    try:
+        prev_day = date.fromisoformat(raw)
+    except ValueError:
+        prev_day = None
+    same_week = (
+        prev_day is not None
+        and prev_day.isocalendar()[:2] == day.isocalendar()[:2]
+    )
+    meta: dict[str, Any] = {"known": True, "cached": True}
+    if same_week:
+        meta["from"] = frm
+        meta["through"] = to
+    notes.append(
+        f"Finnhub: earnings en caché ({len(out)} en el universo). No se vuelve a pedir."
+    )
+    return out, notes, meta
+
+
 def compute_symbol(
     meta: dict,
     bars: list[dict],
@@ -1593,6 +1631,67 @@ def walkforward_public(block: dict | None) -> dict[str, Any]:
     return {k: v for k, v in block.items() if k not in ("signals", "periods")}
 
 
+def bars_without_session(all_bars: dict[str, list[dict]], session: str | None) -> dict[str, list[dict]]:
+    """Copia sin la rueda en curso. Esa barra es un cierre provisorio."""
+    if not session:
+        return all_bars
+    out: dict[str, list[dict]] = {}
+    for sym, bars in all_bars.items():
+        out[sym] = [bar for bar in bars if bar_session_date(bar) != session]
+    return out
+
+
+def previous_walkforward_reusable(previous: dict | None, live_session: str | None) -> dict | None:
+    """La simulación ya publicada, si ningún punto es de la rueda en curso."""
+    if not live_session or not isinstance(previous, dict):
+        return None
+    block = previous.get("top10_walkforward")
+    if not isinstance(block, dict):
+        return None
+    curve = block.get("curve")
+    if not isinstance(curve, list) or not curve:
+        return None
+    end = str(block.get("window_end") or "")
+    if not end or end >= live_session:
+        return None
+    for point in curve:
+        if isinstance(point, dict) and str(point.get("date") or "") >= live_session:
+            return None
+    return block
+
+
+def choose_walkforward(
+    mode: str,
+    meta_by: dict[str, dict],
+    full_bars: dict[str, list[dict]],
+    previous: dict | None,
+    live_session: str | None,
+) -> tuple[dict[str, Any], str]:
+    """En intradía no se agrega el punto de la rueda abierta."""
+    if mode == "intradia":
+        if not live_session:
+            block = previous.get("top10_walkforward") if isinstance(previous, dict) else None
+            if isinstance(block, dict) and block.get("curve"):
+                return block, (
+                    "Simulación: todavía no hay barra de hoy. Se deja la del último cierre."
+                )
+        reused = previous_walkforward_reusable(previous, live_session)
+        if reused is not None:
+            end = reused.get("window_end")
+            return reused, (
+                f"Simulación: se mantiene la del último cierre (hasta {end}). "
+                "La corrida en vivo no agrega puntos."
+            )
+        trimmed = bars_without_session(full_bars, live_session)
+        block = walkforward_public(compute_top10_walkforward(meta_by, trimmed))
+        return block, (
+            f"Simulación: se recalcula sin la rueda en curso ({live_session or '—'}). "
+            "No se agrega ese punto."
+        )
+    block = walkforward_public(compute_top10_walkforward(meta_by, full_bars))
+    return block, ""
+
+
 # Vista por sectores: sólo acciones. Los ETFs (benchmark y de sector) son canastas.
 SECTOR_RS_WEEKS_AGO = 4
 SECTOR_LOW_SAMPLE_MAX = 2
@@ -1961,6 +2060,34 @@ class _PriceTargetGate:
         return parsed
 
 
+def reuse_company_data(
+    rows: list[dict],
+    prev: dict[str, dict],
+) -> tuple[list[str], dict[str, Any]]:
+    """Insiders, analistas y fundamentos ya bajados. Cero llamadas a Finnhub."""
+    by = {str(r.get("symbol") or ""): r for r in rows}
+    stocks = [
+        sym
+        for sym, row in by.items()
+        if sym and str(row.get("kind") or "").lower() != "etf"
+    ]
+    for sym in stocks:
+        _copy_cached_company(by[sym], prev.get(sym) or {})
+    signals.attach_sector_medians(rows)
+    feed = {
+        "price_target": "cache",
+        "cache_days": ANALYST_MAX_AGE_DAYS,
+        "budget": 0,
+        "planned": 0,
+        "cached": True,
+    }
+    notes = [
+        "Finnhub lento: corrida en vivo, se reusa la caché "
+        "(insiders, analistas y fundamentos). No se vuelve a pedir."
+    ]
+    return notes, feed
+
+
 def enrich_company_data(
     rows: list[dict],
     finnhub_key: str,
@@ -2058,11 +2185,33 @@ def enrich_company_data(
     return notes, feed
 
 
+RESUMEN_PROVISIONAL = (
+    "Provisorio: el mercado sigue abierto. Los precios tienen unos 15 minutos de demora "
+    "y se confirman en el cierre."
+)
+
+
+def mark_resumen_provisional(resumen: dict) -> dict:
+    """El texto se puede regenerar en vivo, marcado como provisorio."""
+    sentences = [s for s in (resumen.get("sentences") or []) if s]
+    if RESUMEN_PROVISIONAL not in sentences:
+        sentences.insert(0, RESUMEN_PROVISIONAL)
+    resumen["sentences"] = sentences
+    resumen["text"] = " ".join(sentences)
+    headline = str(resumen.get("headline") or "Angus — resumen")
+    if "provisorio" not in headline.lower():
+        resumen["headline"] = headline + " (provisorio)"
+    resumen["provisional"] = True
+    return resumen
+
+
 def write_resumen_file(resumen: dict) -> None:
     headline = str(resumen.get("headline") or "Angus — resumen")
     text = str(resumen.get("text") or "Sin resumen en esta corrida.")
+    marker = "PROVISORIO — hasta el cierre.\n\n" if resumen.get("provisional") else ""
     RESUMEN_PATH.write_text(
-        headline
+        marker
+        + headline
         + "\n\n"
         + text
         + "\n\nNo es recomendación de compra ni de inversión.\n",
@@ -2070,10 +2219,49 @@ def write_resumen_file(resumen: dict) -> None:
     )
 
 
+def resolve_session_mode(now: datetime | None = None) -> str:
+    """`ANGUS_SESSION` manda (lo fija el workflow). Si no, el reloj de Alpaca."""
+    import market_session
+
+    forced = os.environ.get("ANGUS_SESSION", "").strip().lower()
+    if forced in ("intradia", "intraday", "intradía"):
+        return "intradia"
+    if forced in ("cierre", "close"):
+        return "cierre"
+    if forced == "skip":
+        return "skip"
+    event = os.environ.get("ANGUS_EVENT", "").strip() or "local"
+    schedule = os.environ.get("ANGUS_SCHEDULE", "").strip() or None
+    moment = now or datetime.now(timezone.utc)
+    is_open = None
+    if not (event == "schedule" and schedule == market_session.CLOSE_CRON):
+        is_open = market_session.clock_is_open(market_session.fetch_clock())
+    return market_session.detect_mode(event, schedule, is_open, now=moment)
+
+
+def finalize_session_mode(mode: str, session_date: str | None, now: datetime) -> str:
+    """Aunque el reloj falle, no se guarda una rueda que Nueva York no cerró."""
+    if mode != "cierre" or not session_date:
+        return mode
+    import historial
+
+    if historial.taken_after_close(session_date, now):
+        return mode
+    print("  la rueda todavía no cerró en Nueva York: no se guarda historial ni simulación.")
+    return "intradia"
+
+
 def main() -> None:
     alpaca_headers()  # falla temprano y claro si faltan keys (sin imprimirlas)
-    if not load_finnhub_key():
+    mode = resolve_session_mode()
+    if mode == "skip":
+        print("Mercado cerrado: se saltea esta corrida intradía. No se publica ni se toca el historial.")
+        return
+    print(f"  sesión: {mode}")
+    if mode == "cierre" and not load_finnhub_key():
         print("AVISO: no hay FINNHUB_API_KEY — earnings omitidos, logos sólo desde cache")
+    elif mode == "intradia":
+        print("  intradía: solo precios de Alpaca y VIX. Finnhub lento queda en caché.")
     notes: list[str] = []
     failures: list[str] = []
     previous_payload, previous_source = fetch_previous_payload()
@@ -2199,8 +2387,16 @@ def main() -> None:
     if override_note:
         regime_obj["override"] = override_note
 
+    session_date = (session_dates_from_bars(all_bars.get("SPY") or []) or [None])[-1]
+    mode = finalize_session_mode(mode, session_date, datetime.now(timezone.utc))
     finnhub_key = load_finnhub_key()
-    earnings, e_notes, earnings_meta = fetch_earnings(set(all_bars.keys()), finnhub_key)
+    if mode == "intradia":
+        art_today = datetime.now(timezone(timedelta(hours=-3))).date()
+        earnings, e_notes, earnings_meta = cached_earnings(
+            previous_payload, set(all_bars.keys()), art_today
+        )
+    else:
+        earnings, e_notes, earnings_meta = fetch_earnings(set(all_bars.keys()), finnhub_key)
     notes.extend(e_notes)
     if failures:
         notes.append(f"Símbolos omitidos/fallidos: {len(failures)}")
@@ -2229,8 +2425,17 @@ def main() -> None:
     attach_entro(rows, top10_return, top10_entry.get("by_symbol") or {})
     t_wf = time.perf_counter()
     # Historia larga (full_bars). El ranking de arriba ya quedó calculado con all_bars recortado.
-    top10_walkforward_full = compute_top10_walkforward(meta_by, full_bars)
-    top10_walkforward = walkforward_public(top10_walkforward_full)
+    # En intradía no entra la barra de la rueda abierta: no suma un punto nuevo.
+    import market_session
+
+    live_session = None
+    if mode == "intradia":
+        live_session = market_session.open_session_date(session_date, datetime.now(timezone.utc))
+    top10_walkforward, wf_note = choose_walkforward(
+        mode, meta_by, full_bars, previous_payload, live_session
+    )
+    if wf_note:
+        notes.append(wf_note)
     print(f"  walk-forward: {time.perf_counter() - t_wf:.2f}s")
     if top10_entry.get("by_symbol"):
         bits = [
@@ -2291,12 +2496,17 @@ def main() -> None:
         "planned": 0,
     }
     try:
-        company_notes, analyst_feed = enrich_company_data(
-            rows,
-            finnhub_key,
-            _prev_by_symbol(previous_payload),
-            end_dt,
-        )
+        if mode == "intradia":
+            company_notes, analyst_feed = reuse_company_data(
+                rows, _prev_by_symbol(previous_payload)
+            )
+        else:
+            company_notes, analyst_feed = enrich_company_data(
+                rows,
+                finnhub_key,
+                _prev_by_symbol(previous_payload),
+                end_dt,
+            )
         notes.extend(company_notes)
     except Exception as e:
         print(f"  insiders/fundamentos falló (soft): {type(e).__name__}")
@@ -2319,12 +2529,17 @@ def main() -> None:
         hist_purge_days = historial.PROVISIONAL_PURGE_REAL_DAYS
 
         t_hist = time.perf_counter()
-        historial_public, hist_note = historial.publish(
-            rows=rows,
-            meta_by=meta_by,
-            all_bars=full_bars,
-            now=datetime.now(timezone.utc),
-        )
+        if mode == "intradia":
+            historial_public, hist_note = historial.publish_readonly(
+                meta_by=meta_by,
+            )
+        else:
+            historial_public, hist_note = historial.publish(
+                rows=rows,
+                meta_by=meta_by,
+                all_bars=full_bars,
+                now=datetime.now(timezone.utc),
+            )
         if hist_note:
             notes.append(hist_note)
         print(f"  historial: {time.perf_counter() - t_hist:.2f}s")
@@ -2387,10 +2602,22 @@ def main() -> None:
         print(f"  régimen de mercado falló (soft): {type(e).__name__}")
         notes.append(f"Régimen de mercado: fallo soft ({type(e).__name__}).")
 
+    import market_session
+
+    if mode == "intradia":
+        notes.append(
+            "Sesión: en vivo, provisorio hasta el cierre. "
+            "Precios con unos 15 minutos de demora. "
+            "No se guarda el historial ni se agregan puntos a la simulación."
+        )
+    else:
+        notes.append(market_session.session_banner(mode, session_date) + ".")
     payload = {
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
         "brand": "Angus",
+        "sesion": mode,
+        "sesion_aviso": market_session.session_banner(mode, session_date),
         "kpis": {
             "activos": n,
             "above_ema200": above_ema,
@@ -2459,9 +2686,16 @@ def main() -> None:
                 "en el universo (mínimo 3 nombres, ETF afuera)."
             ),
             "resumen": "Texto plantilla comparado con la publicación anterior. Sin modelo de lenguaje.",
+            "sesion": (
+                "intradia con el mercado abierto (cartel en vivo, precios con unos 15 minutos de demora; "
+                "no se escribe el historial ni se agregan puntos a la simulación). "
+                "cierre cuando la rueda ya terminó, incluido el cron de las 18:30 ART."
+            ),
             "historial_semaforo": (
                 "Una foto por fecha de rueda (veredicto, Desk Score, puesto, cierre y versión de la definición). "
-                "La corrida posterior del mismo día pisa esa foto. "
+                "Solo se guarda con el mercado ya cerrado. La corrida en vivo no escribe el archivo "
+                "ni agrega la rueda del día. Una foto parcial (after_close en falso) se descarta. "
+                "La corrida de cierre del mismo día pisa la foto. "
                 "El archivo historial_semaforo.json se publica con el sitio y, si se puede, "
                 "vuelve al repo. Si no se puede leer la historia anterior, no se reescribe vacía. "
                 "La reconstrucción de unos 6 meses corre una sola vez por definición, solo con precios hasta esa fecha, "
@@ -2500,6 +2734,8 @@ def main() -> None:
     try:
         prev_snap = signals.snapshot_from_payload(previous_payload) if previous_payload else None
         resumen = signals.compose_resumen(signals.snapshot_from_payload(payload), prev_snap)
+        if mode == "intradia":
+            mark_resumen_provisional(resumen)
         if historial_public is not None:
             import historial
 
@@ -2520,14 +2756,18 @@ def main() -> None:
     except Exception as e:
         print(f"  resumen.txt falló (soft): {type(e).__name__}")
 
-    # Logos (soft: nunca rompe el build)
+    # Logos (soft: nunca rompe el build). En intradía solo la caché: no se reescribe el índice.
     logo_syms = [logo_symbol(u) for u in universe]
-    try:
-        logo_map, l_notes = fetch_logos(logo_syms, finnhub_key)
-        payload["notes"].extend(l_notes)
-    except Exception as e:
-        print(f"  logos falló (soft): {type(e).__name__}")
+    if mode == "intradia":
         logo_map = logo_map_from_cache(logo_syms)
+        payload["notes"].append("Logos: corrida en vivo, solo caché.")
+    else:
+        try:
+            logo_map, l_notes = fetch_logos(logo_syms, finnhub_key)
+            payload["notes"].extend(l_notes)
+        except Exception as e:
+            print(f"  logos falló (soft): {type(e).__name__}")
+            logo_map = logo_map_from_cache(logo_syms)
     attach_logos(payload, logo_map)
 
     OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")

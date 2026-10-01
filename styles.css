@@ -2176,6 +2176,29 @@ body.is-ficha .dd-footer {
 
 /* ── Semáforo de entrada y analistas ── */
 
+.dd-session-banner {
+  max-width: var(--dd-max);
+  margin: 0 auto;
+  padding: 0 1.25rem 0.55rem;
+  color: var(--dd-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
+.dd-session-banner.is-live::before {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: var(--dd-ok);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
+  vertical-align: 0.05em;
+}
+
 .dd-sample-notice {
   margin: 0 0 0.85rem;
   padding: 0.65rem 0.85rem;
@@ -3298,6 +3321,12 @@ body.is-ficha .dd-topbar {
   .dd-section-nav-inner {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
+  }
+
+  .dd-session-banner {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.72rem;
   }
 
   .dd-main,
