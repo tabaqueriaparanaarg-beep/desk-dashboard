@@ -8,17 +8,27 @@ on:
       - historial_semaforo.json
   workflow_dispatch:
   schedule:
-    # Lunes a viernes 21:30 UTC = 18:30 Buenos Aires (UTC-3),
-    # después del cierre del mercado de EE.UU. (16:00 ET = 20:00 UTC en horario de verano).
-    # Nota: GitHub puede demorar unos minutos los cron programados.
+    # Cierre: lunes a viernes 21:30 UTC = 18:30 ART (UTC-3 fijo).
+    # Queda después de las 16:00 ET en verano (20:00 UTC) y en invierno (21:00 UTC).
+    # GitHub puede demorar unos minutos los cron programados.
     - cron: "30 21 * * 1-5"
+    # Intradía cada 30 min mientras puede estar abierta la NYSE (9:30–16:00 ET).
+    # Verano EDT (UTC-4): 13:30–20:00 UTC = 10:30–17:00 ART.
+    # Invierno EST (UTC-5): 14:30–21:00 UTC = 11:30–18:00 ART.
+    # La unión es 13:30–21:00 UTC (10:30–18:00 ART). Si /v2/clock dice cerrado
+    # (feriado, finde ya filtrado, o el extremo de la otra estación), se saltea.
+    - cron: "30 13 * * 1-5"
+    - cron: "0,30 14-20 * * 1-5"
+    - cron: "0 21 * * 1-5"
 
 permissions:
   contents: write
   pages: write
   id-token: write
 
-# Un solo deploy a la vez; no cancelar uno en curso.
+# Una sola publicación a la vez (cierre o intradía).
+# No se cancela la que está corriendo: el cierre no tiene que morir
+# si entra la de los 30 minutos.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -46,7 +56,17 @@ jobs:
       - name: Test Top 10 entry streaks, ficha math and walk-forward (mock bars)
         run: python -m unittest discover -s . -p 'test_*.py'
 
+      - name: Ver reloj del mercado (Alpaca /v2/clock)
+        id: market
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          ANGUS_EVENT: ${{ github.event_name }}
+          ANGUS_SCHEDULE: ${{ github.event.schedule }}
+        run: python market_session.py --github-output
+
       - name: Recuperar historial publicado
+        if: success() && steps.market.outputs.mode != 'skip'
         continue-on-error: true
         run: |
           if [ -f historial_semaforo.json ]; then
@@ -62,14 +82,18 @@ jobs:
 
       - name: Build datos.json (Alpaca + Finnhub)
         # Si falla (API caída, keys faltantes), se publica el datos.json existente del repo.
+        # Con el mercado abierto el build no escribe el historial.
+        if: success() && steps.market.outputs.mode != 'skip'
         continue-on-error: true
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          ANGUS_SESSION: ${{ steps.market.outputs.mode }}
         run: python build.py
 
       - name: No pisar el historial publicado
+        if: success() && steps.market.outputs.mode != 'skip'
         # Si no se pudo leer la historia anterior, frenar antes del deploy
         # para que Pages no reemplace el sitio y borre el archivo viejo.
         run: |
@@ -79,6 +103,7 @@ jobs:
           fi
 
       - name: Assemble _site (solo archivos del sitio)
+        if: success() && steps.market.outputs.mode != 'skip'
         run: |
           rm -rf _site
           mkdir -p _site
@@ -90,19 +115,23 @@ jobs:
           ls -la _site
 
       - name: Configure Pages
+        if: success() && steps.market.outputs.mode != 'skip'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        if: success() && steps.market.outputs.mode != 'skip'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
+        if: success() && steps.market.outputs.mode != 'skip'
         uses: actions/deploy-pages@v4
 
       - name: Guardar historial en el repositorio
-        if: success()
+        # La corrida en vivo no commitea. Si el archivo no cambió, el paso sale solo.
+        if: success() && steps.market.outputs.mode == 'cierre'
         continue-on-error: true
         run: |
           if [ ! -f historial_semaforo.json ]; then

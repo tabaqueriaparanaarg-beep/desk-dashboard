@@ -1529,6 +1529,52 @@
       legacyHtml;
   }
 
+  var LIVE_BANNER = "En vivo · provisorio hasta el cierre · precios con ~15 min de demora";
+
+  function sessionDay(data) {
+    var rows = (data && data.ranking) || [];
+    var raw = "";
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] && String(rows[i].symbol || "").toUpperCase() === "SPY" && rows[i].asof) {
+        raw = String(rows[i].asof);
+        break;
+      }
+    }
+    if (!raw && data && data.generated_at) raw = String(data.generated_at);
+    var match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return "";
+    return match[3] + "/" + match[2];
+  }
+
+  function sessionBannerText(data) {
+    if (!data) return "";
+    if (data.sesion_aviso) return String(data.sesion_aviso);
+    var mode = String(data.sesion || data.session || "");
+    if (mode === "intradia" || mode === "intraday") return LIVE_BANNER;
+    if (mode === "cierre" || mode === "close") {
+      var day = sessionDay(data);
+      return day ? "Cierre del " + day : "Cierre";
+    }
+    return "";
+  }
+
+  function renderSessionBanner(data) {
+    var el = document.getElementById("session-banner");
+    if (!el) return;
+    var text = sessionBannerText(data);
+    if (!text) {
+      el.hidden = true;
+      el.textContent = "";
+      el.classList.remove("is-live");
+      return;
+    }
+    el.hidden = false;
+    el.textContent = text;
+    var mode = String((data && (data.sesion || data.session)) || "");
+    var live = mode === "intradia" || mode === "intraday" || text.indexOf("En vivo") === 0;
+    el.classList.toggle("is-live", live);
+  }
+
   function renderSampleNotice(data) {
     var el = document.getElementById("sample-notice");
     if (!el) return;
@@ -1963,6 +2009,7 @@
     renderRsBoard();
     renderFormulas(data.formulas);
     renderSampleNotice(data);
+    renderSessionBanner(data);
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
     document.title = state.baseTitle;
     renderRoute();
