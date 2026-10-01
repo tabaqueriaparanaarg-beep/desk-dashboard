@@ -113,7 +113,18 @@ Reglas (`datos.json` → `regime` / `formulas.regime`):
 - `< 40` → **bajista**
 - Soft override: SPY bajo EMA200 + label alcista → **mixto**
 
-`regime_stub` es alias de `regime` (back-compat).
+`regime_stub` es alias de `regime` (back-compat). El resumen diario sigue usando esta etiqueta.
+
+### Régimen de mercado (puntaje 0–100)
+
+Panel aparte (`datos.json` → `market_regime` / `formulas.market_regime`). No cambia el Desk Score, el semáforo, el ranking ni el historial.
+
+- **125 pts crudos**, normalizados a 0–100 con los puntos que de verdad hay. Si falta el VIX: «calculado sobre X pts disponibles de 125».
+- **Índices SPY/QQQ (80):** 8 pts por condición y por índice — cierre sobre EMA200, cierre sobre SMA50, pendiente de EMA200 al alza (5 sesiones), pendiente de SMA50 al alza, SMA50 sobre EMA200.
+- **Amplitud (30):** 10 × % sobre EMA200, 10 × % sobre SMA50, y 10 según el balance de nuevos máximos y mínimos de 52 semanas del día (5 pts neutros si no hubo ninguno).
+- **Sentimiento (15):** CSV público de CBOE (`VIX_History.csv`). 5 pts si el cierre es ≤ 20, 5 si está bajo la media de 20 ruedas y 5 si está bajo la de 50. Si CBOE falla, VIXY de Alpaca (no entra al universo ni al ranking): 8 y 7 pts contra esas medias, sin umbral de precio.
+- **Exposición sugerida:** 0–25 mínima, 25–50 posiciones chicas, 50–75 normal, 75–100 plena. Es una guía automática, no un consejo de inversión.
+- **Serie:** % de activos sobre la EMA200 en las últimas 42 ruedas, recalculada con las barras ya descargadas.
 
 
 ### Retorno Top 10 del Desk Score

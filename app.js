@@ -1499,6 +1499,201 @@
     }
   }
 
+  var REGIME_COLORS = {
+    red: "#F87171",
+    orange: "#FF8C42",
+    yellow: "#FBBF24",
+    green: "#34D399",
+  };
+
+  function fmtPts(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var x = Math.round(Number(n) * 10) / 10;
+    if (Math.abs(x - Math.round(x)) < 0.05) return String(Math.round(x));
+    return x.toFixed(1);
+  }
+
+  function regimePtsClass(points, max) {
+    if (points == null || max == null || Number(max) <= 0) return "is-muted";
+    if (Number(points) <= 0) return "is-red";
+    if (Number(points) >= Number(max) - 0.05) return "is-green";
+    return "is-orange";
+  }
+
+  function regimeIcon(id) {
+    if (id === "indices") {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 3.2 3.2L20 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.5 6H20v5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+    if (id === "breadth") {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><ellipse cx="12" cy="12" rx="3.6" ry="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 12h16M6.2 8.2h11.6M6.2 15.8h11.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2a3.1 3.1 0 0 1 3 2.4 2.7 2.7 0 0 1 2.3 3.2 2.8 2.8 0 0 1-.4 4.6A3 3 0 0 1 12 19.2a3 3 0 0 1-4.9-4.8 2.8 2.8 0 0 1-.4-4.6 2.7 2.7 0 0 1 2.3-3.2A3.1 3.1 0 0 1 12 4.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 8.2v7.2M9.4 11.2c.7.8 1.6 1.1 2.6 1.1s1.9-.3 2.6-1.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+  }
+
+  function regimeGaugeSvg(score, color) {
+    var r = 74;
+    var cx = 100;
+    var cy = 96;
+    var startX = cx - r;
+    var endX = cx + r;
+    var len = Math.PI * r;
+    var pct = Math.max(0, Math.min(100, Number(score) || 0)) / 100;
+    var dash = (len * pct).toFixed(2);
+    var label = score == null ? "Sin puntaje" : "Puntaje " + score + " de 100";
+    return (
+      '<svg class="dd-regime-gauge" viewBox="0 0 200 112" role="img" aria-label="' + escapeHtml(label) + '">' +
+      '<path d="M ' + startX + " " + cy + " A " + r + " " + r + " 0 0 1 " + endX + " " + cy + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="14" stroke-linecap="round"/>' +
+      '<path d="M ' + startX + " " + cy + " A " + r + " " + r + " 0 0 1 " + endX + " " + cy + '" fill="none" stroke="' + color + '" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + dash + " " + len.toFixed(2) + '"/>' +
+      "</svg>"
+    );
+  }
+
+  function regimeChartSvg(series) {
+    var pts = (series || []).filter(function (p) {
+      return p && p.pct != null && !isNaN(Number(p.pct));
+    });
+    if (pts.length < 2) {
+      return '<p class="dd-regime-chart-empty">Sin suficientes ruedas para la serie.</p>';
+    }
+    var vals = pts.map(function (p) { return Number(p.pct); });
+    var vmin = Math.min.apply(null, vals);
+    var vmax = Math.max.apply(null, vals);
+    var pad = Math.max(4, (vmax - vmin) * 0.18);
+    var lo = Math.max(0, vmin - pad);
+    var hi = Math.min(100, vmax + pad);
+    if (hi - lo < 10) {
+      var mid = (vmin + vmax) / 2;
+      lo = Math.max(0, mid - 6);
+      hi = Math.min(100, mid + 6);
+    }
+    if (hi <= lo) hi = lo + 1;
+    var W = 640;
+    var H = 214;
+    var L = 46;
+    var R = 10;
+    var T = 12;
+    var B = 28;
+    var iw = W - L - R;
+    var ih = H - T - B;
+    function xAt(i) {
+      return L + (pts.length === 1 ? iw / 2 : (i / (pts.length - 1)) * iw);
+    }
+    function yAt(v) {
+      return T + (1 - (v - lo) / (hi - lo)) * ih;
+    }
+    var line = pts.map(function (p, i) {
+      return (i ? "L" : "M") + xAt(i).toFixed(1) + " " + yAt(Number(p.pct)).toFixed(1);
+    }).join(" ");
+    var base = (T + ih).toFixed(1);
+    var area = line + " L" + xAt(pts.length - 1).toFixed(1) + " " + base + " L" + xAt(0).toFixed(1) + " " + base + " Z";
+    var grid = "";
+    var yLabels = "";
+    var ticks = 4;
+    for (var t = 0; t <= ticks; t++) {
+      var val = lo + ((hi - lo) * t) / ticks;
+      var yy = yAt(val);
+      grid += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(255,255,255,0.07)"/>';
+      yLabels += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" fill="#8d8d8d" font-size="12" font-family="Plus Jakarta Sans, Inter, sans-serif">' + Math.round(val) + "%</text>";
+    }
+    var xLabels = "";
+    var want = Math.min(7, pts.length);
+    var seen = {};
+    var steps = Math.max(want - 1, 1);
+    for (var k = 0; k < want; k++) {
+      var idx = Math.round((k * (pts.length - 1)) / steps);
+      if (seen[idx]) continue;
+      seen[idx] = true;
+      var ds = String(pts[idx].date || "");
+      var lab = ds.length >= 10 ? ds.slice(5) : ds;
+      var anchor = "middle";
+      if (idx === 0) anchor = "start";
+      if (idx === pts.length - 1) anchor = "end";
+      xLabels += '<text x="' + xAt(idx).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '" fill="#8d8d8d" font-size="12" font-family="Plus Jakarta Sans, Inter, sans-serif">' + escapeHtml(lab) + "</text>";
+    }
+    return (
+      '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Porcentaje de activos sobre la EMA200 en las últimas ruedas">' +
+      "<defs><linearGradient id=\"ddRegimeFill\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">" +
+      '<stop offset="0%" stop-color="#34D399" stop-opacity="0.38"/>' +
+      '<stop offset="100%" stop-color="#34D399" stop-opacity="0.02"/>' +
+      "</linearGradient></defs>" +
+      grid +
+      '<path d="' + area + '" fill="url(#ddRegimeFill)"/>' +
+      '<path d="' + line + '" fill="none" stroke="#34D399" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>' +
+      yLabels + xLabels +
+      "</svg>"
+    );
+  }
+
+  function renderMarketRegime(data) {
+    var root = document.getElementById("market-regime");
+    var body = document.getElementById("market-regime-body");
+    if (!root || !body) return;
+    var block = data && data.market_regime;
+    if (!block || block.score == null && !(block.components || []).length) {
+      root.hidden = true;
+      body.innerHTML = "";
+      return;
+    }
+    var band = block.band || {};
+    var colorName = band.color || "orange";
+    var color = REGIME_COLORS[colorName] || REGIME_COLORS.orange;
+    root.hidden = false;
+    root.setAttribute("data-band", colorName);
+    root.style.setProperty("--regime-color", color);
+
+    var scoreText = block.score == null ? "—" : String(block.score);
+    var components = block.components || [];
+    var rows = components.map(function (comp) {
+      var pts;
+      if (!comp.available) {
+        pts = '<span class="dd-regime-pts is-muted">sin dato</span>';
+      } else {
+        pts = '<span class="dd-regime-pts ' + regimePtsClass(comp.points, comp.max_points) + '">' +
+          fmtPts(comp.points) + "/" + fmtPts(comp.max_points) + " pts</span>";
+      }
+      var sub = comp.detail ? '<span class="dd-regime-row-sub">' + escapeHtml(comp.detail) + "</span>" : "";
+      return (
+        '<div class="dd-regime-row">' +
+        '<span class="dd-regime-ico">' + regimeIcon(comp.id) + "</span>" +
+        '<span class="dd-regime-row-label">' + escapeHtml(comp.label || "") + sub + "</span>" +
+        pts +
+        "</div>"
+      );
+    }).join("");
+
+    var hl = block.highs_lows || {};
+    var highs = hl.highs != null ? hl.highs : "—";
+    var lows = hl.lows != null ? hl.lows : "—";
+    var line = band.line || "—";
+    var disclaimer = block.disclaimer || band.disclaimer || "Guía automática de exposición, no es un consejo de inversión.";
+    var footer = block.footer || "";
+
+    body.innerHTML =
+      '<div class="dd-regime-hero">' +
+      '<div class="dd-regime-gauge-wrap">' +
+      regimeGaugeSvg(block.score, color) +
+      '<div class="dd-regime-score">' +
+      '<span class="dd-regime-score-num" style="color:' + color + '">' + escapeHtml(scoreText) + "</span>" +
+      '<span class="dd-regime-score-of">de 100</span>' +
+      "</div></div>" +
+      '<div class="dd-regime-exposure">' +
+      '<p class="dd-regime-kicker">Exposición sugerida</p>' +
+      '<p class="dd-regime-exposure-line">' + escapeHtml(line) + "</p>" +
+      '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
+      "</div></div>" +
+      rows +
+      '<div class="dd-regime-hl">' +
+      '<span class="dd-regime-hoy">HOY</span>' +
+      "<span>Nuevos máximos / mínimos de 52 semanas hoy: " +
+      '<span class="dd-regime-hl-high">' + escapeHtml(String(highs)) + "</span>" +
+      " / " +
+      '<span class="dd-regime-hl-low">' + escapeHtml(String(lows)) + "</span>" +
+      "</span></div>" +
+      '<p class="dd-regime-chart-title">% de activos sobre su EMA200 – últimos ~2 meses</p>' +
+      '<div class="dd-regime-chart">' + regimeChartSvg(block.breadth_series) + "</div>" +
+      (footer ? '<p class="dd-regime-foot">' + escapeHtml(footer) + "</p>" : "");
+  }
+
   function applyData(data) {
     state.ranking = data.ranking || [];
     state.historial = data.historial_semaforo || null;
@@ -1508,6 +1703,7 @@
     state.ready = true;
     state.loadError = "";
     renderKpis(data);
+    renderMarketRegime(data);
     renderResumen(data);
     renderTop10(data.top10_return);
     renderWalkforward(data.top10_walkforward);
