@@ -19,86 +19,131 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=27" />
+  <link rel="stylesheet" href="styles.css?v=30" />
 </head>
 <body data-app="desk-dashboard">
-  <header class="dd-header" data-section="header">
-    <div class="dd-brand">
-      <img class="dd-logo" src="assets/logo.svg?v=7" alt="Angus" width="44" height="40" />
-      <div class="dd-brand-text">
-        <h1 class="dd-title">Angus</h1>
+  <div class="dd-topbar">
+    <header class="dd-header" data-section="header">
+      <div class="dd-brand">
+        <img class="dd-logo" src="assets/logo.svg?v=7" alt="" width="44" height="40" />
+        <div class="dd-brand-text">
+          <h1 class="dd-title">Angus</h1>
+        </div>
       </div>
-    </div>
-    <div class="dd-header-actions">
-      <div class="dd-meta" data-field="generated_at">
-        <span class="dd-label">Actualizado</span>
-        <time id="generated-at" class="dd-value">—</time>
-        <span id="refresh-status" class="dd-refresh-status">Auto cada 5 min</span>
-        <span id="last-ui-refresh" class="dd-last-ui-refresh" hidden></span>
+      <div class="dd-header-actions">
+        <div class="dd-meta" data-field="generated_at">
+          <span class="dd-label">Actualizado</span>
+          <time id="generated-at" class="dd-value">—</time>
+          <span id="refresh-status" class="dd-refresh-status">Auto cada 5 min</span>
+          <span id="last-ui-refresh" class="dd-last-ui-refresh" hidden></span>
+        </div>
+        <button type="button" id="btn-refresh" class="dd-btn-refresh" aria-label="Actualizar datos">
+          Actualizar
+        </button>
       </div>
-      <button type="button" id="btn-refresh" class="dd-btn-refresh" aria-label="Actualizar datos">
-        Actualizar
-      </button>
-    </div>
-  </header>
+    </header>
+    <nav class="dd-section-nav" aria-label="Secciones">
+      <div class="dd-section-nav-inner">
+        <a href="#hoy">Hoy</a>
+        <a href="#top10">Top 10</a>
+        <a href="#ranking">Ranking</a>
+        <a href="#historial">Historial</a>
+        <a href="#simulacion">Simulación</a>
+        <a href="#insiders">Insiders</a>
+        <a href="#patrones">Patrones</a>
+        <a href="#analistas">Analistas</a>
+        <a href="#sectores">Sectores</a>
+        <a href="#rs">RS semanal</a>
+        <a href="#formulas">Fórmulas</a>
+        <a href="#notas">Notas</a>
+      </div>
+    </nav>
+  </div>
 
   <main class="dd-main">
     <p id="sample-notice" class="dd-sample-notice" hidden></p>
-    <section class="dd-resumen dd-panel" data-section="resumen" aria-label="Resumen diario">
-      <div class="dd-resumen-head">
-        <h2 class="dd-section-title">Resumen del día</h2>
-        <time id="resumen-when" class="dd-resumen-when">—</time>
+
+    <div id="hoy" class="dd-hoy">
+      <h2 class="dd-sr-only">Qué pasa hoy</h2>
+
+      <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
+        <h2 class="dd-section-title">Régimen de mercado</h2>
+        <div id="market-regime-body"></div>
+      </section>
+
+      <section class="dd-resumen dd-panel" data-section="resumen" aria-label="Resumen diario">
+        <div class="dd-resumen-head">
+          <h2 class="dd-section-title">Resumen del día</h2>
+          <time id="resumen-when" class="dd-resumen-when">—</time>
+        </div>
+        <p id="resumen-text" class="dd-resumen-text is-clamped">Cargando…</p>
+        <button type="button" id="resumen-more" class="dd-text-more" data-clamp="resumen-text" hidden>Ver más</button>
+      </section>
+
+      <div class="dd-today-stats" aria-label="Alertas y resultados">
+        <button type="button" class="dd-today-stat" id="today-clear-btn">
+          <span class="dd-kpi-label">Sin alertas</span>
+          <span class="dd-kpi-value" id="today-clear">—</span>
+          <span class="dd-kpi-sub" id="today-clear-sub">Acciones</span>
+        </button>
+        <a class="dd-today-stat" href="#earnings">
+          <span class="dd-kpi-label">Resultados próximos</span>
+          <span class="dd-kpi-value" id="today-earn">—</span>
+          <span class="dd-kpi-sub" id="today-earn-sub"></span>
+        </a>
       </div>
-      <p id="resumen-text" class="dd-resumen-text">Cargando…</p>
-    </section>
 
-    <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
-      <h2 class="dd-regime-title">
-        <span class="dd-regime-accent" aria-hidden="true"></span>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.2 1.6 3.4 13.2h6.3l-1.1 9.2 10.2-12.4h-6.4l1-8.4z"/></svg>
-        Régimen de mercado
-      </h2>
-      <div id="market-regime-body"></div>
-    </section>
+      <section class="dd-kpis-wrap dd-panel" data-section="kpis" aria-label="KPIs del universo">
+        <h2 class="dd-section-title">Números del universo</h2>
+        <div class="dd-kpis">
+          <article class="dd-kpi-card" data-kpi="activos">
+            <h3 class="dd-kpi-label">Activos</h3>
+            <p class="dd-kpi-value" id="kpi-activos">—</p>
+          </article>
+          <article class="dd-kpi-card" data-kpi="above_ema200">
+            <h3 class="dd-kpi-label">Sobre EMA200</h3>
+            <p class="dd-kpi-value" id="kpi-ema200">—</p>
+            <p class="dd-kpi-sub" id="kpi-ema200-pct"></p>
+          </article>
+          <article class="dd-kpi-card" data-kpi="above_sma50">
+            <h3 class="dd-kpi-label">Sobre SMA50</h3>
+            <p class="dd-kpi-value" id="kpi-sma50">—</p>
+            <p class="dd-kpi-sub" id="kpi-sma50-pct"></p>
+          </article>
+          <article class="dd-kpi-card" data-kpi="rs_gt_70">
+            <h3 class="dd-kpi-label">RS &gt; 70</h3>
+            <p class="dd-kpi-value" id="kpi-rs70">—</p>
+            <p class="dd-kpi-sub" id="kpi-rs70-pct"></p>
+          </article>
+          <article class="dd-kpi-card" data-kpi="volumen_inusual">
+            <h3 class="dd-kpi-label">Vol. inusual (&gt;50%)</h3>
+            <p class="dd-kpi-value" id="kpi-vol">—</p>
+            <p class="dd-kpi-sub" id="kpi-vol-pct"></p>
+          </article>
+          <article class="dd-kpi-card" data-kpi="regime" id="kpi-regime-card">
+            <h3 class="dd-kpi-label">Régimen del universo</h3>
+            <p class="dd-kpi-value" id="kpi-regime">—</p>
+            <p class="dd-kpi-sub" id="kpi-regime-sub"></p>
+          </article>
+        </div>
+      </section>
 
-    <section class="dd-kpis" data-section="kpis" aria-label="KPIs del universo">
-      <article class="dd-kpi-card" data-kpi="activos">
-        <h2 class="dd-kpi-label">Activos</h2>
-        <p class="dd-kpi-value" id="kpi-activos">—</p>
-      </article>
-      <article class="dd-kpi-card" data-kpi="above_ema200">
-        <h2 class="dd-kpi-label">Sobre EMA200</h2>
-        <p class="dd-kpi-value" id="kpi-ema200">—</p>
-        <p class="dd-kpi-sub" id="kpi-ema200-pct"></p>
-      </article>
-      <article class="dd-kpi-card" data-kpi="above_sma50">
-        <h2 class="dd-kpi-label">Sobre SMA50</h2>
-        <p class="dd-kpi-value" id="kpi-sma50">—</p>
-        <p class="dd-kpi-sub" id="kpi-sma50-pct"></p>
-      </article>
-      <article class="dd-kpi-card" data-kpi="rs_gt_70">
-        <h2 class="dd-kpi-label">RS &gt; 70</h2>
-        <p class="dd-kpi-value" id="kpi-rs70">—</p>
-        <p class="dd-kpi-sub" id="kpi-rs70-pct"></p>
-      </article>
-      <article class="dd-kpi-card" data-kpi="volumen_inusual">
-        <h2 class="dd-kpi-label">Vol. inusual (&gt;50%)</h2>
-        <p class="dd-kpi-value" id="kpi-vol">—</p>
-        <p class="dd-kpi-sub" id="kpi-vol-pct"></p>
-      </article>
-      <article class="dd-kpi-card" data-kpi="regime" id="kpi-regime-card">
-        <h2 class="dd-kpi-label">Régimen</h2>
-        <p class="dd-kpi-value" id="kpi-regime">—</p>
-        <p class="dd-kpi-sub" id="kpi-regime-sub"></p>
-      </article>
-    </section>
+      <section class="dd-earnings dd-panel" id="earnings" data-section="earnings" aria-label="Calendario de resultados">
+        <h2 class="dd-section-title">Resultados de la semana</h2>
+        <div id="earnings-strip" class="dd-earnings-strip" data-role="earnings-strip">
+          <p class="dd-empty">Cargando…</p>
+        </div>
+      </section>
+    </div>
 
-
-    <section class="dd-top10 dd-panel" data-section="top10-return" aria-label="Retorno Top 10 del Desk Score">
+    <section class="dd-top10 dd-panel" id="top10" data-section="top10-return" aria-label="Retorno Top 10 del Desk Score">
       <div class="dd-top10-head">
-        <h2 class="dd-section-title">Retorno Top 10 del Desk Score</h2>
+        <h2 class="dd-section-title">Top 10</h2>
         <p class="dd-top10-subtitle" id="top10-subtitle">Retorno últimas 10 ruedas</p>
-        <p class="dd-section-sub">Ordena el Desk Score de hoy. No es una ventaja de compra. Tocá una fila para abrir la ficha.</p>
+        <details class="dd-help">
+          <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo leerlo</summary>
+          <p>Ordena el Desk Score de hoy y mira cómo les fue en las últimas ruedas. No es una ventaja de compra. Tocá una fila para abrir la ficha.</p>
+        </details>
       </div>
       <div class="dd-top10-summary" id="top10-summary" aria-label="Resumen de retornos">
         <article class="dd-top10-card" data-kpi="avg_top10">
@@ -128,141 +173,13 @@
       </div>
     </section>
 
-    <section class="dd-wf dd-panel" data-section="top10-walkforward" aria-label="Simulación del Top 10 contra SPY">
-      <div class="dd-top10-head">
-        <h2 class="dd-section-title">Simulación Top 10 vs SPY</h2>
-        <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward semanal · base 100</p>
-      </div>
-      <p class="dd-wf-caption" id="wf-caption">
-        Simulación semanal: en el último cierre de cada semana se recalcula el Desk Score
-        solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada
-        nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a
-        ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia
-        atrás. Sin comisiones. Es una simulación de un filtro, no una ventaja de compra ni una
-        recomendación. Los resultados pasados no garantizan resultados futuros.
-      </p>
-      <div class="dd-wf-kpis" id="wf-kpis" aria-label="Resultados de la simulación">
-        <article class="dd-top10-card" data-kpi="wf_port">
-          <h3 class="dd-kpi-label">Cartera</h3>
-          <p class="dd-kpi-value" id="wf-port">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_spy">
-          <h3 class="dd-kpi-label">SPY</h3>
-          <p class="dd-kpi-value" id="wf-spy">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_excess">
-          <h3 class="dd-kpi-label">Exceso</h3>
-          <p class="dd-kpi-value" id="wf-excess">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_beat">
-          <h3 class="dd-kpi-label">Semanas &gt; SPY</h3>
-          <p class="dd-kpi-value" id="wf-beat">—</p>
-          <p class="dd-kpi-sub" id="wf-beat-sub"></p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_dd">
-          <h3 class="dd-kpi-label">Caída máx.</h3>
-          <p class="dd-kpi-value" id="wf-dd">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_dd_spy">
-          <h3 class="dd-kpi-label">Caída máx. SPY</h3>
-          <p class="dd-kpi-value" id="wf-dd-spy">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_weeks">
-          <h3 class="dd-kpi-label">Semanas</h3>
-          <p class="dd-kpi-value" id="wf-weeks">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="wf_turn">
-          <h3 class="dd-kpi-label">Rotación</h3>
-          <p class="dd-kpi-value" id="wf-turn">—</p>
-          <p class="dd-kpi-sub" id="wf-turn-sub"></p>
-        </article>
-      </div>
-      <div class="dd-wf-chart-wrap">
-        <p class="dd-wf-legend">
-          <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-port" aria-hidden="true"></span>Cartera Top 10</span>
-          <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-spy" aria-hidden="true"></span>SPY</span>
-        </p>
-        <div id="wf-chart" class="dd-wf-chart" role="img" aria-label="Curva de la cartera contra SPY, base 100"></div>
-      </div>
-      <div class="dd-table-wrap dd-wf-table-wrap">
-        <table class="dd-table dd-wf-table" id="wf-table">
-          <caption class="dd-sr-only">Últimas semanas de la simulación</caption>
-          <thead>
-            <tr>
-              <th scope="col">Cierre</th>
-              <th scope="col">Cartera</th>
-              <th scope="col">SPY</th>
-              <th scope="col" title="Nombres que salieron del Top 10 al empezar esa semana">Cambios</th>
-            </tr>
-          </thead>
-          <tbody id="wf-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="dd-hist dd-panel" id="historial" data-section="historial" aria-label="Historial del semáforo">
-      <div class="dd-top10-head">
-        <h2 class="dd-section-title">Historial del semáforo</h2>
-        <p class="dd-section-sub">Qué pasó después de cada luz. El verde es «sin alertas de riesgo», no una compra. Se compara con SPY y con el promedio del universo.</p>
-      </div>
-      <div id="hist-root">
-        <p class="dd-empty">Cargando…</p>
-      </div>
-      <p class="dd-hist-disclaimer" id="hist-disclaimer">Resultados pasados no garantizan resultados futuros.</p>
-    </section>
-
-    <section class="dd-earnings dd-panel" data-section="earnings" aria-label="Calendario de resultados">
-      <h2 class="dd-section-title">Earnings (semana actual)</h2>
-      <div id="earnings-strip" class="dd-earnings-strip" data-role="earnings-strip">
-        <p class="dd-empty">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="dd-sectors dd-panel" data-section="sectors" aria-label="Vista por sectores">
-      <div class="dd-top10-head">
-        <h2 class="dd-section-title">Vista por sectores</h2>
-        <p class="dd-section-sub">Tocá un sector para filtrar el ranking. El mejor nombre abre la ficha.</p>
-      </div>
-      <p class="dd-sector-caption" id="sector-caption">
-        Acá se ve en qué sectores está la fuerza del universo.
-        Cada tarjeta promedia el Desk Score, el RS y el cambio del día,
-        y cuenta cuántos nombres están sobre la EMA200 y cuántos entran al Top 10 de hoy.
-        La flecha compara el RS medio de ahora con el de hace 4 semanas.
-        Es una lectura del tablero, no una recomendación.
-      </p>
-      <p class="dd-sector-note" id="sector-note">
-        No entran los ETFs: ni los benchmarks (SPY, QQQ, IWM, DIA) ni los de sector
-        (XLK, XLV y el resto). Son canastas, no acciones, y mezclarlos cambiaría el promedio.
-      </p>
-      <div id="sector-grid" class="dd-sector-grid" role="list">
-        <p class="dd-empty">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="dd-insiders dd-panel" data-section="insiders" aria-label="Qué compran los grandes">
-      <div class="dd-top10-head">
-        <h2 class="dd-section-title">Qué compran los grandes</h2>
-        <p class="dd-section-sub" id="insider-caption">Compras netas de insiders, últimos 90 días.</p>
-      </div>
-      <div id="insider-list" class="dd-link-list">
-        <p class="dd-empty">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="dd-scan dd-panel" id="pattern-panel" data-section="patterns" aria-label="Escáner de patrones">
-      <div class="dd-top10-head">
-        <h2 class="dd-section-title">Escáner de patrones</h2>
-        <p class="dd-section-sub">Tocá un nombre para abrir la ficha. Sale del precio que ya baja Alpaca.</p>
-      </div>
-      <div class="dd-filter-group" id="pattern-tabs" role="tablist" aria-label="Patrones"></div>
-      <div id="pattern-list" class="dd-link-list">
-        <p class="dd-empty">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="dd-ranking dd-panel" data-section="ranking" aria-label="Ranking Desk Score">
-      <h2 class="dd-section-title">Ranking Desk Score</h2>
-      <p class="dd-section-sub">Filtro de lectura y de riesgo. Ni el verde ni el Top 10 son una señal de compra. Tocá una fila para abrir la ficha.</p>
+    <section class="dd-ranking dd-panel" id="ranking" data-section="ranking" aria-label="Ranking Desk Score">
+      <h2 class="dd-section-title">Ranking</h2>
+      <p class="dd-section-sub">Tocá una fila para abrir la ficha.</p>
+      <details class="dd-help">
+        <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué significa</summary>
+        <p>Filtro de lectura y de riesgo. Ni el verde ni el Top 10 son una señal de compra. El verde es «sin alertas de riesgo».</p>
+      </details>
       <div class="dd-filters" id="ranking-filters" role="toolbar" aria-label="Filtros de ranking">
         <div class="dd-filter-group" data-filter="kind" role="group" aria-label="Tipo">
           <button type="button" class="dd-chip is-active" data-kind="">Todos</button>
@@ -284,6 +201,7 @@
         </div>
         <p class="dd-filter-count" id="filter-count" aria-live="polite">Mostrando —</p>
       </div>
+      <p class="dd-scroll-hint">Deslizá la tabla para ver el resto de columnas.</p>
       <div class="dd-table-wrap">
         <table class="dd-table" id="ranking-table">
           <thead>
@@ -309,26 +227,288 @@
       </div>
     </section>
 
-    <section class="dd-notes dd-panel" data-section="notes" aria-label="Notas">
-      <h2 class="dd-section-title">Notas</h2>
-      <p class="dd-tip" id="data-refresh-tip">
-        Tip: el botón Actualizar / auto cada 5 min solo recarga <code>datos.json</code>.
-        Para datos frescos del mercado, ejecutá <code>python3 build.py</code> (o cron).
-      </p>
-      <ul id="notes-list" class="dd-notes-list"></ul>
-    </section>
+    <div class="dd-more-label" id="mas">
+      <h2>Más detalle</h2>
+      <p>Todo sigue acá. Abrí solo lo que quieras ver.</p>
+    </div>
+
+    <details class="dd-fold" id="historial">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Historial del semáforo</span>
+          <span class="dd-fold-hint">Qué pasó después de cada luz</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-hist dd-panel" data-section="historial" aria-label="Historial del semáforo">
+          <h2 class="dd-sr-only">Historial del semáforo</h2>
+          <p class="dd-section-sub">El verde es «sin alertas de riesgo», no una compra. Se compara con SPY y con el promedio del universo.</p>
+          <div id="hist-root">
+            <p class="dd-empty">Cargando…</p>
+          </div>
+          <p class="dd-hist-disclaimer" id="hist-disclaimer">Resultados pasados no garantizan resultados futuros.</p>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="simulacion">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Simulación Top 10 vs SPY</span>
+          <span class="dd-fold-hint">Walk-forward semanal</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-wf dd-panel" data-section="top10-walkforward" aria-label="Simulación del Top 10 contra SPY">
+          <div class="dd-top10-head">
+            <h2 class="dd-sr-only">Simulación Top 10 vs SPY</h2>
+            <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward semanal · base 100</p>
+          </div>
+          <details class="dd-help">
+            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
+            <p class="dd-wf-caption" id="wf-caption">
+              Simulación semanal: en el último cierre de cada semana se recalcula el Desk Score
+              solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada
+              nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a
+              ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia
+              atrás. Sin comisiones. Es una simulación de un filtro, no una ventaja de compra ni una
+              recomendación. Los resultados pasados no garantizan resultados futuros.
+            </p>
+          </details>
+          <div class="dd-wf-kpis" id="wf-kpis" aria-label="Resultados de la simulación">
+            <article class="dd-top10-card" data-kpi="wf_port">
+              <h3 class="dd-kpi-label">Cartera</h3>
+              <p class="dd-kpi-value" id="wf-port">—</p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_spy">
+              <h3 class="dd-kpi-label">SPY</h3>
+              <p class="dd-kpi-value" id="wf-spy">—</p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_excess">
+              <h3 class="dd-kpi-label">Exceso</h3>
+              <p class="dd-kpi-value" id="wf-excess">—</p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_beat">
+              <h3 class="dd-kpi-label">Semanas &gt; SPY</h3>
+              <p class="dd-kpi-value" id="wf-beat">—</p>
+              <p class="dd-kpi-sub" id="wf-beat-sub"></p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_dd">
+              <h3 class="dd-kpi-label">Caída máx.</h3>
+              <p class="dd-kpi-value" id="wf-dd">—</p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_dd_spy">
+              <h3 class="dd-kpi-label">Caída máx. SPY</h3>
+              <p class="dd-kpi-value" id="wf-dd-spy">—</p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_weeks">
+              <h3 class="dd-kpi-label">Semanas</h3>
+              <p class="dd-kpi-value" id="wf-weeks">—</p>
+            </article>
+            <article class="dd-top10-card" data-kpi="wf_turn">
+              <h3 class="dd-kpi-label">Rotación</h3>
+              <p class="dd-kpi-value" id="wf-turn">—</p>
+              <p class="dd-kpi-sub" id="wf-turn-sub"></p>
+            </article>
+          </div>
+          <div class="dd-wf-chart-wrap">
+            <p class="dd-wf-legend">
+              <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-port" aria-hidden="true"></span>Cartera Top 10</span>
+              <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-spy" aria-hidden="true"></span>SPY</span>
+            </p>
+            <div id="wf-chart" class="dd-wf-chart" role="img" aria-label="Curva de la cartera contra SPY, base 100"></div>
+          </div>
+          <div class="dd-table-wrap dd-wf-table-wrap">
+            <table class="dd-table dd-wf-table" id="wf-table">
+              <caption class="dd-sr-only">Últimas semanas de la simulación</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Cierre</th>
+                  <th scope="col">Cartera</th>
+                  <th scope="col">SPY</th>
+                  <th scope="col" title="Nombres que salieron del Top 10 al empezar esa semana">Cambios</th>
+                </tr>
+              </thead>
+              <tbody id="wf-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="insiders">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Qué compran los grandes</span>
+          <span class="dd-fold-hint" id="insider-caption">Compras netas de insiders, últimos 90 días.</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-insiders dd-panel" data-section="insiders" aria-label="Qué compran los grandes">
+          <h2 class="dd-sr-only">Qué compran los grandes</h2>
+          <div id="insider-list" class="dd-link-list">
+            <p class="dd-empty">Cargando…</p>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="patrones">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Escáner de patrones</span>
+          <span class="dd-fold-hint">Tocá un nombre para abrir la ficha</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-scan dd-panel" id="pattern-panel" data-section="patterns" aria-label="Escáner de patrones">
+          <h2 class="dd-sr-only">Escáner de patrones</h2>
+          <details class="dd-help">
+            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> De dónde sale</summary>
+            <p>Sale del precio que ya baja Alpaca. No es una señal de compra.</p>
+          </details>
+          <div class="dd-filter-group" id="pattern-tabs" role="tablist" aria-label="Patrones"></div>
+          <div id="pattern-list" class="dd-link-list">
+            <p class="dd-empty">Cargando…</p>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="analistas">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Analistas</span>
+          <span class="dd-fold-hint">% en compra. No entra en el Desk Score</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-analysts dd-panel" data-section="analysts" aria-label="Opinión de los analistas">
+          <h2 class="dd-sr-only">Analistas</h2>
+          <details class="dd-help">
+            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo leerlo</summary>
+            <p>Los analistas suelen ser optimistas y reaccionan tarde. Es contexto, no señal. El detalle de cada nombre está en la ficha.</p>
+          </details>
+          <div id="analyst-list" class="dd-link-list">
+            <p class="dd-empty">Cargando…</p>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="sectores">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Vista por sectores</span>
+          <span class="dd-fold-hint">Tocá un sector para filtrar el ranking</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-sectors dd-panel" data-section="sectors" aria-label="Vista por sectores">
+          <h2 class="dd-sr-only">Vista por sectores</h2>
+          <details class="dd-help">
+            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se lee</summary>
+            <p class="dd-sector-caption" id="sector-caption">
+              Acá se ve en qué sectores está la fuerza del universo.
+              Cada tarjeta promedia el Desk Score, el RS y el cambio del día,
+              y cuenta cuántos nombres están sobre la EMA200 y cuántos entran al Top 10 de hoy.
+              La flecha compara el RS medio de ahora con el de hace 4 semanas.
+              Es una lectura del tablero, no una recomendación.
+            </p>
+            <p class="dd-sector-note" id="sector-note">
+              No entran los ETFs: ni los benchmarks (SPY, QQQ, IWM, DIA) ni los de sector
+              (XLK, XLV y el resto). Son canastas, no acciones, y mezclarlos cambiaría el promedio.
+            </p>
+          </details>
+          <div id="sector-grid" class="dd-sector-grid" role="list">
+            <p class="dd-empty">Cargando…</p>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="rs">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">RS semanal</span>
+          <span class="dd-fold-hint">Fuerza relativa de las últimas semanas</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-rsboard dd-panel" data-section="rs-weekly" aria-label="RS semanal">
+          <h2 class="dd-sr-only">RS semanal</h2>
+          <details class="dd-help">
+            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Definición</summary>
+            <p id="rs-definition"></p>
+          </details>
+          <div class="dd-table-wrap">
+            <table class="dd-table dd-rs-table">
+              <caption class="dd-sr-only">RS Score semanal del universo</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Ticker</th>
+                  <th scope="col">RS ahora</th>
+                  <th scope="col">Hace 4 sem</th>
+                  <th scope="col">Cambio</th>
+                  <th scope="col">Serie</th>
+                </tr>
+              </thead>
+              <tbody id="rs-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="formulas">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Fórmulas</span>
+          <span class="dd-fold-hint">Cómo se calcula cada número</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-formulas dd-panel" data-section="formulas" aria-label="Fórmulas">
+          <h2 class="dd-sr-only">Fórmulas</h2>
+          <dl id="formula-list" class="dd-formula-list">
+            <p class="dd-empty">Cargando…</p>
+          </dl>
+        </section>
+      </div>
+    </details>
+
+    <details class="dd-fold" id="notas">
+      <summary class="dd-fold-summary">
+        <span>
+          <span class="dd-fold-title">Notas</span>
+          <span class="dd-fold-hint">Lo que dejó el último cálculo</span>
+        </span>
+      </summary>
+      <div class="dd-fold-body">
+        <section class="dd-notes dd-panel" data-section="notes" aria-label="Notas">
+          <h2 class="dd-sr-only">Notas</h2>
+          <details class="dd-help">
+            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se actualiza</summary>
+            <p class="dd-tip" id="data-refresh-tip">
+              El botón Actualizar y el refresco automático cada 5 min solo recargan <code>datos.json</code>.
+              Los precios nuevos se arman con <code>python3 build.py</code> (o el cron).
+            </p>
+          </details>
+          <ul id="notes-list" class="dd-notes-list"></ul>
+        </section>
+      </div>
+    </details>
   </main>
 
   <footer class="dd-footer" data-section="footer">
     <p class="dd-disclaimer">
-      <strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.
+      No es recomendación de compra ni de inversión.
       El Desk Score y el semáforo son un filtro de lectura y de riesgo: no predicen el retorno.
-      Uso interno / educativo. Angus.
     </p>
   </footer>
 
   <div id="ficha" class="dd-ficha" hidden role="region" aria-label="Ficha del ticker"></div>
 
-  <script src="app.js?v=25" defer></script>
+  <script src="app.js?v=31" defer></script>
 </body>
 </html>

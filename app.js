@@ -179,7 +179,10 @@
       card.setAttribute("data-regime", label === "—" ? "" : label);
     }
 
-    setText("generated-at", data.generated_at || "—");
+    var when = fmtArt(data.generated_at);
+    setText("generated-at", when || data.generated_at || "—");
+    var stamp = document.getElementById("generated-at");
+    if (stamp && data.generated_at) stamp.setAttribute("datetime", data.generated_at);
   }
 
 
@@ -499,6 +502,30 @@
     });
   }
 
+  function hourLabel(hour) {
+    var h = String(hour || "").toLowerCase();
+    if (h === "amc") return "después del cierre";
+    if (h === "bmo") return "antes de abrir";
+    if (h === "dmh") return "durante la rueda";
+    return hour || "";
+  }
+
+  function earnEpsLine(e) {
+    if (!e) return "";
+    var bits = [];
+    if (e.epsActual != null && e.epsActual !== "") {
+      bits.push("EPS " + fmtEsNum(e.epsActual, 2));
+    } else if (e.epsEstimate != null && e.epsEstimate !== "") {
+      bits.push("EPS est. " + fmtEsNum(e.epsEstimate, 2));
+    }
+    if (e.revenueActual != null && e.revenueActual !== "") {
+      bits.push("ingresos " + fmtUsdCompact(e.revenueActual));
+    } else if (e.revenueEstimate != null && e.revenueEstimate !== "") {
+      bits.push("ingresos est. " + fmtUsdCompact(e.revenueEstimate));
+    }
+    return bits.join(" · ");
+  }
+
   function renderEarnings(list) {
     var strip = document.getElementById("earnings-strip");
     if (!strip) return;
@@ -515,10 +542,16 @@
       chip.className = "dd-earn-chip";
       chip.setAttribute("data-symbol", e.symbol || "");
       if (e.hour) chip.setAttribute("data-hour", e.hour);
+      var spoken = hourLabel(e.hour);
+      var dateLabel = e.date ? fmtDayMonth(e.date) : "";
+      var eps = earnEpsLine(e);
+      var tip = [e.symbol, e.date, e.hour].filter(Boolean).join(" · ");
+      chip.title = tip;
       chip.innerHTML =
         tickerWithLogo(e, "dd-earn-sym") +
-        '<span class="dd-earn-date">' + escapeHtml(e.date || "") + "</span>" +
-        (e.hour ? '<span class="dd-earn-hour">' + escapeHtml(e.hour) + "</span>" : "");
+        (dateLabel ? '<span class="dd-earn-date">' + escapeHtml(dateLabel) + "</span>" : "") +
+        (spoken ? '<span class="dd-earn-hour">' + escapeHtml(spoken) + "</span>" : "") +
+        (eps ? '<span class="dd-earn-eps">' + escapeHtml(eps) + "</span>" : "");
       strip.appendChild(chip);
     });
   }
@@ -711,7 +744,7 @@
     var mm = String(now.getMinutes()).padStart(2, "0");
     var ss = String(now.getSeconds()).padStart(2, "0");
     el.hidden = false;
-    el.textContent = "UI " + hh + ":" + mm + ":" + ss;
+    el.textContent = "· " + hh + ":" + mm;
   }
 
   function setLoading(on) {
@@ -959,6 +992,8 @@
     if (!block || !block.text) {
       if (when) when.textContent = "";
       text.textContent = "Sin resumen en esta publicación. Se arma al correr build.py.";
+      var emptyBtn = document.getElementById("resumen-more");
+      if (emptyBtn) emptyBtn.hidden = true;
       return;
     }
     if (when) {
@@ -967,6 +1002,9 @@
       if (block.generated_at) when.setAttribute("datetime", block.generated_at);
     }
     text.textContent = block.text;
+    text.classList.remove("is-open");
+    text.classList.add("is-clamped");
+    syncClamp("resumen-text", "resumen-more");
   }
 
   function renderInsiders(block) {
@@ -1469,18 +1507,23 @@
       if (anyProv && block.earnings_note) legal += " " + block.earnings_note;
       fine.textContent = legal;
     }
-    var defNote = !legacy && block.definition_note
-      ? '<p class="dd-hist-def">' + escapeHtml(block.definition_note) + "</p>"
+    var helpParts = [];
+    if (!legacy && block.definition_note) {
+      helpParts.push('<p class="dd-hist-def">' + escapeHtml(block.definition_note) + "</p>");
+    }
+    if (block.dedup) helpParts.push('<p class="dd-hist-rule">' + escapeHtml(block.dedup) + "</p>");
+    if (block.universe_benchmark) helpParts.push('<p class="dd-hist-rule">' + escapeHtml(block.universe_benchmark) + "</p>");
+    var help = helpParts.length
+      ? '<details class="dd-help"><summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se arma</summary>' +
+        helpParts.join("") + "</details>"
       : "";
     root.innerHTML =
       sample +
-      defNote +
       '<p class="dd-hist-meta">' + daysLine + escapeHtml(latest) + "</p>" +
       '<p class="dd-hist-sentence">' + escapeHtml(block.sentence || "") + "</p>" +
       (block.todos_los_dias_sentence ? '<p class="dd-hist-alt">' + escapeHtml(block.todos_los_dias_sentence) + "</p>" : "") +
+      help +
       '<div class="dd-hist-groups">' + groups + "</div>" +
-      '<p class="dd-hist-rule">' + escapeHtml(block.dedup || "") + "</p>" +
-      (block.universe_benchmark ? '<p class="dd-hist-rule">' + escapeHtml(block.universe_benchmark) + "</p>" : "") +
       (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales reales de esta definición.</p>') +
       eqText +
       legacyHtml;
@@ -1687,6 +1730,8 @@
       '<p class="dd-regime-exposure-line">' + escapeHtml(line) + "</p>" +
       '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
       "</div></div>" +
+      '<details class="dd-help">' +
+      '<summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Ver el medidor</summary>' +
       rows +
       '<div class="dd-regime-hl">' +
       '<span class="dd-regime-hoy">HOY</span>' +
@@ -1697,7 +1742,200 @@
       "</span></div>" +
       '<p class="dd-regime-chart-title">% de activos sobre su EMA200 – últimos ~2 meses</p>' +
       '<div class="dd-regime-chart">' + regimeChartSvg(block.breadth_series) + "</div>" +
-      (footer ? '<p class="dd-regime-foot">' + escapeHtml(footer) + "</p>" : "");
+      (footer ? '<p class="dd-regime-foot">' + escapeHtml(footer) + "</p>" : "") +
+      "</details>";
+  }
+
+  function syncClamp(textId, btnId) {
+    var el = document.getElementById(textId);
+    var btn = document.getElementById(btnId);
+    if (!el || !btn) return;
+    window.requestAnimationFrame(function () {
+      if (el.classList.contains("is-open")) {
+        btn.hidden = false;
+        btn.textContent = "Ver menos";
+        return;
+      }
+      btn.hidden = el.scrollHeight <= el.clientHeight + 1;
+      btn.textContent = "Ver más";
+    });
+  }
+
+  function artTodayIso() {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function renderToday(data) {
+    var rows = (data && data.ranking) || [];
+    var stocks = 0;
+    var etfs = 0;
+    rows.forEach(function (r) {
+      if (!r.entry || r.entry.verdict !== "verde") return;
+      if (String(r.kind || "").toLowerCase() === "etf") etfs += 1;
+      else stocks += 1;
+    });
+    setText("today-clear", String(stocks));
+    var sub = stocks === 1 ? "acción" : "acciones";
+    if (etfs) sub += " · " + etfs + " ETF";
+    setText("today-clear-sub", sub);
+
+    var today = artTodayIso();
+    var upcoming = ((data && data.earnings) || []).filter(function (e) {
+      return today && String(e.date || "") >= today;
+    });
+    setText("today-earn", String(upcoming.length));
+    if (!upcoming.length) {
+      setText("today-earn-sub", "Nada pendiente esta semana");
+      return;
+    }
+    setText(
+      "today-earn-sub",
+      upcoming
+        .map(function (e) {
+          var when = String(e.date) === today ? "hoy" : fmtDayMonth(e.date);
+          var hour = hourLabel(e.hour);
+          return (e.symbol || "—") + " " + when + (hour ? ", " + hour : "");
+        })
+        .join(" · ")
+    );
+  }
+
+  var FORMULA_LABELS = {
+    desk_score: "Desk Score",
+    rs_score: "RS Score",
+    tendencia: "Tendencia",
+    fuerza_rs: "Fuerza RS",
+    contraccion: "Contracción",
+    vol_rel_20d: "Volumen relativo",
+    dist_ema200_pct: "Distancia a la EMA200",
+    regime: "Régimen del universo",
+    market_regime: "Régimen de mercado",
+    top10_return: "Retorno Top 10",
+    top10_entry: "Entró al Top 10",
+    top10_walkforward: "Simulación walk-forward",
+    pillar_points: "Puntos de cada pilar",
+    range_52w: "Rango de 52 semanas",
+    change_pct: "Cambio del día",
+    trend_gate: "Gate de tendencia",
+    rs_weekly: "RS semanal",
+    sectors: "Sectores",
+    patterns: "Patrones",
+    insiders: "Insiders",
+    fundamentals: "Salud de la empresa",
+    resumen: "Resumen del día",
+    historial_semaforo: "Historial del semáforo",
+    entry: "Semáforo",
+    analysts: "Analistas",
+  };
+
+  function renderFormulas(formulas) {
+    var root = document.getElementById("formula-list");
+    if (!root) return;
+    var keys = formulas && typeof formulas === "object" ? Object.keys(formulas) : [];
+    if (!keys.length) {
+      root.innerHTML = '<p class="dd-empty">Sin fórmulas en esta publicación.</p>';
+      return;
+    }
+    root.innerHTML = keys
+      .map(function (key) {
+        var val = formulas[key];
+        var text = val == null ? "—" : typeof val === "string" ? val : JSON.stringify(val);
+        return (
+          "<div><dt>" + escapeHtml(FORMULA_LABELS[key] || key) + "</dt><dd>" +
+          escapeHtml(text) + "</dd></div>"
+        );
+      })
+      .join("");
+  }
+
+  function renderAnalysts() {
+    var root = document.getElementById("analyst-list");
+    if (!root) return;
+    var rows = (state.ranking || []).filter(function (r) {
+      return String(r.kind || "").toLowerCase() !== "etf" && r.analysts && r.analysts.buy_pct != null;
+    });
+    rows.sort(function (a, b) {
+      return Number(b.analysts.buy_pct) - Number(a.analysts.buy_pct);
+    });
+    if (!rows.length) {
+      root.innerHTML = '<p class="dd-empty">Sin recomendaciones de analistas en esta publicación.</p>';
+      return;
+    }
+    root.innerHTML = rows
+      .map(function (r) {
+        var a = r.analysts;
+        var bits = [fmtEsSmart(a.buy_pct, 1) + "% compra"];
+        var total = (a.latest && a.latest.total) || a.total;
+        if (total) bits.push(total + (Number(total) === 1 ? " analista" : " analistas"));
+        if (a.trend_label) bits.push(a.trend_label);
+        var pt = a.price_target;
+        if (pt && pt.mean != null) bits.push("objetivo USD " + fmtEsNum(pt.mean, 2));
+        else if (pt && pt.median != null) bits.push("objetivo USD " + fmtEsNum(pt.median, 2));
+        if (pt && pt.low != null && pt.high != null) {
+          bits.push("rango " + fmtEsNum(pt.low, 2) + "–" + fmtEsNum(pt.high, 2));
+        }
+        return linkRow(r, bits.join(" · "));
+      })
+      .join("");
+  }
+
+  function fmtSignedPoints(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Math.round(Number(n) * 10) / 10;
+    var body = fmtNum(Math.abs(v), Math.abs(v - Math.round(v)) < 0.05 ? 0 : 1);
+    if (v > 0) return "+" + body;
+    if (v < 0) return "−" + body;
+    return body;
+  }
+
+  function renderRsBoard() {
+    var body = document.getElementById("rs-body");
+    var def = document.getElementById("rs-definition");
+    if (def) def.textContent = (state.rsWeekly && state.rsWeekly.definition) || RS_CAPTION_FALLBACK;
+    if (!body) return;
+    var rows = (state.ranking || []).filter(function (r) {
+      return r.rs_weekly && r.rs_weekly.length;
+    });
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5" class="dd-empty">Sin serie semanal. Se calcula al correr build.py.</td></tr>';
+      return;
+    }
+    rows.sort(function (a, b) {
+      return Number(b.rs_score || 0) - Number(a.rs_score || 0);
+    });
+    body.innerHTML = rows
+      .map(function (r) {
+        var series = r.rs_weekly || [];
+        var now = series[series.length - 1];
+        var ago = series.length > 4 ? series[series.length - 5] : null;
+        var delta = now != null && ago != null ? Number(now) - Number(ago) : null;
+        return (
+          '<tr data-symbol="' + escapeHtml(r.symbol) + '" tabindex="0" role="link" aria-label="Ver ficha de ' +
+          escapeHtml(r.symbol) + '"><td>' + tickerWithLogo(r, "dd-ticker") + "</td><td>" +
+          escapeHtml(now == null ? "—" : fmtNum(now, 1)) + "</td><td>" +
+          escapeHtml(ago == null ? "—" : fmtNum(ago, 1)) + '</td><td class="' + distClass(delta) + '">' +
+          escapeHtml(fmtSignedPoints(delta)) + "</td><td>" + sparklineSvg(series) + "</td></tr>"
+        );
+      })
+      .join("");
+  }
+
+  function fmtUsdCompact(n) {
+    if (n == null || Number.isNaN(Number(n))) return "";
+    var v = Number(n);
+    var sign = v < 0 ? "−" : "";
+    var a = Math.abs(v);
+    if (a >= 1e9) return sign + "USD " + fmtEsSmart(a / 1e9, 1) + " mil millones";
+    return fmtUsdShort(v);
   }
 
   function applyData(data) {
@@ -1711,6 +1949,7 @@
     renderKpis(data);
     renderMarketRegime(data);
     renderResumen(data);
+    renderToday(data);
     renderTop10(data.top10_return);
     renderWalkforward(data.top10_walkforward);
     renderHistorial(data.historial_semaforo);
@@ -1720,6 +1959,9 @@
     renderPatterns(data.patterns);
     applyFilters();
     renderNotes(data.notes);
+    renderAnalysts();
+    renderRsBoard();
+    renderFormulas(data.formulas);
     renderSampleNotice(data);
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
     document.title = state.baseTitle;
@@ -2355,6 +2597,7 @@
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     bindRowOpen("ranking-body");
     bindRowOpen("top10-body");
+    bindRowOpen("rs-body");
     var ficha = document.getElementById("ficha");
     if (ficha) {
       ficha.addEventListener("click", function (ev) {
@@ -2389,11 +2632,125 @@
     }, 120);
   });
 
+  function syncScrollPad() {
+    var bar = document.querySelector(".dd-topbar");
+    if (!bar) return;
+    var h = bar.offsetHeight + 8;
+    document.documentElement.style.setProperty("--dd-topbar-h", h + "px");
+  }
+
+  function bindTextMore() {
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("[data-clamp]");
+      if (!btn) return;
+      var el = document.getElementById(btn.getAttribute("data-clamp"));
+      if (!el) return;
+      var open = el.classList.toggle("is-open");
+      el.classList.toggle("is-clamped", !open);
+      btn.textContent = open ? "Ver menos" : "Ver más";
+    });
+  }
+
+  function bindSectionNav() {
+    var nav = document.querySelector(".dd-section-nav");
+    var links = nav ? [].slice.call(nav.querySelectorAll("a")) : [];
+    if (nav) {
+      nav.addEventListener("click", function (ev) {
+        var a = ev.target.closest("a");
+        if (!a || !nav.contains(a)) return;
+        var id = (a.getAttribute("href") || "").replace(/^#/, "");
+        var el = document.getElementById(id);
+        if (!el) return;
+        ev.preventDefault();
+        if (el.tagName === "DETAILS") el.open = true;
+        links.forEach(function (item) {
+          item.classList.remove("is-active");
+          item.removeAttribute("aria-current");
+        });
+        a.classList.add("is-active");
+        a.setAttribute("aria-current", "true");
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (id === "simulacion" && state.walkforward) {
+          window.setTimeout(function () { drawWalkforwardChart(state.walkforward); }, 80);
+        }
+      });
+    }
+    var sim = document.getElementById("simulacion");
+    if (sim) {
+      sim.addEventListener("toggle", function () {
+        if (sim.open && state.walkforward) drawWalkforwardChart(state.walkforward);
+      });
+    }
+    var clearBtn = document.getElementById("today-clear-btn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        state.flags.solo_verdes = true;
+        document.querySelectorAll('.dd-chip-toggle[data-flag="solo_verdes"]').forEach(function (btn) {
+          btn.classList.add("is-active");
+          btn.setAttribute("aria-pressed", "true");
+        });
+        applyFilters();
+        var ranking = document.getElementById("ranking");
+        if (ranking) ranking.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+    syncScrollPad();
+    window.addEventListener("resize", syncScrollPad);
+    if (!nav || !("IntersectionObserver" in window)) return;
+    var map = {};
+    links.forEach(function (a) {
+      map[(a.getAttribute("href") || "").replace(/^#/, "")] = a;
+    });
+    function band() {
+      var top = (document.querySelector(".dd-topbar") || {}).offsetHeight || 120;
+      var bottom = Math.max(80, window.innerHeight - top - 72);
+      return "-" + top + "px 0px -" + bottom + "px 0px";
+    }
+    var seen = {};
+    var obs = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) seen[entry.target.id] = entry.target;
+          else delete seen[entry.target.id];
+        });
+        var line = ((document.querySelector(".dd-topbar") || {}).offsetHeight || 0) + 20;
+        var best = null;
+        links.forEach(function (item) {
+          var id = (item.getAttribute("href") || "").replace(/^#/, "");
+          var el = seen[id];
+          if (!el) return;
+          if (el.getBoundingClientRect().top <= line) best = id;
+        });
+        if (!best) best = Object.keys(seen)[0];
+        var link = map[best];
+        if (!link) return;
+        links.forEach(function (a) {
+          a.classList.remove("is-active");
+          a.removeAttribute("aria-current");
+        });
+        link.classList.add("is-active");
+        link.setAttribute("aria-current", "true");
+        var scroller = link.parentNode;
+        if (scroller && scroller.scrollTo) {
+          var left = link.offsetLeft - scroller.clientWidth / 2 + link.offsetWidth / 2;
+          scroller.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+        }
+      },
+      { rootMargin: band(), threshold: 0.01 }
+    );
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+  }
+
   registerServiceWorker();
   bindFilters();
   bindRefresh();
   bindFichaNav();
   bindPatternTabs();
+  bindTextMore();
+  bindSectionNav();
   renderRoute();
   loadData({ silent: false }).then(startAuto);
 })();

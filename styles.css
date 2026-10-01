@@ -344,6 +344,7 @@ body {
 .dd-earn-chip {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
   background: var(--dd-bg-elevated);
   border: 1px solid var(--dd-border);
@@ -2041,6 +2042,7 @@ body.is-ficha .dd-footer {
   font-size: 0.78rem;
   text-align: right;
   line-height: 1.35;
+  white-space: normal;
 }
 
 .dd-flag-insider,
@@ -2857,5 +2859,468 @@ body.is-ficha .dd-footer {
 
   .dd-regime-exposure-line {
     font-size: 0.88rem;
+  }
+}
+
+/* ── Jerarquía simple: hoy, ranking, detalle plegado ── */
+
+:root {
+  --dd-radius-card: 16px;
+  --dd-shadow: none;
+  --dd-shadow-sm: none;
+  --dd-space: 14px;
+}
+
+body.is-ficha .dd-topbar {
+  display: none;
+}
+
+.dd-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(13, 13, 13, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--dd-border);
+}
+
+.dd-topbar .dd-header {
+  border-bottom: 0;
+  padding-top: 0.7rem;
+  padding-bottom: 0.15rem;
+}
+
+.dd-section-nav-inner {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  max-width: var(--dd-max);
+  margin: 0 auto;
+  padding: 0.35rem 1.25rem 0.65rem;
+  scrollbar-width: none;
+}
+
+.dd-section-nav-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.dd-section-nav a {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--dd-border);
+  background: transparent;
+  color: var(--dd-muted);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dd-section-nav a.is-active {
+  color: #fff;
+  border-color: rgba(255, 107, 53, 0.55);
+  background: var(--dd-accent-soft);
+}
+
+.dd-main {
+  gap: 0.8rem;
+  padding-top: 0.9rem;
+}
+
+#hoy,
+#top10,
+#ranking,
+#earnings,
+.dd-fold,
+.dd-more-label {
+  scroll-margin-top: var(--dd-topbar-h, 8.6rem);
+}
+
+.dd-hoy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dd-panel {
+  box-shadow: none;
+}
+
+.dd-panel:hover {
+  border-color: var(--dd-border-strong);
+}
+
+.dd-kpi-card:hover,
+.dd-top10-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.dd-section-title {
+  margin-bottom: 0.7rem;
+}
+
+.dd-section-sub {
+  margin-top: -0.35rem;
+}
+
+.dd-resumen-text {
+  margin-top: 0.55rem;
+}
+
+.dd-resumen-text.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dd-text-more {
+  appearance: none;
+  margin: 0.45rem 0 0;
+  padding: 0.35rem 0;
+  border: 0;
+  background: none;
+  color: var(--dd-accent-end);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dd-today-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.dd-today-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  background: var(--dd-card);
+  border: 1px solid var(--dd-border);
+  border-radius: 16px;
+  padding: 0.85rem 0.95rem;
+  min-height: 92px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dd-today-stat .dd-kpi-value {
+  font-size: 1.7rem;
+}
+
+.dd-today-stat .dd-kpi-sub {
+  color: var(--dd-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+#today-clear {
+  color: var(--dd-ok);
+}
+
+.dd-kpis-wrap .dd-kpis {
+  gap: 0.6rem;
+}
+
+.dd-kpis-wrap .dd-kpi-card {
+  background: rgba(255, 255, 255, 0.03);
+  min-height: 0;
+  padding: 0.75rem 0.8rem;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.dd-kpis-wrap .dd-kpi-value {
+  font-size: 1.35rem;
+  margin-top: 0.25rem;
+}
+
+.dd-help {
+  margin: 0.15rem 0 0.75rem;
+}
+
+.dd-help summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 32px;
+  cursor: pointer;
+  color: var(--dd-muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  list-style: none;
+}
+
+.dd-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.dd-help-i {
+  color: var(--dd-accent-end);
+  font-style: normal;
+}
+
+.dd-help p,
+.dd-help .dd-wf-caption,
+.dd-help .dd-sector-caption,
+.dd-help .dd-sector-note,
+.dd-help .dd-tip {
+  margin: 0.4rem 0 0;
+  color: var(--dd-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dd-score {
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dd-fg);
+}
+
+.dd-score.dd-score-high {
+  background: rgba(52, 211, 153, 0.16);
+  box-shadow: none;
+  color: var(--dd-ok);
+}
+
+.dd-score.dd-score-mid {
+  background: rgba(251, 191, 36, 0.16);
+  box-shadow: none;
+  color: var(--dd-warn);
+}
+
+.dd-score.dd-score-low {
+  background: rgba(248, 113, 113, 0.14);
+  box-shadow: none;
+  color: var(--dd-bad);
+}
+
+.dd-kind[data-kind="etf"],
+.dd-kind[data-kind="cedear_proxy"],
+.dd-kind[data-kind="us"] {
+  color: var(--dd-muted);
+  border-color: var(--dd-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dd-scroll-hint {
+  display: none;
+  margin: 0.15rem 0 0.4rem;
+  color: var(--dd-muted-dim);
+  font-size: 0.75rem;
+}
+
+.dd-more-label h2 {
+  margin: 0.35rem 0 0.1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dd-muted);
+}
+
+.dd-more-label p {
+  margin: 0;
+  color: var(--dd-muted-dim);
+  font-size: 0.85rem;
+}
+
+.dd-fold {
+  background: var(--dd-card);
+  border: 1px solid var(--dd-border);
+  border-radius: 16px;
+}
+
+.dd-fold-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 58px;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.dd-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dd-fold-summary::after {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.2rem;
+  border-right: 2px solid var(--dd-muted);
+  border-bottom: 2px solid var(--dd-muted);
+  transform: rotate(45deg) translateY(-2px);
+  flex: 0 0 auto;
+}
+
+.dd-fold[open] > .dd-fold-summary::after {
+  transform: rotate(-135deg) translateY(-2px);
+}
+
+.dd-fold-title {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dd-fold-hint {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--dd-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.dd-fold-body {
+  padding: 0.15rem 1rem 1rem;
+  border-top: 1px solid var(--dd-border);
+}
+
+.dd-fold-body .dd-panel {
+  background: transparent;
+  border: 0;
+  padding: 0.75rem 0 0;
+  border-radius: 0;
+}
+
+.dd-formula-list {
+  margin: 0;
+}
+
+.dd-formula-list > div {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--dd-border);
+}
+
+.dd-formula-list dt {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.dd-formula-list dd {
+  margin: 0.2rem 0 0;
+  color: var(--dd-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dd-earn-eps {
+  display: block;
+  width: 100%;
+  color: var(--dd-muted);
+  font-size: 0.75rem;
+}
+
+.dd-footer .dd-disclaimer {
+  color: var(--dd-muted-dim);
+  font-size: 0.78rem;
+}
+
+.dd-meta .dd-value {
+  word-break: normal;
+}
+
+@media (max-width: 720px) {
+  .dd-scroll-hint {
+    display: block;
+  }
+
+  .dd-topbar .dd-label {
+    display: none;
+  }
+
+  .dd-topbar .dd-meta .dd-value {
+    font-size: 0.78rem;
+  }
+
+  .dd-topbar .dd-refresh-status,
+  .dd-topbar .dd-last-ui-refresh:not([hidden]) {
+    display: inline;
+    margin-top: 0;
+  }
+
+  .dd-topbar .dd-logo {
+    width: 30px;
+    height: 28px;
+  }
+
+  .dd-topbar .dd-header {
+    padding: 0.4rem 0.75rem 0;
+    gap: 0.5rem;
+  }
+
+  .dd-section-nav-inner {
+    padding-top: 0.2rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .dd-topbar .dd-header-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .dd-topbar .dd-meta {
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .dd-topbar .dd-btn-refresh {
+    width: auto;
+    min-height: 36px;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .dd-topbar .dd-title {
+    font-size: 1.25rem;
+  }
+
+  .dd-section-nav-inner {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .dd-main,
+  .dd-footer {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .dd-today-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dd-today-stat .dd-kpi-value {
+    font-size: 1.45rem;
+  }
+
+  .dd-kpis-wrap .dd-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dd-fold-body,
+  .dd-fold-summary {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
   }
 }
