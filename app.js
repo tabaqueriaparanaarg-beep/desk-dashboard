@@ -170,16 +170,21 @@
       ctx.drawImage(img, 0, 0, size, size);
       var data = ctx.getImageData(0, 0, size, size).data;
       var opaque = 0;
-      var light = 0;
+      var accent = 0;
       var i;
       for (i = 0; i < data.length; i += 4) {
         if (data[i + 3] < 24) continue;
         opaque += 1;
-        var y = 0.3 * data[i] + 0.59 * data[i + 1] + 0.11 * data[i + 2];
-        if (y > 228) light += 1;
+        var r = data[i];
+        var g = data[i + 1];
+        var b = data[i + 2];
+        var y = 0.3 * r + 0.59 * g + 0.11 * b;
+        var sat = Math.max(r, g, b) - Math.min(r, g, b);
+        // Marca de color o trazo oscuro. Un cuadrado blanco liso no suma.
+        if (y < 210 || sat > 28) accent += 1;
       }
       if (opaque < 10) return true;
-      return light / opaque > 0.9;
+      return accent < 3;
     } catch (e) {
       return false;
     }

@@ -303,12 +303,44 @@ def fetch_logos(
     return out, notes
 
 
+_LOGO_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif")
+
+
+def logo_stem(filename: str) -> str:
+    """BRK.B.png → BRK.B. Path.stem alcanza: sólo saca la última extensión."""
+    name = str(filename)
+    for ext in _LOGO_EXTS:
+        if name.lower().endswith(ext):
+            return name[: -len(ext)].upper()
+    return Path(name).stem.upper()
+
+
+def logos_on_disk() -> dict[str, str]:
+    """ticker → archivo, para los que ya están en assets/logos."""
+    out: dict[str, str] = {}
+    if not LOGO_DIR.is_dir():
+        return out
+    for path in LOGO_DIR.iterdir():
+        if not path.is_file() or path.name == "index.json":
+            continue
+        if path.suffix.lower() not in _LOGO_EXTS:
+            continue
+        out[logo_stem(path.name)] = path.name
+    return out
+
+
 def logo_map_from_cache(symbols: list[str]) -> dict[str, str | None]:
+    """Cada ticker con archivo en disco queda mapeado, aunque el índice esté viejo."""
     index = load_logo_index()
+    on_disk = logos_on_disk()
     out: dict[str, str | None] = {}
     for s in symbols:
-        fname = index.get(s.upper())
-        out[s.upper()] = logo_rel_path(fname) if fname and (LOGO_DIR / fname).is_file() else None
+        key = s.upper()
+        fname = on_disk.get(key) or index.get(key)
+        if isinstance(fname, str) and fname and (LOGO_DIR / fname).is_file():
+            out[key] = logo_rel_path(fname)
+        else:
+            out[key] = None
     return out
 
 
