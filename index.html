@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=35" />
+  <link rel="stylesheet" href="styles.css?v=36" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -205,10 +205,10 @@
           <button type="button" class="dd-chip is-active" data-sector="">Todos</button>
         </div>
         <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
+          <button type="button" class="dd-chip dd-chip-toggle" data-flag="cedear" aria-pressed="false" title="Tiene CEDEAR en BYMA, según el listado de enero 2026. No es el filtro de tipo «CEDEAR proxy».">Con CEDEAR</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="rs_gt_70" aria-pressed="false">RS &gt; 70</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="solo_verdes" aria-pressed="false" title="Solo nombres sin alertas de riesgo. No es un filtro de compra.">Sin alertas</button>
-          <button type="button" class="dd-chip dd-chip-toggle" data-flag="cedear" aria-pressed="false" title="Tiene CEDEAR en BYMA, según el listado de enero 2026.">Con CEDEAR</button>
         </div>
         <div class="dd-filter-search">
           <label class="dd-sr-only" for="filter-search">Buscar ticker</label>
@@ -598,6 +598,6 @@
     </p>
   </footer>
 
-  <script src="app.js?v=35" defer></script>
+  <script src="app.js?v=36" defer></script>
 </body>
 </html>

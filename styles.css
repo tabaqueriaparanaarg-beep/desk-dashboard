@@ -423,6 +423,11 @@ body {
   padding-bottom: 0.15rem;
 }
 
+.dd-filter-group.dd-filter-flags {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
 .dd-chip {
   appearance: none;
   border: 1px solid var(--dd-border-strong);
