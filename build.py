@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import market_regime
+import rrg
 import signals
 
 ROOT = Path(__file__).resolve().parent
@@ -2554,6 +2555,27 @@ def main() -> None:
     notes.append(
         "Escáner: " + (", ".join(pat_bits) if pat_bits else "sin patrones con estos umbrales") + "."
     )
+
+    rrg_public = None
+    try:
+        # Historia larga (full_bars): el suavizado doble del RRG pide ~30 semanas.
+        rrg_public = rrg.build_rrg(full_bars, meta_by)
+        notes.append(
+            f"Rotación RRG: {len(rrg_public.get('series') or [])} curvas vs SPY "
+            f"({len(rrg_public.get('dates') or [])} semanas en el gráfico)."
+        )
+    except Exception as e:
+        print(f"  RRG falló (soft): {type(e).__name__}")
+        notes.append(f"Rotación RRG: fallo soft ({type(e).__name__}).")
+
+    confluence_public = None
+    try:
+        confluence_public = signals.build_confluence(rows, full_bars)
+        lit = sum(1 for r in (confluence_public.get("rows") or []) if (r.get("count") or 0) > 0)
+        notes.append(f"Señales: {lit} nombres con al menos una lectura activa. No es una compra.")
+    except Exception as e:
+        print(f"  señales falló (soft): {type(e).__name__}")
+        notes.append(f"Señales: fallo soft ({type(e).__name__}).")
     notes.append(
         f"Resumen comparado contra la base {previous_source}. "
         "No incluye tenedores institucionales (13F)."
@@ -2639,6 +2661,8 @@ def main() -> None:
         "sectors": sectors,
         "insider_buys": insider_buys,
         "patterns": pattern_scan,
+        "signals": confluence_public,
+        "rrg": rrg_public,
         "analyst_feed": analyst_feed,
         "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
@@ -2664,6 +2688,8 @@ def main() -> None:
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
             "rs_weekly": RS_WEEKLY_DEFINITION,
             "sectors": SECTOR_FORMULA,
+            "rrg": rrg.DEFINITION,
+            "signals": signals.CONFLUENCE_DEFINITION,
             "patterns": (
                 "breakout_52w: cierre >= máximo de las sesiones previas (hasta 252, mínimo 60), "
                 "o a <=2% de ese máximo con volumen > media de 50 sesiones. "

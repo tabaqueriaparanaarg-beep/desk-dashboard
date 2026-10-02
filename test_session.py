@@ -253,11 +253,13 @@ class HistoryLiveTests(unittest.TestCase):
 
     def test_repo_history_has_no_open_session(self) -> None:
         data = json.loads((ROOT / "historial_semaforo.json").read_text(encoding="utf-8"))
+        now = datetime.now(timezone.utc)
         dates = []
         for snap in data.get("snapshots") or []:
             self.assertTrue(snap.get("after_close"), snap.get("date"))
+            # Una foto commiteada tiene que ser de una rueda que Nueva York ya cerró.
+            self.assertTrue(historial.taken_after_close(str(snap.get("date")), now), snap.get("date"))
             dates.append(snap.get("date"))
-        self.assertNotIn("2026-10-01", dates)
         self.assertIn("2026-09-30", dates)
 
 
@@ -278,9 +280,11 @@ class WorkflowTests(unittest.TestCase):
         sw = (ROOT / "sw.js").read_text(encoding="utf-8")
         self.assertIn(ms.LIVE_BANNER, js)
         self.assertIn('id="session-banner"', html)
-        self.assertIn('VERSION = "dd-v32"', sw)
-        self.assertIn("app.js?v=32", html)
-        self.assertIn("app.js?v=32", sw)
+        self.assertIn('VERSION = "dd-v34"', sw)
+        self.assertIn("app.js?v=34", html)
+        self.assertIn("styles.css?v=34", html)
+        self.assertIn("app.js?v=34", sw)
+        self.assertIn("styles.css?v=34", sw)
 
 
 if __name__ == "__main__":
