@@ -1530,3 +1530,497 @@ def compose_resumen(today: dict, previous: dict | None) -> dict[str, Any]:
         "sentences": sentences,
         "compared_to": (previous or {}).get("generated_at") if previous else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Matriz de confluencia. No entra en el Desk Score ni en el semáforo.
+# Las lecturas de patrón (base, cruce EMA200, máximo) reusan el escáner.
+# ---------------------------------------------------------------------------
+# MACD clásico 12/26/9. El cruce alcista tiene que haber ocurrido en las
+# últimas 3 velas de ese marco (diario o semanal).
+MACD_FAST = 12
+MACD_SLOW = 26
+MACD_SIGNAL = 9
+MACD_CROSS_LOOKBACK = 3
+
+# RSI de Wilder, período 14. Activa si salió de sobreventa (cruzó 30 hacia
+# arriba en las últimas 5 velas) o si cruzó 50 hacia arriba en las últimas 3.
+# Estar arriba de 50 sin un cruce reciente no cuenta.
+RSI_PERIOD = 14
+RSI_OVERSOLD = 30.0
+RSI_OVERSOLD_LOOKBACK = 5
+RSI_MID = 50.0
+RSI_MID_LOOKBACK = 3
+
+# Rebote en la EMA200: el cierre está arriba, en las últimas 10 sesiones el
+# mínimo tocó la EMA o quedó a <= 1,5% por encima, y el precio ya venía de
+# arriba (no es el cruce fresco desde abajo: ese es `cruce_ema200`).
+REBOTE_LOOKBACK = 10
+REBOTE_NEAR_PCT = 1.5
+
+# El pilar de contracción ya es el proxy VCP (0–100). 70 o más enciende la
+# lectura aunque el escáner de base no haya marcado el lateral.
+CONTRACTION_MIN = 70.0
+
+# Contracción semanal propia: el escáner de base mira ventanas de 15–30
+# sesiones diarias. En velas semanales, además, 6 semanas con rango <= 10%
+# y el cierre en el 40% superior de ese rango.
+VCP_WEEKLY_BARS = 6
+VCP_WEEKLY_MAX_RANGE_PCT = 10.0
+VCP_WEEKLY_UPPER = 0.60
+
+# Pivote semanal: cierre en máximo de las semanas previas (hasta 52, mínimo
+# 12) y volumen de la semana sobre la media de las 10 anteriores.
+PIVOT_WEEKLY_MIN = 12
+PIVOT_WEEKLY_MAX = 52
+PIVOT_WEEKLY_VOL = 10
+
+# No hay EMA200 semanal: ~560 días de Alpaca no llegan a 200 semanas.
+CONFLUENCE_LIMITATION = (
+    "No se calcula rebote ni cruce de una EMA200 semanal: el historial que baja "
+    "Angus (unas 80 semanas) no alcanza para 200 velas semanales. "
+    "«Sobre medias» usa la SMA50 que ya calcula Angus, no una EMA50 aparte."
+)
+
+CONFLUENCE_DEFINITION = (
+    "Lecturas independientes del precio. Una activa no es una compra. "
+    "Diario — rebote EMA200: cierre arriba de la EMA200, mínimo a <=1,5% de la EMA "
+    f"en las últimas {REBOTE_LOOKBACK} sesiones, y el precio ya venía de arriba. "
+    "Cruce EMA200: el mismo cruce alcista del escáner (últimas 5 sesiones). "
+    f"MACD: la línea 12/26 cruzó hacia arriba a su señal de {MACD_SIGNAL} "
+    f"en las últimas {MACD_CROSS_LOOKBACK} velas. "
+    f"RSI({RSI_PERIOD}): cruzó {RSI_OVERSOLD:.0f} hacia arriba en las últimas "
+    f"{RSI_OVERSOLD_LOOKBACK} velas, o cruzó {RSI_MID:.0f} hacia arriba en las últimas "
+    f"{RSI_MID_LOOKBACK}. "
+    "VCP: base lateral del escáner, o pilar de contracción ≥ 70. "
+    "Pivote: máximo de 52 semanas del escáner (cierre en el máximo, o a ≤2% con volumen). "
+    "Sobre medias: cierre > SMA50 y cierre > EMA200. "
+    "Semanal — las mismas reglas de MACD y de RSI sobre velas semanales "
+    "(última sesión de cada semana ISO). "
+    f"Contracción semanal: base del escáner aplicada a esas velas, o {VCP_WEEKLY_BARS} "
+    f"semanas con rango ≤{VCP_WEEKLY_MAX_RANGE_PCT:.0f}% y cierre en el tramo superior. "
+    "Pivote semanal: cierre ≥ máximo de las semanas previas (hasta 52, mínimo 12) "
+    "con volumen sobre la media de 10 semanas. "
+    + CONFLUENCE_LIMITATION
+)
+
+# id, rótulo largo, rótulo corto de la columna, marco
+CONFLUENCE_COLUMNS: list[tuple[str, str, str, str]] = [
+    ("rebote_ema200", "Rebote EMA200", "Rebote", "D"),
+    ("cruce_ema200", "Cruce EMA200", "Cruce", "D"),
+    ("macd", "Cruce MACD", "MACD", "D"),
+    ("rsi", "RSI", "RSI", "D"),
+    ("vcp", "Base / contracción", "VCP", "D"),
+    ("pivote", "Pivote", "Pivote", "D"),
+    ("sobre_medias", "Sobre medias", "Medias", "D"),
+    ("macd_w", "Cruce MACD semanal", "MACD", "W"),
+    ("rsi_w", "RSI semanal", "RSI", "W"),
+    ("vcp_w", "Contracción semanal", "VCP", "W"),
+    ("pivote_w", "Pivote semanal", "Pivote", "W"),
+]
+
+
+def rsi_wilder(closes: list[float], period: int = RSI_PERIOD) -> list[float | None]:
+    """Misma RSI de Wilder que build.rsi (semilla = media simple de los primeros `period`)."""
+    out: list[float | None] = [None] * len(closes)
+    if len(closes) < period + 1:
+        return out
+    gains: list[float] = []
+    losses: list[float] = []
+    for i in range(1, len(closes)):
+        delta = closes[i] - closes[i - 1]
+        gains.append(max(delta, 0.0))
+        losses.append(max(-delta, 0.0))
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    def _rsi(ag: float, al: float) -> float:
+        if al == 0:
+            return 100.0
+        rs = ag / al
+        return 100.0 - (100.0 / (1.0 + rs))
+
+    out[period] = _rsi(avg_gain, avg_loss)
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        out[i + 1] = _rsi(avg_gain, avg_loss)
+    return out
+
+
+def macd_lines(
+    closes: list[float],
+    fast: int = MACD_FAST,
+    slow: int = MACD_SLOW,
+    signal: int = MACD_SIGNAL,
+) -> tuple[list[float | None], list[float | None]]:
+    """Línea MACD (EMA rápida − EMA lenta) y su señal (EMA de esa línea)."""
+    ema_fast = ema(closes, fast)
+    ema_slow = ema(closes, slow)
+    line: list[float | None] = []
+    for a, b in zip(ema_fast, ema_slow):
+        if a is None or b is None:
+            line.append(None)
+        else:
+            line.append(a - b)
+    valid_idx = [i for i, v in enumerate(line) if v is not None]
+    sig: list[float | None] = [None] * len(closes)
+    if len(valid_idx) >= signal:
+        smoothed = ema([line[i] for i in valid_idx if line[i] is not None], signal)
+        for j, i in enumerate(valid_idx):
+            sig[i] = smoothed[j]
+    return line, sig
+
+
+def crossed_above(
+    fast: list[float | None],
+    slow: list[float | None],
+    lookback: int,
+) -> bool:
+    """True si `fast` cruzó hacia arriba a `slow` en las últimas `lookback` velas."""
+    n = len(fast)
+    if n < 2 or lookback < 1:
+        return False
+    start = max(1, n - lookback)
+    for i in range(start, n):
+        prev_f, prev_s = fast[i - 1], slow[i - 1]
+        cur_f, cur_s = fast[i], slow[i]
+        if None in (prev_f, prev_s, cur_f, cur_s):
+            continue
+        if prev_f <= prev_s and cur_f > cur_s:
+            return True
+    return False
+
+
+def crossed_level(series: list[float | None], level: float, lookback: int) -> bool:
+    """True si la serie cruzó `level` hacia arriba en las últimas `lookback` velas."""
+    n = len(series)
+    if n < 2 or lookback < 1:
+        return False
+    start = max(1, n - lookback)
+    for i in range(start, n):
+        prev, cur = series[i - 1], series[i]
+        if prev is None or cur is None:
+            continue
+        if prev < level <= cur:
+            return True
+    return False
+
+
+def rebote_ema200(
+    closes: list[float],
+    lows: list[float],
+    ema200: list[float | None],
+    lookback: int = REBOTE_LOOKBACK,
+    near_pct: float = REBOTE_NEAR_PCT,
+) -> bool:
+    """Toque de la EMA200 desde arriba y cierre de vuelta por encima. No es el cruce fresco."""
+    n = len(closes)
+    if n < 2 or ema200[-1] is None or ema200[-1] <= 0 or closes[-1] <= ema200[-1]:
+        return False
+    start = max(0, n - lookback)
+    touched = False
+    for i in range(start, n):
+        level = ema200[i]
+        if level is None or level <= 0:
+            continue
+        if lows[i] <= level * (1.0 + near_pct / 100.0):
+            touched = True
+            break
+    if not touched:
+        return False
+    anchor = ema200[start]
+    if anchor is not None and closes[start] > anchor:
+        return True
+    above = 0
+    total = 0
+    for i in range(start, n - 1):
+        level = ema200[i]
+        if level is None:
+            continue
+        total += 1
+        if closes[i] > level:
+            above += 1
+    return total > 0 and above * 2 >= total
+
+
+def _bar_day_iso(bar: dict) -> date | None:
+    raw = str(bar.get("t") or "")[:10]
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def to_weekly_bars(bars: list[dict] | None) -> list[dict]:
+    """Una vela por semana ISO: apertura de la primera sesión, máximo, mínimo, cierre y volumen sumado."""
+    buckets: dict[tuple[int, int], dict] = {}
+    order: list[tuple[int, int]] = []
+    for bar in bars or []:
+        day = _bar_day_iso(bar)
+        close = _f(bar.get("c"))
+        if day is None or close is None:
+            continue
+        iso = day.isocalendar()
+        key = (int(iso[0]), int(iso[1]))
+        high = _f(bar.get("h"))
+        low = _f(bar.get("l"))
+        vol = _f(bar.get("v")) or 0.0
+        if key not in buckets:
+            order.append(key)
+            buckets[key] = {
+                "t": day.isoformat() + "T00:00:00Z",
+                "o": close,
+                "h": close if high is None else high,
+                "l": close if low is None else low,
+                "c": close,
+                "v": vol,
+            }
+            continue
+        slot = buckets[key]
+        slot["h"] = max(slot["h"], close if high is None else high)
+        slot["l"] = min(slot["l"], close if low is None else low)
+        slot["c"] = close
+        slot["v"] = float(slot["v"]) + vol
+        slot["t"] = day.isoformat() + "T00:00:00Z"
+    return [buckets[k] for k in order]
+
+
+def weekly_contraction(weekly: list[dict]) -> bool:
+    """Seis semanas apretadas, con el cierre en la parte alta del rango."""
+    if len(weekly) < VCP_WEEKLY_BARS:
+        return False
+    window = weekly[-VCP_WEEKLY_BARS :]
+    highs = [float(b["h"]) for b in window]
+    lows = [float(b["l"]) for b in window]
+    close = float(window[-1]["c"])
+    hi = max(highs)
+    lo = min(lows)
+    if close <= 0 or hi <= lo:
+        return False
+    if (hi - lo) / close * 100.0 > VCP_WEEKLY_MAX_RANGE_PCT:
+        return False
+    return (close - lo) / (hi - lo) >= VCP_WEEKLY_UPPER
+
+
+def weekly_pivot(weekly: list[dict]) -> bool:
+    """Cierre semanal en máximo reciente, con volumen sobre la media."""
+    n = len(weekly)
+    if n < PIVOT_WEEKLY_MIN + 1:
+        return False
+    highs = [float(b["h"]) for b in weekly]
+    vols = [float(b.get("v") or 0) for b in weekly]
+    prior = highs[-(PIVOT_WEEKLY_MAX + 1) : -1]
+    if len(prior) < PIVOT_WEEKLY_MIN:
+        return False
+    close = float(weekly[-1]["c"])
+    if close < max(prior):
+        return False
+    hist = [v for v in vols[-(PIVOT_WEEKLY_VOL + 1) : -1] if v > 0]
+    if len(hist) < PIVOT_WEEKLY_VOL:
+        return False
+    avg = sum(hist) / len(hist)
+    return avg > 0 and vols[-1] > avg
+
+
+def _pattern_map(patterns: list[dict] | None) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for pat in patterns or []:
+        if isinstance(pat, dict) and pat.get("id"):
+            out[str(pat["id"])] = pat
+    return out
+
+
+def evaluate_signals(
+    bars: list[dict] | None,
+    *,
+    patterns: list[dict] | None = None,
+    contraction: float | None = None,
+) -> dict[str, Any]:
+    """Banderas de la matriz para un ticker. No modifica el Desk Score.
+
+    `patterns` es la salida del escáner (si es None, se calcula acá).
+    `contraction` es el pilar 0–100 que ya arma build.py.
+    """
+    bars = list(bars or [])
+    if patterns is None:
+        patterns = detect_patterns(bars)
+    found = _pattern_map(patterns)
+    signals: dict[str, bool] = {col[0]: False for col in CONFLUENCE_COLUMNS}
+    details: dict[str, str] = {col[0]: "" for col in CONFLUENCE_COLUMNS}
+
+    parsed = _ohlcv(bars)
+    if parsed is not None:
+        closes, _highs, lows, _vols = parsed
+        ema200 = ema(closes, PATTERN_EMA_PERIOD)
+        sma50 = sma(closes, PATTERN_SMA_PERIOD)
+        if rebote_ema200(closes, lows, ema200):
+            signals["rebote_ema200"] = True
+            details["rebote_ema200"] = (
+                "El cierre está arriba de la EMA200 después de tocarla en las últimas sesiones"
+            )
+        if "ema200_cross_up" in found:
+            signals["cruce_ema200"] = True
+            details["cruce_ema200"] = str(found["ema200_cross_up"].get("detail") or "Cruce alcista de la EMA200")
+        macd_line, macd_sig = macd_lines(closes)
+        if crossed_above(macd_line, macd_sig, MACD_CROSS_LOOKBACK):
+            signals["macd"] = True
+            details["macd"] = "El MACD cruzó hacia arriba a su señal en las últimas 3 ruedas"
+        rsi = rsi_wilder(closes, RSI_PERIOD)
+        rsi_os = crossed_level(rsi, RSI_OVERSOLD, RSI_OVERSOLD_LOOKBACK)
+        rsi_mid = crossed_level(rsi, RSI_MID, RSI_MID_LOOKBACK)
+        if rsi_os or rsi_mid:
+            signals["rsi"] = True
+            if rsi_os and rsi_mid:
+                details["rsi"] = "El RSI salió de sobreventa y cruzó 50"
+            elif rsi_os:
+                details["rsi"] = "El RSI cruzó 30 hacia arriba"
+            else:
+                details["rsi"] = "El RSI cruzó 50 hacia arriba"
+        score = _f(contraction)
+        base = "base" in found
+        contracted = score is not None and score >= CONTRACTION_MIN
+        if base or contracted:
+            signals["vcp"] = True
+            if base and contracted:
+                details["vcp"] = f"Base del escáner y contracción en { _fmt_es(score, 0) }"
+            elif base:
+                details["vcp"] = str(found["base"].get("detail") or "Base lateral del escáner")
+            else:
+                details["vcp"] = f"Pilar de contracción en { _fmt_es(score or 0, 0) }"
+        if "breakout_52w" in found:
+            signals["pivote"] = True
+            details["pivote"] = str(found["breakout_52w"].get("detail") or "Máximo de 52 semanas")
+        if (
+            sma50[-1] is not None
+            and ema200[-1] is not None
+            and closes[-1] > sma50[-1]
+            and closes[-1] > ema200[-1]
+        ):
+            signals["sobre_medias"] = True
+            details["sobre_medias"] = "El cierre está arriba de la SMA50 y de la EMA200"
+
+        weekly = to_weekly_bars(bars)
+        if weekly:
+            w_closes = [float(b["c"]) for b in weekly]
+            w_macd, w_sig = macd_lines(w_closes)
+            if crossed_above(w_macd, w_sig, MACD_CROSS_LOOKBACK):
+                signals["macd_w"] = True
+                details["macd_w"] = "En velas semanales, el MACD cruzó hacia arriba a su señal"
+            w_rsi = rsi_wilder(w_closes, RSI_PERIOD)
+            w_os = crossed_level(w_rsi, RSI_OVERSOLD, RSI_OVERSOLD_LOOKBACK)
+            w_mid = crossed_level(w_rsi, RSI_MID, RSI_MID_LOOKBACK)
+            if w_os or w_mid:
+                signals["rsi_w"] = True
+                details["rsi_w"] = (
+                    "En velas semanales, el RSI salió de sobreventa o cruzó 50"
+                )
+            weekly_base = _detect_base(
+                [float(b["h"]) for b in weekly],
+                [float(b["l"]) for b in weekly],
+                w_closes,
+            )
+            tight = weekly_contraction(weekly)
+            if weekly_base or tight:
+                signals["vcp_w"] = True
+                if weekly_base and tight:
+                    details["vcp_w"] = "Base en velas semanales y rango corto de 6 semanas"
+                elif weekly_base:
+                    details["vcp_w"] = "Base en velas semanales, cerca de máximos"
+                else:
+                    details["vcp_w"] = "Seis semanas con el rango apretado y el cierre en la parte alta"
+            if weekly_pivot(weekly):
+                signals["pivote_w"] = True
+                details["pivote_w"] = "Cierre semanal en máximo reciente, con volumen sobre la media"
+
+    count = sum(1 for on in signals.values() if on)
+    return {"signals": signals, "details": details, "count": count}
+
+
+def _column_public() -> dict[str, list[dict[str, str]]]:
+    daily = []
+    weekly = []
+    for cid, label, short, frame in CONFLUENCE_COLUMNS:
+        item = {"id": cid, "label": label, "short": short}
+        if frame == "W":
+            weekly.append(item)
+        else:
+            daily.append(item)
+    return {"daily": daily, "weekly": weekly}
+
+
+def build_confluence(
+    rows: list[dict] | None,
+    bars_by_symbol: dict[str, list[dict]] | None = None,
+) -> dict[str, Any]:
+    """Bloque `signals` de datos.json. Orden: más lecturas activas primero."""
+    bars_by_symbol = bars_by_symbol or {}
+    built: list[dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict) or not row.get("symbol"):
+            continue
+        symbol = str(row["symbol"])
+        pillars = row.get("pillars") if isinstance(row.get("pillars"), dict) else {}
+        evaluated = evaluate_signals(
+            bars_by_symbol.get(symbol) or [],
+            patterns=row.get("patterns") if isinstance(row.get("patterns"), list) else None,
+            contraction=_f((pillars or {}).get("contraccion")),
+        )
+        score = _f(row.get("desk_score"))
+        built.append(
+            {
+                "symbol": symbol,
+                "name": row.get("name") or symbol,
+                "kind": row.get("kind") or "",
+                "sector": row.get("sector") or "",
+                "rank": row.get("rank"),
+                "desk_score": score,
+                "rs_score": _f(row.get("rs_score")),
+                "signals": evaluated["signals"],
+                "details": evaluated["details"],
+                "count": evaluated["count"],
+            }
+        )
+    built.sort(
+        key=lambda r: (
+            -int(r["count"]),
+            -(r["desk_score"] if isinstance(r["desk_score"], (int, float)) else -1),
+            str(r["symbol"]),
+        )
+    )
+    lists: list[dict[str, Any]] = []
+    quiet: list[str] = []
+    for cid, label, _short, frame in CONFLUENCE_COLUMNS:
+        hits = []
+        for row in built:
+            if not (row["signals"] or {}).get(cid):
+                continue
+            hits.append(
+                {
+                    "symbol": row["symbol"],
+                    "name": row["name"],
+                    "desk_score": row["desk_score"],
+                    "rank": row["rank"],
+                    "detail": (row["details"] or {}).get(cid) or "",
+                }
+            )
+        if not hits:
+            quiet.append(label)
+            continue
+        lists.append(
+            {
+                "id": cid,
+                "label": label,
+                "timeframe": frame,
+                "count": len(hits),
+                "rows": hits,
+            }
+        )
+    return {
+        "definition": CONFLUENCE_DEFINITION,
+        "limitation": CONFLUENCE_LIMITATION,
+        "columns": _column_public(),
+        "rows": built,
+        "lists": lists,
+        "quiet": quiet,
+    }

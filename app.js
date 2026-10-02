@@ -25,6 +25,12 @@
     historial: null,
     patternTab: "breakout_52w",
     patternScan: null,
+    page: "resumen",
+    rrg: null,
+    rrgFilter: "sector",
+    rrgFrame: 0,
+    rrgTimer: null,
+    signalsBlock: null,
   };
 
   var HEALTH_SPECS = [
@@ -792,8 +798,12 @@
     syncSectorActive();
     applyFilters();
     if (scroll && state.sector) {
-      var el = document.querySelector('[data-section="ranking"]');
-      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if ((location.hash || "") === "#ranking") {
+        var el = document.getElementById("ranking");
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        location.hash = "#ranking";
+      }
     }
   }
 
@@ -1875,6 +1885,8 @@
     rs_weekly: "RS semanal",
     sectors: "Sectores",
     patterns: "Patrones",
+    signals: "Señales",
+    rrg: "Rotación (RRG)",
     insiders: "Insiders",
     fundamentals: "Salud de la empresa",
     resumen: "Resumen del día",
@@ -2008,6 +2020,9 @@
     renderAnalysts();
     renderRsBoard();
     renderFormulas(data.formulas);
+    renderPodium();
+    renderSignals(data.signals);
+    renderRrg(data.rrg);
     renderSampleNotice(data);
     renderSessionBanner(data);
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
@@ -2538,6 +2553,7 @@
       "</div></header>" +
       entryBlock(row) +
       analystBlock(row) +
+      signalFichaBlock(row) +
       '<section class="dd-ficha-card" aria-label="Patrones">' +
       '<h2 class="dd-ficha-kicker">Patrones</h2>' +
       patternChips(row) +
@@ -2573,33 +2589,119 @@
     document.title = row.symbol + " · Angus";
   }
 
+  var PAGE_BY_HASH = {
+    "": "resumen",
+    resumen: "resumen",
+    hoy: "resumen",
+    formulas: "resumen",
+    notas: "resumen",
+    score: "score",
+    top10: "score",
+    ranking: "score",
+    sectores: "score",
+    rs: "score",
+    historial: "score",
+    simulacion: "score",
+    senales: "senales",
+    patrones: "senales",
+    rotacion: "rotacion",
+    analisis: "analisis",
+    insiders: "analisis",
+    analistas: "analisis",
+  };
+
+  function routeKey() {
+    var raw = (location.hash || "").replace(/^#/, "");
+    try {
+      raw = decodeURIComponent(raw);
+    } catch (e) {}
+    return raw;
+  }
+
+  function pageFromHash() {
+    if (parseTickerHash()) return "analisis";
+    var key = routeKey().toLowerCase();
+    if (key === "señales") return "senales";
+    if (key === "rotación") return "rotacion";
+    if (key === "análisis" || key === "analisis") return "analisis";
+    if (key === "fórmulas") return "resumen";
+    return PAGE_BY_HASH[key] || "resumen";
+  }
+
+  function showPage(page) {
+    state.page = page;
+    document.querySelectorAll(".dd-pane").forEach(function (el) {
+      el.classList.toggle("is-on", el.getAttribute("data-page") === page);
+    });
+    document.querySelectorAll(".dd-tabbar a").forEach(function (a) {
+      var on = a.getAttribute("data-page") === page;
+      a.classList.toggle("is-active", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+    if (page !== "rotacion") stopRrgPlay();
+    if (page === "score" && state.walkforward) {
+      var sim = document.getElementById("simulacion");
+      if (sim && sim.open) {
+        window.requestAnimationFrame(function () { drawWalkforwardChart(state.walkforward); });
+      }
+    }
+    if (page === "rotacion") {
+      window.requestAnimationFrame(drawRrg);
+    }
+  }
+
+  function renderAnalisisEmpty() {
+    var root = document.getElementById("ficha");
+    if (!root) return;
+    root.hidden = false;
+    root.innerHTML =
+      '<p class="dd-ficha-empty">Elegí un ticker para ver la ficha. Podés buscarlo arriba o tocar una fila en Score, Señales o Rotación.</p>';
+    if (state.baseTitle) document.title = state.baseTitle;
+    state.fichaSym = null;
+  }
+
+  var lastNavHash = null;
+
   function renderRoute() {
     var sym = parseTickerHash();
-    var ficha = document.getElementById("ficha");
-    if (!sym) {
-      var was = document.body.classList.contains("is-ficha");
-      document.body.classList.remove("is-ficha");
-      if (ficha) {
-        ficha.hidden = true;
-        ficha.innerHTML = "";
+    var hash = location.hash || "";
+    var moved = hash !== lastNavHash;
+    lastNavHash = hash;
+    var key = routeKey();
+    var page = pageFromHash();
+    var enteringTicker = sym && state.fichaSym !== sym;
+    showPage(page);
+    if (sym) {
+      state.fichaSym = sym;
+      var search = document.getElementById("analisis-search");
+      if (search && document.activeElement !== search) search.value = sym;
+      renderFicha(sym);
+      if (moved && enteringTicker) {
+        window.scrollTo(0, 0);
+        var back = document.getElementById("ficha-back");
+        if (back) back.focus();
       }
-      if (state.baseTitle) document.title = state.baseTitle;
-      if (was) window.scrollTo(0, state.listScroll || 0);
-      state.fichaSym = null;
       return;
     }
-    var entering = state.fichaSym !== sym || !document.body.classList.contains("is-ficha");
-    if (entering && !document.body.classList.contains("is-ficha")) {
-      state.listScroll = window.scrollY || 0;
-    }
-    state.fichaSym = sym;
-    document.body.classList.add("is-ficha");
-    if (ficha) ficha.hidden = false;
-    renderFicha(sym);
-    if (entering) {
+    state.fichaSym = null;
+    if (state.baseTitle) document.title = state.baseTitle;
+    if (page === "analisis") renderAnalisisEmpty();
+    if (!moved) return;
+    var foldId = key.toLowerCase();
+    if (foldId === "fórmulas") foldId = "formulas";
+    var fold = document.getElementById(foldId);
+    if (fold && fold.tagName === "DETAILS") fold.open = true;
+    var target = document.getElementById(foldId);
+    if (target && foldId && foldId !== page) {
+      window.setTimeout(function () {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 40);
+    } else {
       window.scrollTo(0, 0);
-      var back = document.getElementById("ficha-back");
-      if (back) back.focus();
+    }
+    if (foldId === "simulacion" && state.walkforward) {
+      window.setTimeout(function () { drawWalkforwardChart(state.walkforward); }, 80);
     }
   }
 
@@ -2645,6 +2747,15 @@
     bindRowOpen("ranking-body");
     bindRowOpen("top10-body");
     bindRowOpen("rs-body");
+    bindRowOpen("senales-body");
+    var podio = document.getElementById("podio-body");
+    if (podio) {
+      podio.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("[data-symbol]");
+        if (!btn || !podio.contains(btn)) return;
+        openTicker(btn.getAttribute("data-symbol"));
+      });
+    }
     var ficha = document.getElementById("ficha");
     if (ficha) {
       ficha.addEventListener("click", function (ev) {
@@ -2698,30 +2809,423 @@
     });
   }
 
-  function bindSectionNav() {
-    var nav = document.querySelector(".dd-section-nav");
-    var links = nav ? [].slice.call(nav.querySelectorAll("a")) : [];
-    if (nav) {
-      nav.addEventListener("click", function (ev) {
-        var a = ev.target.closest("a");
-        if (!a || !nav.contains(a)) return;
-        var id = (a.getAttribute("href") || "").replace(/^#/, "");
-        var el = document.getElementById(id);
-        if (!el) return;
-        ev.preventDefault();
-        if (el.tagName === "DETAILS") el.open = true;
-        links.forEach(function (item) {
-          item.classList.remove("is-active");
-          item.removeAttribute("aria-current");
-        });
-        a.classList.add("is-active");
-        a.setAttribute("aria-current", "true");
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-        if (id === "simulacion" && state.walkforward) {
-          window.setTimeout(function () { drawWalkforwardChart(state.walkforward); }, 80);
-        }
-      });
+  var RRG_COLOR = {
+    liderando: "#34D399",
+    mejorando: "#38BDF8",
+    debilitandose: "#FBBF24",
+    rezagado: "#F87171",
+  };
+  var SIG_DAILY = [
+    ["rebote_ema200", "Rebote"],
+    ["cruce_ema200", "Cruce"],
+    ["macd", "MACD"],
+    ["rsi", "RSI"],
+    ["vcp", "VCP"],
+    ["pivote", "Pivote"],
+    ["sobre_medias", "Medias"],
+  ];
+  var SIG_WEEKLY = [
+    ["macd_w", "MACD"],
+    ["rsi_w", "RSI"],
+    ["vcp_w", "VCP"],
+    ["pivote_w", "Pivote"],
+  ];
+
+  function sigCols(block) {
+    var cols = (block && block.columns) || {};
+    function pack(list, fallback) {
+      var out = (list || []).map(function (c) {
+        return [c.id, c.short || c.label || c.id];
+      }).filter(function (c) { return c[0]; });
+      return out.length ? out : fallback;
     }
+    return { daily: pack(cols.daily, SIG_DAILY), weekly: pack(cols.weekly, SIG_WEEKLY) };
+  }
+
+  function renderPodium() {
+    var root = document.getElementById("podio");
+    var body = document.getElementById("podio-body");
+    if (!root || !body) return;
+    var rows = (state.ranking || []).filter(function (r) { return r && r.rank != null; });
+    rows.sort(function (a, b) { return Number(a.rank) - Number(b.rank); });
+    rows = rows.slice(0, 3);
+    if (!rows.length) {
+      root.hidden = true;
+      body.innerHTML = "";
+      return;
+    }
+    root.hidden = false;
+    body.innerHTML = rows.map(function (r, i) {
+      var sub = [r.name, r.sector].filter(Boolean).join(" · ");
+      var score = i === 0
+        ? gaugeHtml(r.desk_score)
+        : '<p class="dd-podio-score">' + escapeHtml(r.desk_score == null ? "—" : fmtEsSmart(r.desk_score, 1)) + "</p>";
+      return (
+        '<button type="button" class="dd-podio-card' + (i === 0 ? " is-first" : "") +
+        '" data-symbol="' + escapeHtml(r.symbol) + '">' +
+        '<span class="dd-podio-pos">' + (i + 1) + "</span>" +
+        score +
+        '<span class="dd-podio-id">' + logoHtml(r.symbol, logoFor(r), i === 0 ? 36 : 28) +
+        "<span><strong>" + escapeHtml(r.symbol) + "</strong>" +
+        (sub ? "<em>" + escapeHtml(sub) + "</em>" : "") +
+        "</span></span></button>"
+      );
+    }).join("");
+  }
+
+  function renderSignals(block) {
+    state.signalsBlock = block || null;
+    var head = document.getElementById("senales-head");
+    var body = document.getElementById("senales-body");
+    var lists = document.getElementById("senales-lists");
+    var def = document.getElementById("senales-def");
+    if (def) {
+      def.textContent = (block && block.definition) ||
+        "Sale del precio que ya baja Angus. Una lectura activa no es una compra.";
+    }
+    var cols = sigCols(block);
+    if (head) {
+      function ths(list) {
+        return list.map(function (c) {
+          return '<th scope="col">' + escapeHtml(c[1]) + "</th>";
+        }).join("");
+      }
+      head.innerHTML =
+        "<tr>" +
+        '<th scope="col" class="dd-sticky-col dd-col-ticker" rowspan="2">Ticker</th>' +
+        '<th scope="colgroup" colspan="' + cols.daily.length + '">Diario</th>' +
+        '<th scope="colgroup" colspan="' + cols.weekly.length + '">Semanal</th>' +
+        '<th scope="col" rowspan="2">RS</th>' +
+        "</tr><tr>" + ths(cols.daily) + ths(cols.weekly) + "</tr>";
+    }
+    var rows = (block && block.rows) || [];
+    if (body) {
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="14" class="dd-empty">Sin matriz en esta publicación. Se calcula al correr build.py.</td></tr>';
+      } else {
+        body.innerHTML = rows.map(function (r) {
+          function dots(list) {
+            return list.map(function (c) {
+              var on = r.signals && r.signals[c[0]];
+              return '<td><span class="dd-sigdot' + (on ? " is-on" : "") + '" title="' +
+                escapeHtml(c[1] + (on ? ": activa" : ": no")) + '"></span></td>';
+            }).join("");
+          }
+          var count = r.count != null ? r.count : 0;
+          return (
+            '<tr data-symbol="' + escapeHtml(r.symbol) + '" tabindex="0" role="link" aria-label="Ver ficha de ' +
+            escapeHtml(r.symbol) + '"><td class="dd-sticky-col dd-col-ticker"><span class="dd-sig-ticker">' +
+            tickerWithLogo(r, "dd-ticker") +
+            '<span class="dd-sig-n' + (count >= 4 ? " is-hot" : "") + '" title="Lecturas activas">' +
+            escapeHtml(String(count)) + "</span></span></td>" +
+            dots(cols.daily) + dots(cols.weekly) +
+            "<td>" + escapeHtml(r.rs_score == null ? "—" : fmtNum(r.rs_score, 1)) + "</td></tr>"
+          );
+        }).join("");
+      }
+    }
+    if (!lists) return;
+    var groups = (block && block.lists) || [];
+    if (!block) {
+      lists.innerHTML = '<p class="dd-empty">Las listas por señal aparecen cuando build.py publica la matriz.</p>';
+      return;
+    }
+    var html = groups.map(function (g) {
+      var items = (g.rows || []).map(function (r) {
+        return linkRow(r, r.detail || "");
+      }).join("");
+      var marco = g.timeframe === "W" ? "Semanal" : "Diario";
+      return (
+        '<section class="dd-sig-list"><h3>' + escapeHtml(g.label) +
+        ' <span class="dd-sig-count">' + escapeHtml(marco + " · " + g.count) + "</span></h3>" +
+        '<div class="dd-link-list">' + items + "</div></section>"
+      );
+    }).join("");
+    if (block.quiet && block.quiet.length) {
+      html += '<p class="dd-sig-quiet">Sin lecturas: ' + escapeHtml(block.quiet.join(", ")) + ".</p>";
+    }
+    if (block.limitation) {
+      html += '<p class="dd-sig-quiet">' + escapeHtml(block.limitation) + "</p>";
+    }
+    lists.innerHTML = html || '<p class="dd-empty">Ninguna lectura activa con estos umbrales.</p>';
+  }
+
+  function signalFichaBlock(row) {
+    var block = state.signalsBlock;
+    if (!block || !row) return "";
+    var hit = null;
+    (block.rows || []).forEach(function (r) {
+      if (String(r.symbol) === String(row.symbol)) hit = r;
+    });
+    if (!hit) return "";
+    var cols = sigCols(block);
+    var on = cols.daily.concat(cols.weekly).filter(function (c) {
+      return hit.signals && hit.signals[c[0]];
+    });
+    var chips = on.length
+      ? '<div class="dd-sig-chips">' + on.map(function (c) {
+        return '<span class="dd-sig-chip">' + escapeHtml(c[1]) + "</span>";
+      }).join("") + "</div>"
+      : '<p class="dd-ficha-empty">Sin lecturas activas en esta rueda.</p>';
+    return (
+      '<section class="dd-ficha-card" aria-label="Señales">' +
+      '<h2 class="dd-ficha-kicker">Señales · ' + escapeHtml(String(hit.count || 0)) + "</h2>" +
+      chips +
+      '<p class="dd-ficha-note">Lectura del precio. No es una recomendación de compra.</p></section>'
+    );
+  }
+
+  function rrgSeries() {
+    var all = (state.rrg && state.rrg.series) || [];
+    var f = state.rrgFilter || "sector";
+    return all.filter(function (s) {
+      if (f === "all") return true;
+      if (f === "stock") return s.group === "stock";
+      if (f === "etf") return s.group === "sector" || s.group === "benchmark";
+      return s.group === "sector";
+    });
+  }
+
+  function stopRrgPlay() {
+    if (state.rrgTimer) {
+      window.clearInterval(state.rrgTimer);
+      state.rrgTimer = null;
+    }
+    var btn = document.getElementById("rrg-play");
+    if (btn) {
+      btn.textContent = "Play";
+      btn.setAttribute("aria-pressed", "false");
+    }
+  }
+
+  function renderRrgNotes() {
+    var ul = document.getElementById("rrg-notes");
+    if (!ul) return;
+    var timeline = state.rrg && state.rrg.notes_by_date;
+    var notes;
+    if (timeline && timeline.length) {
+      var i = Math.max(0, Math.min(timeline.length - 1, state.rrgFrame || 0));
+      notes = timeline[i] || [];
+      if (!notes.length) {
+        notes = ["Esta semana ningún ETF de sector cambió de cuadrante respecto del SPY."];
+      }
+    } else {
+      notes = (state.rrg && state.rrg.notes) || [];
+    }
+    ul.innerHTML = notes.map(function (n) {
+      return "<li>" + escapeHtml(n) + "</li>";
+    }).join("");
+  }
+
+  function renderRrg(block) {
+    state.rrg = block || null;
+    var dates = (block && block.dates) || [];
+    var max = Math.max(0, dates.length - 1);
+    var slider = document.getElementById("rrg-slider");
+    if (!state.rrgTimer) state.rrgFrame = frameFromQuery(max);
+    if (state.rrgFrame > max) state.rrgFrame = max;
+    if (slider) {
+      slider.max = String(max);
+      slider.value = String(state.rrgFrame);
+      slider.disabled = dates.length < 2;
+    }
+    var def = document.getElementById("rrg-def");
+    if (def) {
+      def.textContent = (block && block.definition) ||
+        "Rotación relativa contra el SPY, con cierres semanales. El centro es 100.";
+    }
+    renderRrgNotes();
+    drawRrg();
+  }
+
+  function frameFromQuery(max) {
+    var raw = "";
+    try {
+      raw = new URLSearchParams(location.search).get("frame") || "";
+    } catch (e) {
+      raw = "";
+    }
+    if (raw === "") return max;
+    var n = Number(raw);
+    if (Number.isNaN(n)) return max;
+    return Math.max(0, Math.min(max, Math.round(n)));
+  }
+
+  function rrgFrameLabel() {
+    var dates = (state.rrg && state.rrg.dates) || [];
+    var el = document.getElementById("rrg-frame-label");
+    if (!el) return;
+    if (!dates.length) {
+      el.textContent = "—";
+      return;
+    }
+    var i = Math.max(0, Math.min(dates.length - 1, state.rrgFrame || 0));
+    el.textContent = fmtDayMonth(dates[i]) + " · " + (i + 1) + "/" + dates.length;
+  }
+
+  function drawRrg() {
+    var host = document.getElementById("rrg-chart");
+    if (!host) return;
+    var tip = document.getElementById("rrg-tip");
+    if (tip) tip.hidden = true;
+    rrgFrameLabel();
+    renderRrgNotes();
+    var dates = (state.rrg && state.rrg.dates) || [];
+    var series = rrgSeries();
+    var labels = (state.rrg && state.rrg.quadrants) || {
+      liderando: "Liderando",
+      debilitandose: "Debilitándose",
+      rezagado: "Rezagado",
+      mejorando: "Mejorando",
+    };
+    if (!dates.length || !series.length) {
+      host.innerHTML = '<p class="dd-empty">Sin curva de rotación en esta publicación. Hacen falta varias semanas de cierres.</p>';
+      host.setAttribute("aria-label", "Sin gráfico de rotación");
+      return;
+    }
+    var frame = Math.max(0, Math.min(dates.length - 1, state.rrgFrame || 0));
+    var tail = (state.rrg && state.rrg.tail) || 12;
+    var valsX = [];
+    var valsY = [];
+    series.forEach(function (s) {
+      (s.points || []).forEach(function (p) {
+        if (!p) return;
+        valsX.push(Number(p.ratio));
+        valsY.push(Number(p.momentum));
+      });
+    });
+    if (!valsX.length) {
+      host.innerHTML = '<p class="dd-empty">Estos nombres todavía no tienen puntos en la ventana.</p>';
+      return;
+    }
+    function extent(vals) {
+      var min = 100;
+      var max = 100;
+      vals.forEach(function (v) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+      });
+      var span = Math.max(4, max - min);
+      var pad = span * 0.14;
+      return [min - pad, max + pad];
+    }
+    var xDom = extent(valsX);
+    var yDom = extent(valsY);
+    var w = 640;
+    var h = 420;
+    var padL = 52;
+    var padR = 18;
+    var padT = 28;
+    var padB = 42;
+    var innerW = w - padL - padR;
+    var innerH = h - padT - padB;
+    function xAt(v) {
+      return padL + ((v - xDom[0]) / (xDom[1] - xDom[0])) * innerW;
+    }
+    function yAt(v) {
+      return padT + (1 - (v - yDom[0]) / (yDom[1] - yDom[0])) * innerH;
+    }
+    var xMid = xAt(100);
+    var yMid = yAt(100);
+    var quads =
+      '<rect x="' + padL + '" y="' + padT + '" width="' + (xMid - padL) + '" height="' + (yMid - padT) + '" fill="rgba(56,189,248,0.08)"/>' +
+      '<rect x="' + xMid + '" y="' + padT + '" width="' + (padL + innerW - xMid) + '" height="' + (yMid - padT) + '" fill="rgba(52,211,153,0.08)"/>' +
+      '<rect x="' + padL + '" y="' + yMid + '" width="' + (xMid - padL) + '" height="' + (padT + innerH - yMid) + '" fill="rgba(248,113,113,0.08)"/>' +
+      '<rect x="' + xMid + '" y="' + yMid + '" width="' + (padL + innerW - xMid) + '" height="' + (padT + innerH - yMid) + '" fill="rgba(251,191,36,0.08)"/>';
+    function qLabel(text, x, y, anchor) {
+      return '<text x="' + x + '" y="' + y + '" text-anchor="' + anchor +
+        '" fill="#8d8d8d" font-size="11" font-family="Plus Jakarta Sans, Inter, sans-serif">' +
+        escapeHtml(text) + "</text>";
+    }
+    var names =
+      qLabel(labels.mejorando || "Mejorando", padL + 8, padT + 16, "start") +
+      qLabel(labels.liderando || "Liderando", padL + innerW - 8, padT + 16, "end") +
+      qLabel(labels.rezagado || "Rezagado", padL + 8, padT + innerH - 8, "start") +
+      qLabel(labels.debilitandose || "Debilitándose", padL + innerW - 8, padT + innerH - 8, "end");
+    var axes =
+      '<line x1="' + xMid.toFixed(1) + '" y1="' + padT + '" x2="' + xMid.toFixed(1) + '" y2="' + (padT + innerH) + '" stroke="rgba(255,255,255,0.28)"/>' +
+      '<line x1="' + padL + '" y1="' + yMid.toFixed(1) + '" x2="' + (padL + innerW) + '" y2="' + yMid.toFixed(1) + '" stroke="rgba(255,255,255,0.28)"/>' +
+      '<text x="' + padL + '" y="16" fill="#a0a0a0" font-size="11" font-family="Plus Jakarta Sans, Inter, sans-serif">RS-Momentum ↑</text>' +
+      '<text x="' + (padL + innerW) + '" y="' + (h - 8) + '" text-anchor="end" fill="#a0a0a0" font-size="11" font-family="Plus Jakarta Sans, Inter, sans-serif">RS-Ratio →</text>';
+    var showNames = state.rrgFilter !== "stock" && state.rrgFilter !== "all";
+    var trails = series.map(function (s) {
+      var pts = s.points || [];
+      var chunks = [];
+      var cur = [];
+      var from = Math.max(0, frame - tail + 1);
+      for (var i = from; i <= frame && i < pts.length; i++) {
+        if (!pts[i]) {
+          if (cur.length) chunks.push(cur);
+          cur = [];
+        } else {
+          cur.push(pts[i]);
+        }
+      }
+      if (cur.length) chunks.push(cur);
+      var head = frame < pts.length ? pts[frame] : null;
+      var color = RRG_COLOR[(head && head.quadrant) || "liderando"] || "#34D399";
+      var lines = chunks.map(function (chunk) {
+        if (chunk.length < 2) return "";
+        var d = chunk.map(function (p, k) {
+          return (k ? "L" : "M") + xAt(p.ratio).toFixed(1) + "," + yAt(p.momentum).toFixed(1);
+        }).join("");
+        return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>';
+      }).join("");
+      if (!head) return lines;
+      var cx = xAt(head.ratio);
+      var cy = yAt(head.momentum);
+      var rad = s.group === "stock" ? 4.2 : 6.4;
+      var name = "";
+      if (showNames || s.group === "sector") {
+        if (state.rrgFilter !== "stock") {
+          var anchor = cx > w - 78 ? "end" : "start";
+          var lx = anchor === "end" ? cx - 8 : cx + 8;
+          name = '<text x="' + lx.toFixed(1) + '" y="' + (cy + 4).toFixed(1) + '" text-anchor="' + anchor +
+            '" fill="#f5f5f5" font-size="11" font-weight="600" font-family="Plus Jakarta Sans, Inter, sans-serif">' +
+            escapeHtml(s.symbol) + "</text>";
+        }
+      }
+      var tip = escapeHtml(s.symbol + " · " + (labels[head.quadrant] || head.quadrant));
+      return lines +
+        '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + rad + '" fill="' + color + '"/>' +
+        '<circle class="dd-rrg-hit" data-rrg-symbol="' + escapeHtml(s.symbol) +
+        '" data-rrg-name="' + escapeHtml(s.display || s.name || s.symbol) +
+        '" data-rrg-ratio="' + escapeHtml(fmtEsNum(head.ratio, 2)) +
+        '" data-rrg-mom="' + escapeHtml(fmtEsNum(head.momentum, 2)) +
+        '" data-rrg-quad="' + escapeHtml(labels[head.quadrant] || head.quadrant) +
+        '" data-rrg-date="' + escapeHtml(fmtDayMonth(head.date)) +
+        '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="16" fill="transparent"><title>' + tip + "</title></circle>" +
+        name;
+    }).join("");
+    host.innerHTML =
+      '<svg class="dd-rrg-svg" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="Rotación relativa al ' +
+      escapeHtml(fmtDayMonth(dates[frame])) + '">' +
+      quads + names + axes + trails + "</svg>";
+  }
+
+  function showRrgTip(hit, ev) {
+    var tip = document.getElementById("rrg-tip");
+    var stage = document.querySelector(".dd-rrg-stage");
+    if (!tip || !stage || !hit) return;
+    tip.innerHTML =
+      "<strong>" + escapeHtml(hit.getAttribute("data-rrg-symbol") || "") + "</strong>" +
+      "<span>" + escapeHtml(hit.getAttribute("data-rrg-name") || "") + "</span>" +
+      "<span>" + escapeHtml(hit.getAttribute("data-rrg-quad") || "") + " · " +
+      escapeHtml(hit.getAttribute("data-rrg-date") || "") + "</span>" +
+      "<span>RS-Ratio " + escapeHtml(hit.getAttribute("data-rrg-ratio") || "—") +
+      " · RS-Momentum " + escapeHtml(hit.getAttribute("data-rrg-mom") || "—") + "</span>";
+    tip.hidden = false;
+    var rect = stage.getBoundingClientRect();
+    var left = (ev.clientX - rect.left) + 12;
+    var top = (ev.clientY - rect.top) - 72;
+    if (left > rect.width - 190) left = rect.width - 200;
+    if (left < 8) left = 8;
+    if (top < 8) top = 8;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function bindSectionNav() {
     var sim = document.getElementById("simulacion");
     if (sim) {
       sim.addEventListener("toggle", function () {
@@ -2737,58 +3241,134 @@
           btn.setAttribute("aria-pressed", "true");
         });
         applyFilters();
-        var ranking = document.getElementById("ranking");
-        if (ranking) ranking.scrollIntoView({ behavior: "smooth", block: "start" });
+        if ((location.hash || "") === "#ranking") {
+          var ranking = document.getElementById("ranking");
+          if (ranking && ranking.scrollIntoView) ranking.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          location.hash = "#ranking";
+        }
+      });
+    }
+    var filters = document.getElementById("rrg-filters");
+    if (filters) {
+      filters.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("[data-rrg]");
+        if (!btn || !filters.contains(btn)) return;
+        state.rrgFilter = btn.getAttribute("data-rrg") || "sector";
+        filters.querySelectorAll("[data-rrg]").forEach(function (chip) {
+          chip.classList.toggle("is-active", chip === btn);
+        });
+        var tip = document.getElementById("rrg-tip");
+        if (tip) tip.hidden = true;
+        drawRrg();
+      });
+    }
+    var play = document.getElementById("rrg-play");
+    if (play) {
+      play.addEventListener("click", function () {
+        var dates = (state.rrg && state.rrg.dates) || [];
+        if (dates.length < 2) return;
+        if (state.rrgTimer) {
+          stopRrgPlay();
+          return;
+        }
+        if (state.rrgFrame >= dates.length - 1) state.rrgFrame = 0;
+        play.textContent = "Pausa";
+        play.setAttribute("aria-pressed", "true");
+        state.rrgTimer = window.setInterval(function () {
+          var max = dates.length - 1;
+          state.rrgFrame += 1;
+          if (state.rrgFrame >= max) {
+            state.rrgFrame = max;
+            stopRrgPlay();
+          }
+          var slider = document.getElementById("rrg-slider");
+          if (slider) slider.value = String(state.rrgFrame);
+          drawRrg();
+        }, 700);
+        drawRrg();
+      });
+    }
+    var slider = document.getElementById("rrg-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        stopRrgPlay();
+        state.rrgFrame = Number(slider.value) || 0;
+        drawRrg();
+      });
+    }
+    var chart = document.getElementById("rrg-chart");
+    if (chart) {
+      chart.addEventListener("click", function (ev) {
+        var hit = ev.target.closest("[data-rrg-symbol]");
+        var tip = document.getElementById("rrg-tip");
+        if (!hit) {
+          if (tip) tip.hidden = true;
+          return;
+        }
+        showRrgTip(hit, ev);
+      });
+      chart.addEventListener("mousemove", function (ev) {
+        var hit = ev.target.closest("[data-rrg-symbol]");
+        if (!hit) return;
+        showRrgTip(hit, ev);
+      });
+    }
+    var stage = document.querySelector(".dd-rrg-stage");
+    if (stage) {
+      stage.addEventListener("mouseleave", function () {
+        var tip = document.getElementById("rrg-tip");
+        if (tip) tip.hidden = true;
+      });
+    }
+    var search = document.getElementById("analisis-search");
+    var suggest = document.getElementById("analisis-suggest");
+    function paintSuggest() {
+      if (!suggest || !search) return;
+      var q = String(search.value || "").trim().toUpperCase();
+      if (!q) {
+        suggest.hidden = true;
+        suggest.innerHTML = "";
+        return;
+      }
+      var hits = (state.ranking || []).filter(function (r) {
+        return String(r.symbol || "").toUpperCase().indexOf(q) !== -1 ||
+          String(r.name || "").toUpperCase().indexOf(q) !== -1;
+      }).slice(0, 8);
+      if (!hits.length) {
+        suggest.hidden = false;
+        suggest.innerHTML = '<p class="dd-empty">Ningún ticker con ese texto.</p>';
+        return;
+      }
+      suggest.hidden = false;
+      suggest.innerHTML = hits.map(function (r) {
+        return '<button type="button" data-symbol="' + escapeHtml(r.symbol) + '">' +
+          logoHtml(r.symbol, logoFor(r), 22) +
+          "<strong>" + escapeHtml(r.symbol) + "</strong><span>" + escapeHtml(r.name || "") + "</span></button>";
+      }).join("");
+    }
+    if (search) {
+      search.addEventListener("input", paintSuggest);
+      search.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        var q = String(search.value || "").trim().toUpperCase();
+        var exact = (state.ranking || []).filter(function (r) {
+          return String(r.symbol || "").toUpperCase() === q;
+        })[0];
+        if (exact) openTicker(exact.symbol);
+      });
+    }
+    if (suggest) {
+      suggest.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("[data-symbol]");
+        if (!btn || !suggest.contains(btn)) return;
+        openTicker(btn.getAttribute("data-symbol"));
+        suggest.hidden = true;
       });
     }
     syncScrollPad();
     window.addEventListener("resize", syncScrollPad);
-    if (!nav || !("IntersectionObserver" in window)) return;
-    var map = {};
-    links.forEach(function (a) {
-      map[(a.getAttribute("href") || "").replace(/^#/, "")] = a;
-    });
-    function band() {
-      var top = (document.querySelector(".dd-topbar") || {}).offsetHeight || 120;
-      var bottom = Math.max(80, window.innerHeight - top - 72);
-      return "-" + top + "px 0px -" + bottom + "px 0px";
-    }
-    var seen = {};
-    var obs = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) seen[entry.target.id] = entry.target;
-          else delete seen[entry.target.id];
-        });
-        var line = ((document.querySelector(".dd-topbar") || {}).offsetHeight || 0) + 20;
-        var best = null;
-        links.forEach(function (item) {
-          var id = (item.getAttribute("href") || "").replace(/^#/, "");
-          var el = seen[id];
-          if (!el) return;
-          if (el.getBoundingClientRect().top <= line) best = id;
-        });
-        if (!best) best = Object.keys(seen)[0];
-        var link = map[best];
-        if (!link) return;
-        links.forEach(function (a) {
-          a.classList.remove("is-active");
-          a.removeAttribute("aria-current");
-        });
-        link.classList.add("is-active");
-        link.setAttribute("aria-current", "true");
-        var scroller = link.parentNode;
-        if (scroller && scroller.scrollTo) {
-          var left = link.offsetLeft - scroller.clientWidth / 2 + link.offsetWidth / 2;
-          scroller.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
-        }
-      },
-      { rootMargin: band(), threshold: 0.01 }
-    );
-    Object.keys(map).forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) obs.observe(el);
-    });
   }
 
   registerServiceWorker();
