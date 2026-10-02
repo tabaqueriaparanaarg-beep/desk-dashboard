@@ -3,6 +3,8 @@
   "use strict";
 
   var AUTO_MS = 5 * 60 * 1000;
+  var PAGE_SIZE = 40;
+  var RRG_STOCK_LIMIT = 28;
   var state = {
     ranking: [],
     logos: {},
@@ -12,7 +14,14 @@
     sector: "",
     sectorLabel: "",
     sectors: null,
-    flags: { above_ema200: false, rs_gt_70: false, solo_verdes: false },
+    flags: { above_ema200: false, rs_gt_70: false, solo_verdes: false, cedear: false },
+    rankPage: 0,
+    sigPage: 0,
+    sigSearch: "",
+    sigSector: "",
+    sigOnly: false,
+    rrgSector: "",
+    fichas: null,
     search: "",
     autoTimer: null,
     loading: false,
@@ -142,15 +151,57 @@
   }
 
   // onerror delegado (capture): errores de <img> no burbujean, pero sí se capturan.
+  function markLogoFallback(img) {
+    var wrap = img && img.parentNode;
+    if (!wrap || !wrap.classList || !wrap.classList.contains("dd-tlogo")) return;
+    wrap.classList.add("dd-tlogo-fallback");
+    wrap.textContent = wrap.getAttribute("data-initials") || "?";
+  }
+
+  function logoLooksBlank(img) {
+    try {
+      var canvas = document.createElement("canvas");
+      var size = 16;
+      canvas.width = size;
+      canvas.height = size;
+      var ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return false;
+      ctx.clearRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      var data = ctx.getImageData(0, 0, size, size).data;
+      var opaque = 0;
+      var light = 0;
+      var i;
+      for (i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 24) continue;
+        opaque += 1;
+        var y = 0.3 * data[i] + 0.59 * data[i + 1] + 0.11 * data[i + 2];
+        if (y > 228) light += 1;
+      }
+      if (opaque < 10) return true;
+      return light / opaque > 0.9;
+    } catch (e) {
+      return false;
+    }
+  }
+
   document.addEventListener(
     "error",
     function (ev) {
       var img = ev.target;
-      if (!img || img.tagName !== "IMG" || !img.parentNode) return;
+      if (!img || img.tagName !== "IMG") return;
+      markLogoFallback(img);
+    },
+    true
+  );
+  document.addEventListener(
+    "load",
+    function (ev) {
+      var img = ev.target;
+      if (!img || img.tagName !== "IMG") return;
       var wrap = img.parentNode;
-      if (!wrap.classList || !wrap.classList.contains("dd-tlogo")) return;
-      wrap.classList.add("dd-tlogo-fallback");
-      wrap.textContent = wrap.getAttribute("data-initials") || "?";
+      if (!wrap || !wrap.classList || !wrap.classList.contains("dd-tlogo")) return;
+      if (logoLooksBlank(img)) markLogoFallback(img);
     },
     true
   );
@@ -573,7 +624,9 @@
       if (state.flags.above_ema200 && !r.above_ema200) return false;
       if (state.flags.rs_gt_70 && !((r.rs_score || 0) > 70)) return false;
       if (state.flags.solo_verdes && !(r.entry && r.entry.verdict === "verde")) return false;
-      if (q && String(r.symbol || "").toUpperCase().indexOf(q) === -1) return false;
+      if (state.flags.cedear && !r.cedear) return false;
+      if (q && String(r.symbol || "").toUpperCase().indexOf(q) === -1 &&
+          String(r.name || "").toUpperCase().indexOf(q) === -1) return false;
       return true;
     });
   }
@@ -708,10 +761,43 @@
     });
   }
 
+  function pageWindow(rows, page) {
+    var total = (rows || []).length;
+    var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    var current = Math.max(0, Math.min(page || 0, pages - 1));
+    var start = current * PAGE_SIZE;
+    return {
+      page: current,
+      pages: pages,
+      start: start,
+      rows: (rows || []).slice(start, start + PAGE_SIZE),
+      total: total,
+    };
+  }
+
+  function paintPager(id, windowed) {
+    var root = document.getElementById(id);
+    if (!root) return;
+    var label = document.getElementById(id === "rank-pager" ? "rank-page" : "sig-page");
+    var show = windowed.total > PAGE_SIZE;
+    root.hidden = !show;
+    if (!show) return;
+    var from = windowed.total ? windowed.start + 1 : 0;
+    var to = Math.min(windowed.total, windowed.start + windowed.rows.length);
+    if (label) label.textContent = from + "–" + to + " · " + (windowed.page + 1) + "/" + windowed.pages;
+    var prev = root.querySelector("button:first-of-type");
+    var next = root.querySelector("button:last-of-type");
+    if (prev) prev.disabled = windowed.page <= 0;
+    if (next) next.disabled = windowed.page >= windowed.pages - 1;
+  }
+
   function applyFilters() {
     var filtered = filteredRanking();
-    renderRanking(filtered);
+    var windowed = pageWindow(filtered, state.rankPage);
+    state.rankPage = windowed.page;
+    renderRanking(windowed.rows);
     updateFilterCount(filtered.length, state.ranking.length);
+    paintPager("rank-pager", windowed);
   }
 
   function renderNotes(notes) {
@@ -795,6 +881,7 @@
     if (next && next === state.sector) next = "";
     state.sector = next;
     state.sectorLabel = next ? sectorLabelFor(next) : "";
+    state.rankPage = 0;
     syncSectorActive();
     applyFilters();
     if (scroll && state.sector) {
@@ -1115,6 +1202,9 @@
       return head + '<p class="dd-ficha-empty">Sin datos. Los ETF no tienen fundamentos de empresa.</p></section>';
     }
     var fund = row && row.fundamentals;
+    if (!fund) {
+      return head + '<p class="dd-ficha-empty">Cargando datos. Se completa de a poco, sin pasarnos del límite de Finnhub.</p></section>';
+    }
     var metrics = (fund && fund.metrics) || {};
     var vs = (fund && fund.vs_sector) || {};
     var cells = [];
@@ -1151,7 +1241,7 @@
     }
     var ins = row && row.insiders;
     if (!ins || (ins.net_shares == null && ins.open_market_count == null)) {
-      return head + '<p class="dd-ficha-empty">Sin datos</p></section>';
+      return head + '<p class="dd-ficha-empty">Cargando datos. Se completa de a poco, sin pasarnos del límite de Finnhub.</p></section>';
     }
     var money = ins.net_value_usd == null ? "" : " · " + fmtUsdShort(ins.net_value_usd) + (ins.value_approx ? " aprox." : "");
     var latest = ins.latest_date ? " · última " + fmtDayMonth(ins.latest_date) : "";
@@ -1246,7 +1336,7 @@
     }
     var a = row && row.analysts;
     if (!a) {
-      return head + '<p class="dd-ficha-empty">Sin datos todavía. Se completa de a poco para no pasarnos del límite de Finnhub.</p></section>';
+      return head + '<p class="dd-ficha-empty">Cargando datos. Se completa de a poco, sin pasarnos del límite de Finnhub.</p></section>';
     }
     var latest = a.latest;
     if (!latest || !latest.total) {
@@ -2085,6 +2175,7 @@
         });
         btn.classList.add("is-active");
         state.kind = btn.getAttribute("data-kind") || "";
+        state.rankPage = 0;
         applyFilters();
       });
     }
@@ -2096,6 +2187,7 @@
         state.flags[flag] = !state.flags[flag];
         btn.classList.toggle("is-active", state.flags[flag]);
         btn.setAttribute("aria-pressed", state.flags[flag] ? "true" : "false");
+        state.rankPage = 0;
         applyFilters();
       });
     });
@@ -2104,6 +2196,7 @@
     if (search) {
       search.addEventListener("input", function () {
         state.search = search.value || "";
+        state.rankPage = 0;
         applyFilters();
       });
     }
@@ -2204,6 +2297,36 @@
     }
     var m = /^\/t\/([A-Za-z0-9._-]+)$/.exec(h);
     return m ? m[1].toUpperCase() : null;
+  }
+
+  function ensureFichas() {
+    if (state.fichas) return Promise.resolve(state.fichas);
+    if (state.fichasPromise) return state.fichasPromise;
+    state.fichasPromise = fetch("fichas.json?ts=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (data) {
+        state.fichas = data && typeof data === "object" ? data : {};
+        return state.fichas;
+      })
+      .catch(function () {
+        state.fichas = {};
+        return state.fichas;
+      });
+    return state.fichasPromise;
+  }
+
+  function mergedRow(sym) {
+    var row = rowBySymbol(sym);
+    if (!row) return row;
+    var book = state.fichas || {};
+    var extra = book[row.symbol] || book[String(sym || "").toUpperCase()];
+    if (!extra) return row;
+    var copy = {};
+    Object.keys(row).forEach(function (k) { copy[k] = row[k]; });
+    ["fundamentals", "insiders", "analysts", "patterns"].forEach(function (k) {
+      if (extra[k] != null) copy[k] = extra[k];
+    });
+    return copy;
   }
 
   function rowBySymbol(sym) {
@@ -2451,7 +2574,7 @@
         '<p class="dd-ficha-empty">Cargando…</p></div>';
       return;
     }
-    var row = rowBySymbol(sym);
+    var row = mergedRow(sym);
     if (!row) {
       var msg = state.loadError || ("No hay ficha para " + sym + " en este ranking.");
       root.innerHTML =
@@ -2677,6 +2800,9 @@
       var search = document.getElementById("analisis-search");
       if (search && document.activeElement !== search) search.value = sym;
       renderFicha(sym);
+      ensureFichas().then(function () {
+        if (parseTickerHash() === sym) renderFicha(sym);
+      });
       if (moved && enteringTicker) {
         window.scrollTo(0, 0);
         var back = document.getElementById("ficha-back");
@@ -2873,6 +2999,39 @@
     }).join("");
   }
 
+  function filterSignalRows(rows) {
+    var q = (state.sigSearch || "").trim().toUpperCase();
+    return (rows || []).filter(function (r) {
+      if (state.sigOnly && !(r.count > 0)) return false;
+      if (state.sigSector && r.sector !== state.sigSector) return false;
+      if (!q) return true;
+      return String(r.symbol || "").toUpperCase().indexOf(q) !== -1 ||
+        String(r.name || "").toUpperCase().indexOf(q) !== -1;
+    });
+  }
+
+  function fillSignalSectors() {
+    var select = document.getElementById("sig-sector");
+    var rrgSelect = document.getElementById("rrg-sector");
+    var sectors = {};
+    (state.ranking || []).forEach(function (r) {
+      if (!r || !r.sector || String(r.kind || "").toLowerCase() === "etf") return;
+      sectors[r.sector] = true;
+    });
+    function fill(el, current, firstLabel) {
+      if (!el) return;
+      var value = current || "";
+      var html = '<option value="">' + escapeHtml(firstLabel) + "</option>";
+      Object.keys(sectors).sort().forEach(function (sector) {
+        html += '<option value="' + escapeHtml(sector) + '">' + escapeHtml(sectorLabelFor(sector)) + "</option>";
+      });
+      el.innerHTML = html;
+      el.value = value;
+    }
+    fill(select, state.sigSector, "Todos los sectores");
+    fill(rrgSelect, state.rrgSector, "Mayor RS, todos los sectores");
+  }
+
   function renderSignals(block) {
     state.signalsBlock = block || null;
     var head = document.getElementById("senales-head");
@@ -2898,10 +3057,18 @@
         '<th scope="col" rowspan="2">RS</th>' +
         "</tr><tr>" + ths(cols.daily) + ths(cols.weekly) + "</tr>";
     }
-    var rows = (block && block.rows) || [];
+    var allSignalRows = (block && block.rows) || [];
+    var filteredSignals = filterSignalRows(allSignalRows);
+    var windowedSignals = pageWindow(filteredSignals, state.sigPage);
+    state.sigPage = windowedSignals.page;
+    var rows = windowedSignals.rows;
+    paintPager("sig-pager", windowedSignals);
+    fillSignalSectors();
     if (body) {
-      if (!rows.length) {
+      if (!allSignalRows.length) {
         body.innerHTML = '<tr><td colspan="14" class="dd-empty">Sin matriz en esta publicación. Se calcula al correr build.py.</td></tr>';
+      } else if (!filteredSignals.length) {
+        body.innerHTML = '<tr><td colspan="14" class="dd-empty">Ningún ticker con ese filtro.</td></tr>';
       } else {
         body.innerHTML = rows.map(function (r) {
           function dots(list) {
@@ -2925,7 +3092,19 @@
       }
     }
     if (!lists) return;
-    var groups = (block && block.lists) || [];
+    var allowed = {};
+    filteredSignals.forEach(function (r) { allowed[r.symbol] = true; });
+    var groups = ((block && block.lists) || []).map(function (g) {
+      var hits = (g.rows || []).filter(function (r) { return allowed[r.symbol]; });
+      return {
+        id: g.id,
+        label: g.label,
+        timeframe: g.timeframe,
+        count: hits.length,
+        rows: hits.slice(0, 12),
+        more: Math.max(0, hits.length - 12),
+      };
+    }).filter(function (g) { return g.count; });
     if (!block) {
       lists.innerHTML = '<p class="dd-empty">Las listas por señal aparecen cuando build.py publica la matriz.</p>';
       return;
@@ -2938,7 +3117,9 @@
       return (
         '<section class="dd-sig-list"><h3>' + escapeHtml(g.label) +
         ' <span class="dd-sig-count">' + escapeHtml(marco + " · " + g.count) + "</span></h3>" +
-        '<div class="dd-link-list">' + items + "</div></section>"
+        '<div class="dd-link-list">' + items + "</div>" +
+        (g.more ? '<p class="dd-sig-quiet">y ' + g.more + " más con esta lectura.</p>" : "") +
+        "</section>"
       );
     }).join("");
     if (block.quiet && block.quiet.length) {
@@ -2975,15 +3156,44 @@
     );
   }
 
+  function rrgRs(symbol) {
+    var row = rowBySymbol(symbol);
+    if (!row || row.rs_score == null || Number.isNaN(Number(row.rs_score))) return -1;
+    return Number(row.rs_score);
+  }
+
   function rrgSeries() {
     var all = (state.rrg && state.rrg.series) || [];
     var f = state.rrgFilter || "sector";
-    return all.filter(function (s) {
+    var base = all.filter(function (s) {
       if (f === "all") return true;
       if (f === "stock") return s.group === "stock";
       if (f === "etf") return s.group === "sector" || s.group === "benchmark";
       return s.group === "sector";
     });
+    var extra = document.getElementById("rrg-extra");
+    var cap = document.getElementById("rrg-cap");
+    var stocksView = f === "stock" || f === "all";
+    if (extra) extra.hidden = !stocksView;
+    if (!stocksView) {
+      if (cap) cap.textContent = "";
+      return base;
+    }
+    var sector = state.rrgSector || "";
+    var etfs = base.filter(function (s) { return s.group !== "stock"; });
+    var stocks = base.filter(function (s) { return s.group === "stock"; });
+    if (sector) {
+      etfs = etfs.filter(function (s) { return s.sector === sector; });
+      stocks = stocks.filter(function (s) { return s.sector === sector; });
+    }
+    stocks.sort(function (a, b) { return rrgRs(b.symbol) - rrgRs(a.symbol); });
+    var shown = stocks.slice(0, RRG_STOCK_LIMIT);
+    if (cap) {
+      cap.textContent = stocks.length > shown.length
+        ? "Mostrando " + shown.length + " de " + stocks.length + " acciones, las de mayor RS."
+        : "";
+    }
+    return etfs.concat(shown);
   }
 
   function stopRrgPlay() {
@@ -3258,6 +3468,7 @@
         filters.querySelectorAll("[data-rrg]").forEach(function (chip) {
           chip.classList.toggle("is-active", chip === btn);
         });
+        fillSignalSectors();
         var tip = document.getElementById("rrg-tip");
         if (tip) tip.hidden = true;
         drawRrg();
@@ -3365,6 +3576,53 @@
         if (!btn || !suggest.contains(btn)) return;
         openTicker(btn.getAttribute("data-symbol"));
         suggest.hidden = true;
+      });
+    }
+    function bindPager(id, key) {
+      var root = document.getElementById(id);
+      if (!root) return;
+      root.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("button");
+        if (!btn || !root.contains(btn)) return;
+        var dir = btn.id.indexOf("prev") !== -1 ? -1 : 1;
+        state[key] = (state[key] || 0) + dir;
+        if (key === "rankPage") applyFilters();
+        else if (state.signalsBlock) renderSignals(state.signalsBlock);
+      });
+    }
+    bindPager("rank-pager", "rankPage");
+    bindPager("sig-pager", "sigPage");
+    var sigSearch = document.getElementById("sig-search");
+    if (sigSearch) {
+      sigSearch.addEventListener("input", function () {
+        state.sigSearch = sigSearch.value || "";
+        state.sigPage = 0;
+        if (state.signalsBlock) renderSignals(state.signalsBlock);
+      });
+    }
+    var sigSector = document.getElementById("sig-sector");
+    if (sigSector) {
+      sigSector.addEventListener("change", function () {
+        state.sigSector = sigSector.value || "";
+        state.sigPage = 0;
+        if (state.signalsBlock) renderSignals(state.signalsBlock);
+      });
+    }
+    var sigOnly = document.getElementById("sig-only");
+    if (sigOnly) {
+      sigOnly.addEventListener("click", function () {
+        state.sigOnly = !state.sigOnly;
+        sigOnly.classList.toggle("is-active", state.sigOnly);
+        sigOnly.setAttribute("aria-pressed", state.sigOnly ? "true" : "false");
+        state.sigPage = 0;
+        if (state.signalsBlock) renderSignals(state.signalsBlock);
+      });
+    }
+    var rrgSector = document.getElementById("rrg-sector");
+    if (rrgSector) {
+      rrgSector.addEventListener("change", function () {
+        state.rrgSector = rrgSector.value || "";
+        drawRrg();
       });
     }
     syncScrollPad();

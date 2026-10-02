@@ -108,6 +108,7 @@ jobs:
           rm -rf _site
           mkdir -p _site
           cp index.html app.js styles.css sw.js manifest.webmanifest datos.json _site/
+          if [ -f fichas.json ]; then cp fichas.json _site/; fi
           if [ -f historial_semaforo.json ]; then cp historial_semaforo.json _site/; fi
           if [ -f resumen.txt ]; then cp resumen.txt _site/resumen.txt; else printf '%s\n' 'Sin resumen en esta publicación.' > _site/resumen.txt; fi
           cp -r assets _site/assets
