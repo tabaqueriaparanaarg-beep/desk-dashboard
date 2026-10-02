@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=34" />
+  <link rel="stylesheet" href="styles.css?v=36" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -205,6 +205,7 @@
           <button type="button" class="dd-chip is-active" data-sector="">Todos</button>
         </div>
         <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
+          <button type="button" class="dd-chip dd-chip-toggle" data-flag="cedear" aria-pressed="false" title="Tiene CEDEAR en BYMA, según el listado de enero 2026. No es el filtro de tipo «CEDEAR proxy».">Con CEDEAR</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="rs_gt_70" aria-pressed="false">RS &gt; 70</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="solo_verdes" aria-pressed="false" title="Solo nombres sin alertas de riesgo. No es un filtro de compra.">Sin alertas</button>
@@ -214,6 +215,11 @@
           <input type="search" id="filter-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
         </div>
         <p class="dd-filter-count" id="filter-count" aria-live="polite">Mostrando —</p>
+      </div>
+      <div class="dd-pager" id="rank-pager" hidden>
+        <button type="button" id="rank-prev">Anterior</button>
+        <span id="rank-page">1</span>
+        <button type="button" id="rank-next">Siguiente</button>
       </div>
       <p class="dd-scroll-hint">Deslizá la tabla para ver el resto de columnas.</p>
       <div class="dd-table-wrap">
@@ -252,6 +258,7 @@
         <section class="dd-hist dd-panel" data-section="historial" aria-label="Historial del semáforo">
           <h2 class="dd-sr-only">Historial del semáforo</h2>
           <p class="dd-section-sub">El verde es «sin alertas de riesgo», no una compra. Se compara con SPY y con el promedio del universo.</p>
+          <p class="dd-universe-mark">Universo ampliado el 02/10/2026. Lo anterior queda con el universo chico: no se reescribió el pasado.</p>
           <div id="hist-root">
             <p class="dd-empty">Cargando…</p>
           </div>
@@ -272,6 +279,7 @@
           <div class="dd-top10-head">
             <h2 class="dd-sr-only">Simulación Top 10 vs SPY</h2>
             <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward semanal · base 100</p>
+            <p class="dd-universe-mark">Universo ampliado el 02/10/2026. Las semanas de antes usan el universo de ese momento.</p>
           </div>
           <details class="dd-help">
             <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
@@ -380,7 +388,21 @@
         <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué mide cada columna</summary>
         <p id="senales-def">Sale del precio que ya baja Angus. El diario y el semanal son lecturas distintas.</p>
       </details>
+      <div class="dd-sig-tools">
+        <label class="dd-sr-only" for="sig-search">Buscar en señales</label>
+        <input type="search" id="sig-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
+        <label class="dd-sr-only" for="sig-sector">Sector</label>
+        <select id="sig-sector" class="dd-select">
+          <option value="">Todos los sectores</option>
+        </select>
+        <button type="button" id="sig-only" class="dd-chip dd-chip-toggle" aria-pressed="false">Con señales</button>
+      </div>
       <p class="dd-scroll-hint">Deslizá la tabla para ver el diario y el semanal.</p>
+      <div class="dd-pager" id="sig-pager" hidden>
+        <button type="button" id="sig-prev">Anterior</button>
+        <span id="sig-page">1</span>
+        <button type="button" id="sig-next">Siguiente</button>
+      </div>
       <div class="dd-table-wrap">
         <table class="dd-table dd-sig-table" id="senales-table">
           <thead id="senales-head"></thead>
@@ -445,6 +467,13 @@
         <button type="button" class="dd-chip" data-rrg="etf">ETFs</button>
         <button type="button" class="dd-chip" data-rrg="stock">Acciones</button>
         <button type="button" class="dd-chip" data-rrg="all">Todos</button>
+      </div>
+      <div class="dd-rrg-extra" id="rrg-extra" hidden>
+        <label class="dd-sr-only" for="rrg-sector">Sector de las acciones</label>
+        <select id="rrg-sector" class="dd-select">
+          <option value="">Mayor RS, todos los sectores</option>
+        </select>
+        <p id="rrg-cap" class="dd-rrg-cap"></p>
       </div>
       <div class="dd-rrg-stage">
         <div id="rrg-chart" class="dd-rrg-chart" role="img" aria-label="Gráfico de rotación relativa"></div>
@@ -569,6 +598,6 @@
     </p>
   </footer>
 
-  <script src="app.js?v=34" defer></script>
+  <script src="app.js?v=36" defer></script>
 </body>
 </html>

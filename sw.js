@@ -5,15 +5,15 @@
  */
 "use strict";
 
-var VERSION = "dd-v34";
+var VERSION = "dd-v36";
 var SHELL_CACHE = VERSION + "-shell";
 var DATA_CACHE = VERSION + "-data";
 
 var SHELL_ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=34",
-  "app.js?v=34",
+  "styles.css?v=36",
+  "app.js?v=36",
   "manifest.webmanifest",
   "assets/logo.svg?v=7",
   "assets/favicon.ico?v=7",
@@ -53,8 +53,36 @@ function isDataRequest(url) {
   return /\/datos\.json$/.test(url.pathname);
 }
 
+function isFichaRequest(url) {
+  return /\/fichas\.json$/.test(url.pathname);
+}
+
 function isResumenRequest(url) {
   return /\/resumen\.txt$/.test(url.pathname);
+}
+
+function networkFirstNamed(request, fileName) {
+  var key = new URL(fileName, self.registration.scope).href;
+  return fetch(request, { cache: "no-store" }).then(function (resp) {
+    if (resp && resp.ok) {
+      var copy = resp.clone();
+      caches.open(DATA_CACHE).then(function (c) { c.put(key, copy); });
+    }
+    return resp;
+  }).catch(function () {
+    return caches.open(DATA_CACHE).then(function (c) {
+      return c.match(key);
+    }).then(function (hit) {
+      return hit || new Response("{}", {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+  });
+}
+
+function networkFirstFichas(request) {
+  return networkFirstNamed(request, "fichas.json");
 }
 
 function networkFirstData(request) {
@@ -114,6 +142,8 @@ self.addEventListener("fetch", function (event) {
 
   if (isDataRequest(url)) {
     event.respondWith(networkFirstData(req));
+  } else if (isFichaRequest(url)) {
+    event.respondWith(networkFirstFichas(req));
   } else if (isResumenRequest(url)) {
     event.respondWith(fetch(req, { cache: "no-store" }).catch(function () {
       return caches.match(req);

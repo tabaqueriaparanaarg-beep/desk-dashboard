@@ -24,6 +24,9 @@ import signals
 
 ROOT = Path(__file__).resolve().parent
 UNIVERSE_PATH = ROOT / "universe.json"
+FICHAS_PATH = ROOT / "fichas.json"
+UNIVERSE_EXPANDED_ON = "2026-10-02"
+UNIVERSE_EXPANDED_LABEL = "Universo ampliado el 02/10/2026"
 OUT_PATH = ROOT / "datos.json"
 
 def _env_first(*names: str, default: str = "") -> str:
@@ -56,9 +59,30 @@ WALKFORWARD_WEEKS = 26
 WALKFORWARD_WARMUP_SESSIONS = 200
 WALKFORWARD_RECENT = 6
 WALKFORWARD_TOP_N = 10
-BATCH_SIZE = 8
+BATCH_SIZE = 15
 MAX_RETRIES = 5
 SLEEP_BETWEEN_BATCHES = 0.35
+
+
+def load_universe(path: Path | None = None) -> tuple[list[dict], dict]:
+    """Lee universe.json. Acepta una lista (formato viejo) o {tickers, ...}."""
+    raw = json.loads((path or UNIVERSE_PATH).read_text(encoding="utf-8"))
+    if isinstance(raw, list):
+        return raw, {}
+    if isinstance(raw, dict) and isinstance(raw.get("tickers"), list):
+        meta = {k: v for k, v in raw.items() if k != "tickers"}
+        return list(raw["tickers"]), meta
+    raise ValueError("universe.json inválido")
+
+
+def company_data_policy(mode: str) -> str:
+    """Qué hacer con Finnhub lento (insiders, analistas, fundamentos).
+
+    intradía: cero llamadas, solo la caché. El cierre rota un cupo.
+    """
+    if (mode or "").strip().lower() in ("intradia", "intraday", "intradía"):
+        return "cache"
+    return "rotate"
 
 
 def load_finnhub_key() -> str:
@@ -887,6 +911,7 @@ def compute_symbol(
         "above_ema200": bool(ema200_v is not None and close > ema200_v),
         "above_sma50": bool(sma50_v is not None and close > sma50_v),
         "flags": flags,
+        **({"cedear": bool(meta["cedear"])} if "cedear" in meta else {}),
         "_rel_perf_raw": rel_perf,
         "_tend": tend,
         "_contr": contr,
@@ -1708,6 +1733,7 @@ SECTOR_LABELS_ES = {
     "Energy": "Energía",
     "Materials": "Materiales",
     "Utilities": "Servicios",
+    "Real Estate": "Inmuebles",
 }
 SECTOR_CAPTION = (
     "Acá se ve en qué sectores está la fuerza del universo. "
@@ -2009,6 +2035,55 @@ def _plan_slow_fetches(symbols: list[str], prev: dict[str, dict], today: date) -
     return plan, budget
 
 
+def slim_analysts(block: Any) -> dict | None:
+    """Lo justo para la columna Compra y la lista. El detalle va a fichas.json."""
+    if not isinstance(block, dict):
+        return None
+    latest = block.get("latest") if isinstance(block.get("latest"), dict) else {}
+    slim: dict[str, Any] = {
+        "buy_pct": block.get("buy_pct"),
+        "trend_label": block.get("trend_label"),
+        "fetched_on": block.get("fetched_on"),
+        "total": latest.get("total") if latest.get("total") is not None else block.get("total"),
+    }
+    target = block.get("price_target")
+    if isinstance(target, dict):
+        kept = {
+            k: target.get(k)
+            for k in ("mean", "median", "low", "high")
+            if target.get(k) is not None
+        }
+        if kept:
+            slim["price_target"] = kept
+    if slim.get("buy_pct") is None and not slim.get("total") and not slim.get("trend_label"):
+        return None
+    return slim
+
+
+def split_fichas(rows: list[dict] | None) -> dict[str, dict]:
+    """Saca fundamentos, insiders y el detalle de analistas del ranking.
+
+    datos.json se queda con lo que pinta la tabla. La ficha pide fichas.json.
+    """
+    fichas: dict[str, dict] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or "")
+        if not sym:
+            continue
+        detail: dict[str, Any] = {}
+        for key in ("fundamentals", "insiders", "analysts"):
+            if row.get(key) is not None:
+                detail[key] = row.pop(key)
+        slim = slim_analysts(detail.get("analysts"))
+        if slim:
+            row["analysts"] = slim
+        if detail:
+            fichas[sym] = detail
+    return fichas
+
+
 def _access_error_text(value: Any) -> bool:
     text = str(value or "").lower()
     if not text:
@@ -2268,7 +2343,7 @@ def main() -> None:
     previous_payload, previous_source = fetch_previous_payload()
     print(f"  base del resumen: {previous_source}")
 
-    universe = json.loads(UNIVERSE_PATH.read_text())
+    universe, universe_meta = load_universe()
     symbols = [u["symbol"] for u in universe]
     meta_by = {u["symbol"]: u for u in universe}
 
@@ -2497,7 +2572,7 @@ def main() -> None:
         "planned": 0,
     }
     try:
-        if mode == "intradia":
+        if company_data_policy(mode) == "cache":
             company_notes, analyst_feed = reuse_company_data(
                 rows, _prev_by_symbol(previous_payload)
             )
@@ -2671,14 +2746,23 @@ def main() -> None:
         "notes": notes,
         "formulas": {
             "desk_score": DESK_SCORE_FORMULA,
-            "rs_score": "Percentil 0–100 de (retorno_stock − retorno_SPY) en ~126 sesiones (6m; fallback 63d/3m)",
+            "rs_score": (
+                "Percentil 0–100 de (retorno_stock − retorno_SPY) en ~126 sesiones "
+                "(6m; fallback 63d/3m), dentro del universo que se scorea en esa corrida. "
+                "Si el universo crece, el percentil se recalcula: el mismo retorno relativo "
+                "puede quedar en otro puesto. La fórmula del Desk Score no cambia."
+            ),
             "tendencia": "Precio vs SMA50/EMA200 + pendientes (~5d) + SMA50>EMA200",
             "fuerza_rs": "0.75*RS_score + bonus por aceleración relativa 1m",
             "contraccion": "Proxy VCP: ratio ATR actual/ATR~60d, vol realizada 20/60, RSI no extremo, dry-up volumen",
             "vol_rel_20d": "Volumen último día / media 20 sesiones",
             "dist_ema200_pct": "(close/EMA200 − 1) * 100",
             "regime": rule,
-            "market_regime": market_regime.FORMULA,
+            "market_regime": (
+                market_regime.FORMULA
+                + " La amplitud (sobre EMA200, sobre SMA50, máximos y mínimos) usa el universo scored de esa corrida. "
+                "SPY, QQQ y el VIX no cambian de definición cuando el universo crece."
+            ),
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
             "top10_entry": TOP10_ENTRY_NOTE,
             "top10_walkforward": TOP10_WALKFORWARD_FORMULA,
@@ -2796,6 +2880,20 @@ def main() -> None:
             logo_map = logo_map_from_cache(logo_syms)
     attach_logos(payload, logo_map)
 
+    fichas = split_fichas(payload.get("ranking") or [])
+    payload["universe"] = {
+        "stocks": sum(1 for u in universe if str(u.get("kind") or "").lower() != "etf"),
+        "etfs": sum(1 for u in universe if str(u.get("kind") or "").lower() == "etf"),
+        "scored": n,
+        "expanded_on": universe_meta.get("expanded_on") or UNIVERSE_EXPANDED_ON,
+        "label": UNIVERSE_EXPANDED_LABEL,
+        "note": (
+            f"{UNIVERSE_EXPANDED_LABEL}. El percentil de RS y la amplitud se calculan "
+            "sobre este universo. El historial y la simulación anteriores no se reescriben."
+        ),
+    }
+    payload["fichas"] = "fichas.json"
+    FICHAS_PATH.write_text(json.dumps(fichas, ensure_ascii=False) + "\n")
     OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
     print(f"\nEscrito {OUT_PATH} — {n} tickers scored, régimen={label}")
     if market_regime_obj:

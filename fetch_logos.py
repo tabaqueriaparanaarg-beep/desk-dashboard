@@ -27,7 +27,7 @@ def main() -> None:
     ap.add_argument("--sleep", type=float, default=b.LOGO_SLEEP, help="segundos entre llamadas Finnhub")
     args = ap.parse_args()
 
-    universe = json.loads(b.UNIVERSE_PATH.read_text())
+    universe, _meta = b.load_universe()
     all_syms = [b.logo_symbol(u) for u in universe]
     if args.symbols:
         target = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]

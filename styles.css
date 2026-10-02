@@ -423,6 +423,11 @@ body {
   padding-bottom: 0.15rem;
 }
 
+.dd-filter-group.dd-filter-flags {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
 .dd-chip {
   appearance: none;
   border: 1px solid var(--dd-border-strong);
@@ -1207,7 +1212,7 @@ body {
   width: var(--dd-tlogo-size);
   height: var(--dd-tlogo-size);
   border-radius: 50%;
-  background: #f2f2f2;
+  background: #1a1a1a;
   padding: 2px;
   box-sizing: border-box;
   display: inline-flex;
@@ -3492,6 +3497,77 @@ body.is-ficha .dd-topbar {
   gap: 0.35rem;
 }
 
+.dd-pager[hidden],
+.dd-rrg-extra[hidden] {
+  display: none !important;
+}
+
+.dd-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.dd-pager button {
+  min-height: 36px;
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--dd-border-strong);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.dd-pager button:disabled {
+  opacity: 0.35;
+}
+
+.dd-pager span {
+  color: var(--dd-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-sig-tools,
+.dd-rrg-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.2rem 0 0.7rem;
+}
+
+.dd-select,
+.dd-sig-tools .dd-search {
+  min-height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--dd-border-strong);
+  background: #141414;
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.55rem;
+}
+
+.dd-sig-tools .dd-search {
+  flex: 1 1 10rem;
+}
+
+.dd-universe-mark,
+.dd-rrg-cap {
+  margin: 0.35rem 0 0.7rem;
+  color: var(--dd-muted);
+  font-size: 0.78rem;
+}
+
+.dd-rrg-cap:empty {
+  display: none;
+}
+
 .dd-sigdot {
   display: inline-block;
   width: 10px;
@@ -3569,6 +3645,10 @@ body.is-ficha .dd-topbar {
 
 .dd-rrg-hit {
   cursor: pointer;
+}
+
+.dd-rrg-tip[hidden] {
+  display: none !important;
 }
 
 .dd-rrg-tip {
