@@ -135,5 +135,22 @@ class FinnhubRotationTests(unittest.TestCase):
         self.assertEqual(fichas["AAA"]["fundamentals"]["metrics"]["pe_ttm"], 12)
 
 
+class LogoMapTests(unittest.TestCase):
+    def test_every_ticker_with_a_file_is_mapped(self):
+        rows, _ = build.load_universe()
+        symbols = [r["symbol"] for r in rows]
+        mapped = build.logo_map_from_cache(symbols)
+        missing = [s for s in symbols if not mapped.get(s)]
+        self.assertEqual(missing, ["VMRK"])
+        self.assertEqual(mapped["AAPL"], "assets/logos/AAPL.png")
+        self.assertEqual(mapped["BRK.B"], "assets/logos/BRK.B.png")
+        self.assertTrue((build.LOGO_DIR / "AAPL.png").is_file())
+        for sym, rel in mapped.items():
+            if not rel:
+                continue
+            size = (build.ROOT / rel).stat().st_size
+            self.assertLess(size, 40_000, sym)
+
+
 if __name__ == "__main__":
     unittest.main()
