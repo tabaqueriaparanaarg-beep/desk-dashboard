@@ -825,6 +825,159 @@ body {
   }
 }
 
+/* ── Atribución del exceso Top 10 vs SPY ── */
+
+.dd-attr {
+  margin-top: 1.15rem;
+  padding: 0.95rem 1rem 0.75rem;
+  background: var(--dd-bg-elevated);
+  border: 1px solid var(--dd-border);
+  border-radius: 16px;
+}
+
+.dd-attr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.dd-attr-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dd-attr-value {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-attr-line {
+  margin: 0.45rem 0 0.85rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.dd-attr-row {
+  margin-bottom: 0.7rem;
+}
+
+.dd-attr-row-h {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.28rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.dd-attr-track {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.dd-attr-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+}
+
+.dd-attr-bar-pos {
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.55), var(--dd-ok));
+}
+
+.dd-attr-bar-neg {
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.55), var(--dd-bad));
+}
+
+.dd-attr-foot {
+  margin: 0.15rem 0 0.65rem;
+  color: var(--dd-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.dd-attr-partial {
+  margin-top: -0.35rem;
+}
+
+.dd-attr-more {
+  margin-top: 0.15rem;
+}
+
+.dd-attr-more summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--dd-fg);
+  font-size: 0.86rem;
+  font-weight: 700;
+  list-style: none;
+}
+
+.dd-attr-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.dd-attr-h {
+  margin: 0.85rem 0 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dd-muted);
+}
+
+.dd-attr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dd-attr-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.12rem 0.75rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--dd-border);
+}
+
+.dd-attr-sym {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.dd-attr-meta {
+  grid-column: 1 / -1;
+  color: var(--dd-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.dd-attr-contrib {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-attr-list li.is-total {
+  border-top-color: var(--dd-border-strong);
+}
+
+.dd-attr-list li.is-total .dd-attr-sym {
+  font-size: 0.82rem;
+}
+
 /* ── Simulación walk-forward Top 10 vs SPY ── */
 
 .dd-wf-caption {

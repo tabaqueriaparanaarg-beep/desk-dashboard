@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=37" />
+  <link rel="stylesheet" href="styles.css?v=38" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -184,6 +184,24 @@
           <tbody id="top10-body">
           </tbody>
         </table>
+      </div>
+      <div class="dd-attr" id="top10-attr" data-section="top10-attribution" hidden>
+        <div class="dd-attr-head">
+          <h3 class="dd-attr-title">Exceso vs SPY</h3>
+          <p class="dd-attr-value" id="attr-excess">—</p>
+        </div>
+        <p class="dd-attr-line" id="attr-line"></p>
+        <div class="dd-attr-split" id="attr-split"></div>
+        <p class="dd-attr-foot" id="attr-foot">Efecto sector + efecto selección = exceso de esta ventana.</p>
+        <p class="dd-attr-foot dd-attr-partial" id="attr-partial" hidden></p>
+        <details class="dd-help">
+          <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué mide</summary>
+          <p id="attr-note"></p>
+        </details>
+        <details class="dd-attr-more">
+          <summary>Ver más</summary>
+          <div id="attr-more"></div>
+        </details>
       </div>
     </section>
 
@@ -598,6 +616,6 @@
     </p>
   </footer>
 
-  <script src="app.js?v=37" defer></script>
+  <script src="app.js?v=38" defer></script>
 </body>
 </html>
