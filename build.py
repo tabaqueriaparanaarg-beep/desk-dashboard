@@ -1767,6 +1767,18 @@ SECTOR_LABELS_ES = {
     "Utilities": "Servicios",
     "Real Estate": "Inmuebles",
 }
+# Proxy del retorno sectorial en la misma ventana que Retorno Top 10.
+# Son los ETF de sector que ya están en el universo (Alpaca, sin un feed nuevo).
+# Comunicación, Materiales, Servicios e Inmuebles no tienen ETF acá.
+SECTOR_ETF = {
+    "Technology": "XLK",
+    "Financials": "XLF",
+    "Energy": "XLE",
+    "Health Care": "XLV",
+    "Industrials": "XLI",
+    "Consumer Staples": "XLP",
+    "Consumer Discretionary": "XLY",
+}
 SECTOR_CAPTION = (
     "Acá se ve en qué sectores está la fuerza del universo. "
     "Cada tarjeta promedia el Desk Score, el RS y el cambio del día, "
@@ -1949,6 +1961,503 @@ def compute_sector_view(
             "symbols": sorted(set(excluded)),
         },
         "rows": out_rows,
+    }
+
+
+# Atribución del exceso del Top 10 vs SPY. No entra en el Desk Score.
+#
+# Misma ventana que Retorno Top 10 (WINDOW_SESSIONS ruedas, o la que traiga el bloque).
+#
+#   exceso = R_top10 − R_spy
+#   R_top10 = avg_return_pct ya publicado (media equiponderada de los nombres con retorno)
+#   R_spy   = spy_return_pct de esa misma ventana
+#
+# Por ticker, peso w = 1/n:
+#   aporte_i = w × (r_i − R_spy)
+#   Σ aporte_i = exceso
+# El redondeo a 2 decimales se cierra contra ese exceso: la diferencia de centésimas
+# se suma al aporte de mayor valor absoluto.
+#
+# Por sector, corte simple estilo Brinson-Fachler. Los pesos del SPY por
+# capitalización no vienen en Alpaca ni en Finnhub free, así que la referencia
+# w_b es el universo de acciones equiponderado (sin ETFs), el mismo criterio
+# que la vista por sectores.
+#
+#   w_p,s = nombres del Top 10 en s / n
+#   w_b,s = acciones del universo en s / acciones con sector
+#   R_b,s = retorno del ETF de sector (XLK, XLF, …) en la misma ventana si hay dato;
+#           si no hay ETF o no hay barras, la media equiponderada de las acciones de s
+#   allocation_s = (w_p,s − w_b,s) × (R_b,s − R_spy)
+#   efecto_sector = Σ allocation_s
+#   efecto_selección = exceso − efecto_sector
+#
+# La selección es el residuo: junta la selección y la interacción de Brinson,
+# más lo que no cierra contra el SPY porque w_b no es el peso real del índice.
+# Por construcción, efecto_sector + efecto_selección = exceso.
+# Un ETF de sector dentro del Top 10 cuenta en su sector. SPY (y el resto de
+# benchmarks) va al grupo Índice, con efecto sector 0: no es una apuesta sectorial.
+# Describe lo que ya pasó. No es una señal de compra ni de venta.
+TOP10_ATTRIBUTION_QUE_MIDE = (
+    "Mide de dónde salió la diferencia entre el Top 10 y el SPY en las mismas ruedas "
+    "que Retorno Top 10. El exceso es el retorno medio del Top 10, con el mismo peso "
+    "para cada nombre, menos el retorno del SPY. "
+    "Cada ticker aporta (su retorno − SPY) dividido la cantidad de nombres. "
+    "El efecto sector mira si el Top 10 está más o menos cargado que el universo "
+    "equiponderado en cada sector: el retorno del sector es el del ETF "
+    "(XLK, XLF, XLE, XLV, XLI, XLP, XLY) y, si no hay ETF, la media de las acciones de ese sector. "
+    "Los pesos del SPY por capitalización no están en Alpaca ni en Finnhub free, por eso la referencia es el universo. "
+    "El efecto selección es el resto (incluye la interacción). "
+    "Describe lo que ya pasó: no es una señal de compra ni de venta."
+)
+TOP10_ATTRIBUTION_FORMULA = (
+    "Misma ventana que top10_return. "
+    "exceso = avg_return_pct − spy_return_pct. "
+    "aporte_i = (1/n) × (return_i − spy_return_pct); la suma se reconcilia al exceso "
+    "en centésimas (el ajuste cae en el aporte de mayor valor absoluto). "
+    "w_b = acciones con sector, sin ETFs, equiponderadas (no hay pesos del SPY en el feed free). "
+    "w_p = Top 10 con retorno, equiponderado, por sector GICS del ranking. "
+    "R_b,s = ETF de sector (XLK/XLF/XLE/XLV/XLI/XLP/XLY) si hay retorno; "
+    "si no, media equiponderada de las acciones de ese sector con retorno válido. "
+    "allocation_s = (w_p,s − w_b,s) × (R_b,s − spy); "
+    "efecto_sector = Σ allocation_s; efecto_selección = exceso − efecto_sector. "
+    "La selección incluye la interacción de Brinson y el residuo contra el SPY."
+)
+_ATTRIBUTION_FLAT_PP = 0.15
+
+
+def _pct_from_cents(cents: int) -> float:
+    value = round(cents / 100.0, 2)
+    if value == 0:
+        return 0.0
+    return float(value)
+
+
+def _to_cents(value: float) -> int:
+    return int(round(float(value) * 100.0))
+
+
+def _allocate_cents(raw: list[float], target_cents: int) -> list[int]:
+    """Reparte centésimas para que la suma sea `target_cents`.
+
+    El residuo del redondeo se lo queda la partida de mayor valor absoluto
+    (si empatan, la primera).
+    """
+    if not raw:
+        return []
+    parts = [_to_cents(v) for v in raw]
+    drift = target_cents - sum(parts)
+    if drift != 0:
+        idx = max(range(len(raw)), key=lambda i: (abs(raw[i]), -i))
+        parts[idx] += drift
+    return parts
+
+
+def _join_es(labels: list[str]) -> str:
+    clean = [lab for lab in labels if lab]
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        return clean[0]
+    if len(clean) == 2:
+        return f"{clean[0]} y {clean[1]}"
+    return ", ".join(clean[:-1]) + " y " + clean[-1]
+
+
+def _attribution_bucket(meta: dict) -> tuple[str, str, str]:
+    """(clave, etiqueta, tipo) con tipo en gics | indice | sin_sector."""
+    sector = sector_key(meta)
+    kind = str(meta.get("kind") or "").strip().lower()
+    if kind == "etf" and (not sector or sector == "Benchmark"):
+        return "__index__", "Índice", "indice"
+    if not sector or sector == "Benchmark":
+        return "__none__", "Sin sector", "sin_sector"
+    return sector, SECTOR_LABELS_ES.get(sector, sector), "gics"
+
+
+def _lookup_window_return(
+    symbol: str,
+    published: dict[str, float],
+    bars_by_symbol: dict[str, list[dict]] | None,
+    window: int,
+) -> float | None:
+    """Retorno de la ventana. Si el símbolo ya está en el Top 10, usa ese número."""
+    if symbol in published:
+        return published[symbol]
+    closes: list[float] = []
+    for bar in (bars_by_symbol or {}).get(symbol) or []:
+        if not isinstance(bar, dict) or bar.get("c") is None:
+            continue
+        try:
+            closes.append(float(bar["c"]))
+        except (TypeError, ValueError):
+            continue
+    return session_return_pct(closes, window)
+
+
+def _attribution_headline(
+    excess: float,
+    allocation: float,
+    selection: float,
+    sectors: list[dict],
+) -> str:
+    if abs(excess) < _ATTRIBUTION_FLAT_PP:
+        return "En estas ruedas el Top 10 quedó casi empatado con el SPY."
+    lead = "El exceso" if excess > 0 else "La diferencia en contra"
+    # Si tiran para lados distintos y el neto es más chico que cada uno,
+    # ninguno «explica» el exceso: se compensaron.
+    if (
+        allocation * selection < 0
+        and abs(excess) < min(abs(allocation), abs(selection))
+    ):
+        driver = _attribution_driver(sectors, allocation)
+        if driver is not None:
+            how = _attribution_how(driver)
+            if allocation * excess > 0:
+                return f"{lead} es chico: {how} sumó, y la selección lo compensó."
+            return f"{lead} es chico: la selección sumó, y {how} lo compensó."
+        return f"{lead} es chico: el efecto sector y la selección se compensaron."
+    if abs(abs(allocation) - abs(selection)) <= 0.01:
+        return f"{lead} se reparte entre el efecto sector y la selección."
+    if abs(allocation) > abs(selection):
+        driver = _attribution_driver(sectors, allocation)
+        if driver is not None:
+            return f"{lead} vino sobre todo de {_attribution_how(driver)}."
+        return f"{lead} vino sobre todo del efecto sector."
+    return f"{lead} vino sobre todo de selección."
+
+
+def _attribution_driver(sectors: list[dict], allocation: float) -> dict | None:
+    sign = 1.0 if allocation > 0 else -1.0
+    candidates = [
+        s
+        for s in sectors
+        if s.get("proxy_kind") in ("etf", "universo") and s.get("allocation_pct") is not None
+    ]
+    if not candidates:
+        return None
+    driver = max(
+        candidates,
+        key=lambda s: (
+            sign * float(s.get("allocation_pct") or 0.0),
+            abs(float(s.get("weight_top10_pct") or 0.0) - float(s.get("weight_benchmark_pct") or 0.0)),
+        ),
+    )
+    if abs(float(driver.get("allocation_pct") or 0.0)) < 0.01:
+        return None
+    return driver
+
+
+def _attribution_how(driver: dict) -> str:
+    label = str(driver.get("label") or driver.get("sector") or "ese sector")
+    weight_top = float(driver.get("weight_top10_pct") or 0.0)
+    weight_bench = float(driver.get("weight_benchmark_pct") or 0.0)
+    if weight_top > weight_bench + 0.5:
+        return f"estar cargado en {label}"
+    if weight_top < weight_bench - 0.5:
+        return f"estar liviano en {label}"
+    return f"el sector {label}"
+
+
+def _public_ticker(item: dict) -> dict:
+    return {
+        "rank": item.get("rank"),
+        "symbol": item.get("symbol"),
+        "sector": item.get("sector"),
+        "sector_label": item.get("sector_label"),
+        "return_pct": item.get("return_pct"),
+        "weight_pct": item.get("weight_pct"),
+    }
+
+
+def _empty_attribution(window: int, headline: str) -> dict[str, Any]:
+    return {
+        "window_sessions": window,
+        "asof": None,
+        "method": "brinson_simple",
+        "benchmark_weights": "universo_equiponderado",
+        "sector_return_proxy": "etf_o_media_universo",
+        "n": 0,
+        "avg_return_pct": None,
+        "spy_return_pct": None,
+        "excess_pct": None,
+        "allocation_pct": None,
+        "selection_pct": None,
+        "partial": False,
+        "partial_note": None,
+        "headline": headline,
+        "que_mide": TOP10_ATTRIBUTION_QUE_MIDE,
+        "tickers": [],
+        "sectors": [],
+    }
+
+
+def compute_top10_attribution(
+    ranking: list[dict] | None,
+    top10_return: dict | None,
+    bars_by_symbol: dict[str, list[dict]] | None = None,
+    window: int | None = None,
+) -> dict[str, Any]:
+    """Arma `top10_attribution` para la misma ventana que Retorno Top 10.
+
+    No modifica el ranking ni el Desk Score. No escribe historial.
+    """
+    block = top10_return or {}
+    win = window if isinstance(window, int) and window > 0 else block.get("window_sessions")
+    try:
+        win = int(win)
+    except (TypeError, ValueError):
+        win = WINDOW_SESSIONS
+    if win < 1:
+        win = WINDOW_SESSIONS
+
+    top_rows = [r for r in (block.get("rows") or []) if isinstance(r, dict)]
+    valid = []
+    for src in top_rows:
+        symbol = str(src.get("symbol") or "").strip()
+        if not symbol or _as_float(src.get("return_pct")) is None:
+            continue
+        valid.append(src)
+    if not valid:
+        empty = _empty_attribution(win, "Sin retorno del Top 10 para atribuir.")
+        empty["asof"] = block.get("asof")
+        return empty
+
+    by_symbol: dict[str, dict] = {}
+    for row in ranking or []:
+        if not isinstance(row, dict):
+            continue
+        symbol = str(row.get("symbol") or "").strip()
+        if symbol and symbol not in by_symbol:
+            by_symbol[symbol] = row
+
+    published: dict[str, float] = {}
+    for src in valid:
+        published[str(src.get("symbol")).strip()] = float(_as_float(src.get("return_pct")))
+
+    n = len(valid)
+    avg = _as_float(block.get("avg_return_pct"))
+    if avg is None:
+        avg = sum(published[str(src.get("symbol")).strip()] for src in valid) / n
+    spy = _as_float(block.get("spy_return_pct"))
+
+    ticker_meta: list[dict] = []
+    for src in valid:
+        symbol = str(src.get("symbol")).strip()
+        meta = by_symbol.get(symbol) or {"symbol": symbol}
+        bkey, blabel, bkind = _attribution_bucket(meta)
+        ret = published[symbol]
+        ticker_meta.append(
+            {
+                "rank": src.get("rank"),
+                "symbol": symbol,
+                "sector": None if bkey.startswith("__") else bkey,
+                "sector_label": blabel,
+                "bucket": bkey,
+                "bucket_kind": bkind,
+                "return_pct": safe_round(ret, 2),
+                "weight_pct": round(100.0 / n, 1),
+                "_return": ret,
+            }
+        )
+
+    if spy is None:
+        out = _empty_attribution(
+            win,
+            "Sin retorno del SPY en la misma ventana: no se puede partir el exceso.",
+        )
+        out["asof"] = block.get("asof")
+        out["n"] = n
+        out["avg_return_pct"] = safe_round(avg, 2)
+        out["tickers"] = [
+            _public_ticker(item) | {"contribution_pct": None}
+            for item in ticker_meta
+        ]
+        return out
+
+    excess = float(avg) - float(spy)
+    excess_cents = _to_cents(excess)
+    raw_contribs = [(item["_return"] - float(spy)) / n for item in ticker_meta]
+    contrib_cents = _allocate_cents(raw_contribs, excess_cents)
+    tickers_out: list[dict] = []
+    for item, cents in zip(ticker_meta, contrib_cents):
+        public = _public_ticker(item)
+        public["contribution_pct"] = _pct_from_cents(cents)
+        tickers_out.append(public)
+
+    bench_counts: dict[str, int] = {}
+    bench_members: dict[str, list[str]] = {}
+    for row in ranking or []:
+        if not isinstance(row, dict) or not sector_row_included(row):
+            continue
+        key = sector_key(row)
+        symbol = str(row.get("symbol") or "").strip()
+        bench_counts[key] = bench_counts.get(key, 0) + 1
+        if symbol:
+            bench_members.setdefault(key, []).append(symbol)
+    bench_n = sum(bench_counts.values())
+
+    group_counts: dict[str, int] = {}
+    group_labels: dict[str, tuple[str, str]] = {}
+    for item in ticker_meta:
+        group_counts[item["bucket"]] = group_counts.get(item["bucket"], 0) + 1
+        group_labels[item["bucket"]] = (item["sector_label"], item["bucket_kind"])
+
+    sector_keys: list[str] = []
+    seen: set[str] = set()
+    for key in list(bench_counts) + list(group_counts):
+        if key in seen or key in ("__index__", "__none__"):
+            continue
+        seen.add(key)
+        sector_keys.append(key)
+
+    missing_labels: list[str] = []
+    drafted: list[dict] = []
+    if bench_n <= 0:
+        allocation_cents = 0
+        partial = True
+        partial_note = (
+            "Sin acciones con sector en el universo: no hay pesos de referencia. "
+            "El efecto sector queda en cero y todo el exceso pasa a selección."
+        )
+    else:
+        for key in sector_keys:
+            label = SECTOR_LABELS_ES.get(key, group_labels.get(key, (key, "gics"))[0])
+            n_top = group_counts.get(key, 0)
+            n_bench = bench_counts.get(key, 0)
+            w_p = n_top / n
+            w_b = n_bench / bench_n
+            sector_ret = None
+            proxy = None
+            proxy_kind = "gics"
+            proxy_n = 0
+            etf = SECTOR_ETF.get(key)
+            if etf:
+                etf_ret = _lookup_window_return(etf, published, bars_by_symbol, win)
+                if etf_ret is not None:
+                    sector_ret = etf_ret
+                    proxy = etf
+                    proxy_n = 1
+            if sector_ret is None:
+                rets = []
+                for symbol in bench_members.get(key) or []:
+                    ret = _lookup_window_return(symbol, published, bars_by_symbol, win)
+                    if ret is not None:
+                        rets.append(ret)
+                if rets:
+                    sector_ret = sum(rets) / len(rets)
+                    proxy_kind = "universo"
+                    proxy_n = len(rets)
+            raw = None
+            if sector_ret is None:
+                if n_top > 0 or abs(w_p - w_b) > 1e-9:
+                    missing_labels.append(str(label))
+            else:
+                raw = (w_p - w_b) * (sector_ret - float(spy))
+            drafted.append(
+                {
+                    "sector": key,
+                    "label": label,
+                    "proxy": proxy,
+                    "proxy_kind": "universo" if proxy_kind == "universo" else ("etf" if proxy else "none"),
+                    "proxy_n": proxy_n,
+                    "n_top10": n_top,
+                    "n_benchmark": n_bench,
+                    "weight_top10_pct": round(w_p * 100.0, 1),
+                    "weight_benchmark_pct": round(w_b * 100.0, 1),
+                    "sector_return_pct": safe_round(sector_ret, 2) if sector_ret is not None else None,
+                    "raw": raw,
+                }
+            )
+        active = [row for row in drafted if row["raw"] is not None]
+        raw_allocs = [float(row["raw"]) for row in active]
+        allocation_cents = _to_cents(sum(raw_allocs)) if raw_allocs else 0
+        split = _allocate_cents(raw_allocs, allocation_cents)
+        for row, cents in zip(active, split):
+            row["allocation_pct"] = _pct_from_cents(cents)
+        for row in drafted:
+            row.pop("raw", None)
+            if "allocation_pct" not in row:
+                row["allocation_pct"] = None
+        partial = bool(missing_labels)
+        partial_note = None
+        if missing_labels:
+            partial_note = (
+                "Sin retorno de sector para "
+                + _join_es(missing_labels)
+                + ": ese tramo queda dentro de selección."
+            )
+
+    if group_counts.get("__index__"):
+        drafted.append(
+            {
+                "sector": "Benchmark",
+                "label": "Índice",
+                "proxy": "SPY",
+                "proxy_kind": "indice",
+                "proxy_n": group_counts["__index__"],
+                "n_top10": group_counts["__index__"],
+                "n_benchmark": 0,
+                "weight_top10_pct": round(group_counts["__index__"] / n * 100.0, 1),
+                "weight_benchmark_pct": 0.0,
+                "sector_return_pct": safe_round(spy, 2),
+                "allocation_pct": 0.0,
+            }
+        )
+    if group_counts.get("__none__"):
+        drafted.append(
+            {
+                "sector": None,
+                "label": "Sin sector",
+                "proxy": None,
+                "proxy_kind": "sin_sector",
+                "proxy_n": 0,
+                "n_top10": group_counts["__none__"],
+                "n_benchmark": 0,
+                "weight_top10_pct": round(group_counts["__none__"] / n * 100.0, 1),
+                "weight_benchmark_pct": 0.0,
+                "sector_return_pct": None,
+                "allocation_pct": 0.0,
+            }
+        )
+        partial = True
+        extra = "Hay nombres sin sector: su diferencia contra el SPY queda dentro de selección."
+        partial_note = f"{partial_note} {extra}".strip() if partial_note else extra
+
+    selection_cents = excess_cents - allocation_cents
+    allocation_pct = _pct_from_cents(allocation_cents)
+    selection_pct = _pct_from_cents(selection_cents)
+    excess_pct = _pct_from_cents(excess_cents)
+
+    def _sector_sort(row: dict) -> tuple:
+        alloc = row.get("allocation_pct")
+        mag = abs(alloc) if isinstance(alloc, (int, float)) else -1.0
+        kind_rank = 0 if row.get("proxy_kind") in ("etf", "universo", "none", "gics") else 1
+        return (kind_rank, -mag, str(row.get("label") or ""))
+
+    drafted.sort(key=_sector_sort)
+    # proxy_kind "none" se queda; "gics" no sale al JSON (ya se reemplazó por etf/universo/none).
+    for row in drafted:
+        if row.get("proxy_kind") == "gics":
+            row["proxy_kind"] = "none"
+
+    return {
+        "window_sessions": win,
+        "asof": block.get("asof"),
+        "method": "brinson_simple",
+        "benchmark_weights": "universo_equiponderado",
+        "sector_return_proxy": "etf_o_media_universo",
+        "n": n,
+        "avg_return_pct": safe_round(avg, 2),
+        "spy_return_pct": safe_round(spy, 2),
+        "excess_pct": excess_pct,
+        "allocation_pct": allocation_pct,
+        "selection_pct": selection_pct,
+        "partial": partial,
+        "partial_note": partial_note,
+        "headline": _attribution_headline(excess_pct, allocation_pct, selection_pct, drafted),
+        "que_mide": TOP10_ATTRIBUTION_QUE_MIDE,
+        "tickers": tickers_out,
+        "sectors": drafted,
     }
 
 
@@ -2527,6 +3036,9 @@ def main() -> None:
     notes.append(
         f"Retorno Top 10 ({WINDOW_SESSIONS} ruedas): medio {top10_return.get('avg_return_pct')}% · SPY {top10_return.get('spy_return_pct')}%"
     )
+    top10_attribution = compute_top10_attribution(rows, top10_return, all_bars)
+    if top10_attribution.get("headline"):
+        notes.append("Atribución del exceso Top 10: " + str(top10_attribution["headline"]))
     top10_entry = compute_top10_entry(
         meta_by, all_bars, ENTRY_LOOKBACK_SESSIONS, today_rows=rows
     )
@@ -2762,6 +3274,7 @@ def main() -> None:
         "regime_stub": regime_obj,  # alias back-compat
         "market_regime": market_regime_obj,
         "top10_return": top10_return,
+        "top10_attribution": top10_attribution,
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
         "historial_semaforo": historial_public,
@@ -2796,6 +3309,7 @@ def main() -> None:
                 "SPY, QQQ y el VIX no cambian de definición cuando el universo crece."
             ),
             "top10_return": f"(close[-1]/close[-{WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas {WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
+            "top10_attribution": TOP10_ATTRIBUTION_FORMULA,
             "top10_entry": TOP10_ENTRY_NOTE,
             "top10_walkforward": TOP10_WALKFORWARD_FORMULA,
             "pillar_points": "Puntos del pilar = score 0–100 × peso (Tendencia 0.30, Fuerza RS 0.35, Contracción 0.35), antes de las penalizaciones suaves del Desk Score. Setup no entra.",

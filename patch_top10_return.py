@@ -44,6 +44,9 @@ def main() -> None:
     symbols = [r["symbol"] for r in top if r.get("symbol")]
     if "SPY" not in symbols:
         symbols.append("SPY")
+    for etf in b.SECTOR_ETF.values():
+        if etf not in symbols:
+            symbols.append(etf)
 
     end_dt = datetime.now(timezone.utc).date()
     start_dt = end_dt - timedelta(days=LOOKBACK_CALENDAR_DAYS)
@@ -83,13 +86,18 @@ def main() -> None:
     top10 = b.compute_top10_return(ranking, all_bars, b.WINDOW_SESSIONS)
     # La racha «Entró» sale del build completo (hace falta ~EMA200). Acá sólo se conserva.
     b.copy_entro_from_ranking(ranking, top10)
+    # Misma ventana y las mismas barras. Los sectores sin ETF quedan parciales
+    # si este parche no bajó el universo entero: el build completo sí lo tiene.
+    attribution = b.compute_top10_attribution(ranking, top10, all_bars)
     data["top10_return"] = top10
+    data["top10_attribution"] = attribution
     formulas = data.setdefault("formulas", {})
     formulas["top10_return"] = (
         f"(close[-1]/close[-{b.WINDOW_SESSIONS + 1}] - 1)*100 sobre últimas "
         f"{b.WINDOW_SESSIONS} ruedas; avg = media de los Top 10 con retorno válido; "
         "SPY misma ventana"
     )
+    formulas["top10_attribution"] = b.TOP10_ATTRIBUTION_FORMULA
     notes = data.setdefault("notes", [])
     note = (
         f"Retorno Top 10 ({b.WINDOW_SESSIONS} ruedas): medio "
@@ -104,6 +112,12 @@ def main() -> None:
     print(
         f"avg={top10.get('avg_return_pct')}% SPY={top10.get('spy_return_pct')}% "
         f"asof={top10.get('asof')} rows={len(top10.get('rows') or [])}"
+    )
+    print(
+        f"atribución exceso={attribution.get('excess_pct')}% "
+        f"sector={attribution.get('allocation_pct')}% "
+        f"selección={attribution.get('selection_pct')}% "
+        f"| {attribution.get('headline')}"
     )
     for r in top10.get("rows") or []:
         print(

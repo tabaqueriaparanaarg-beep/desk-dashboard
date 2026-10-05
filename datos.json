@@ -2787,7 +2787,8 @@
     "Régimen: mixto (56.9% sobre EMA200; SPY dist EMA200 6.42%)",
     "UI: Actualizar / auto cada 5 min solo recarga datos.json; los datos se refrescan con python3 build.py (o cron).",
     "Retorno Top 10 (10 ruedas): medio 1.1% · SPY 0.75%",
-    "Logos: 61/72 con logo (nuevos 0, cache 72, errores 0)"
+    "Logos: 61/72 con logo (nuevos 0, cache 72, errores 0)",
+    "Atribución del exceso Top 10: El exceso es chico: estar cargado en Tecnología sumó, y la selección lo compensó."
   ],
   "formulas": {
     "desk_score": "0.25*Tendencia + 0.30*Fuerza_RS + 0.30*Contracción + 0.15*Setup (cada pilar 0–100)",
@@ -2799,7 +2800,8 @@
     "vol_rel_20d": "Volumen último día / media 20 sesiones",
     "dist_ema200_pct": "(close/EMA200 − 1) * 100",
     "regime": "alcista if pct_above_ema200>=60; mixto if 40–60; bajista if <40; soft override: SPY under EMA200 + alcista → mixto",
-    "top10_return": "(close[-1]/close[-11] - 1)*100 sobre últimas 10 ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana"
+    "top10_return": "(close[-1]/close[-11] - 1)*100 sobre últimas 10 ruedas; avg = media de los Top 10 con retorno válido; SPY misma ventana",
+    "top10_attribution": "Misma ventana que top10_return. exceso = avg_return_pct − spy_return_pct. aporte_i = (1/n) × (return_i − spy_return_pct); la suma se reconcilia al exceso en centésimas (el ajuste cae en el aporte de mayor valor absoluto). w_b = acciones con sector, sin ETFs, equiponderadas (no hay pesos del SPY en el feed free). w_p = Top 10 con retorno, equiponderado, por sector GICS del ranking. R_b,s = ETF de sector (XLK/XLF/XLE/XLV/XLI/XLP/XLY) si hay retorno; si no, media equiponderada de las acciones de ese sector con retorno válido. allocation_s = (w_p,s − w_b,s) × (R_b,s − spy); efecto_sector = Σ allocation_s; efecto_selección = exceso − efecto_sector. La selección incluye la interacción de Brinson y el residuo contra el SPY."
   },
   "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
   "logos": {
@@ -2875,5 +2877,259 @@
     "XLY": null,
     "XOM": "assets/logos/XOM.png",
     "XYZ": "assets/logos/XYZ.png"
+  },
+  "top10_attribution": {
+    "window_sessions": 10,
+    "asof": "2026-09-25T04:00:00Z",
+    "method": "brinson_simple",
+    "benchmark_weights": "universo_equiponderado",
+    "sector_return_proxy": "etf_o_media_universo",
+    "n": 10,
+    "avg_return_pct": 1.1,
+    "spy_return_pct": 0.75,
+    "excess_pct": 0.35,
+    "allocation_pct": 3.12,
+    "selection_pct": -2.77,
+    "partial": false,
+    "partial_note": null,
+    "headline": "El exceso es chico: estar cargado en Tecnología sumó, y la selección lo compensó.",
+    "que_mide": "Mide de dónde salió la diferencia entre el Top 10 y el SPY en las mismas ruedas que Retorno Top 10. El exceso es el retorno medio del Top 10, con el mismo peso para cada nombre, menos el retorno del SPY. Cada ticker aporta (su retorno − SPY) dividido la cantidad de nombres. El efecto sector mira si el Top 10 está más o menos cargado que el universo equiponderado en cada sector: el retorno del sector es el del ETF (XLK, XLF, XLE, XLV, XLI, XLP, XLY) y, si no hay ETF, la media de las acciones de ese sector. Los pesos del SPY por capitalización no están en Alpaca ni en Finnhub free, por eso la referencia es el universo. El efecto selección es el resto (incluye la interacción). Describe lo que ya pasó: no es una señal de compra ni de venta.",
+    "tickers": [
+      {
+        "rank": 1,
+        "symbol": "ABBV",
+        "sector": "Health Care",
+        "sector_label": "Salud",
+        "return_pct": 2.56,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.18
+      },
+      {
+        "rank": 2,
+        "symbol": "XLK",
+        "sector": "Technology",
+        "sector_label": "Tecnología",
+        "return_pct": 4.73,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.4
+      },
+      {
+        "rank": 3,
+        "symbol": "KO",
+        "sector": "Consumer Staples",
+        "sector_label": "Consumo básico",
+        "return_pct": -0.44,
+        "weight_pct": 10.0,
+        "contribution_pct": -0.12
+      },
+      {
+        "rank": 4,
+        "symbol": "CRM",
+        "sector": "Technology",
+        "sector_label": "Tecnología",
+        "return_pct": -3.81,
+        "weight_pct": 10.0,
+        "contribution_pct": -0.45
+      },
+      {
+        "rank": 5,
+        "symbol": "SPY",
+        "sector": null,
+        "sector_label": "Índice",
+        "return_pct": 0.75,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.0
+      },
+      {
+        "rank": 6,
+        "symbol": "MSFT",
+        "sector": "Technology",
+        "sector_label": "Tecnología",
+        "return_pct": 4.22,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.35
+      },
+      {
+        "rank": 7,
+        "symbol": "NVDA",
+        "sector": "Technology",
+        "sector_label": "Tecnología",
+        "return_pct": 3.08,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.23
+      },
+      {
+        "rank": 8,
+        "symbol": "GOOGL",
+        "sector": "Communication",
+        "sector_label": "Comunicación",
+        "return_pct": 1.79,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.1
+      },
+      {
+        "rank": 9,
+        "symbol": "AAPL",
+        "sector": "Technology",
+        "sector_label": "Tecnología",
+        "return_pct": 1.12,
+        "weight_pct": 10.0,
+        "contribution_pct": 0.04
+      },
+      {
+        "rank": 10,
+        "symbol": "AMZN",
+        "sector": "Consumer Discretionary",
+        "sector_label": "Consumo discrecional",
+        "return_pct": -3.02,
+        "weight_pct": 10.0,
+        "contribution_pct": -0.38
+      }
+    ],
+    "sectors": [
+      {
+        "sector": "Technology",
+        "label": "Tecnología",
+        "proxy": "XLK",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 5,
+        "n_benchmark": 13,
+        "weight_top10_pct": 50.0,
+        "weight_benchmark_pct": 21.3,
+        "sector_return_pct": 4.73,
+        "allocation_pct": 1.15
+      },
+      {
+        "sector": "Financials",
+        "label": "Finanzas",
+        "proxy": "XLF",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 0,
+        "n_benchmark": 12,
+        "weight_top10_pct": 0.0,
+        "weight_benchmark_pct": 19.7,
+        "sector_return_pct": -4.21,
+        "allocation_pct": 0.98
+      },
+      {
+        "sector": "Energy",
+        "label": "Energía",
+        "proxy": "XLE",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 0,
+        "n_benchmark": 5,
+        "weight_top10_pct": 0.0,
+        "weight_benchmark_pct": 8.2,
+        "sector_return_pct": -4.76,
+        "allocation_pct": 0.45
+      },
+      {
+        "sector": "Materials",
+        "label": "Materiales",
+        "proxy": null,
+        "proxy_kind": "universo",
+        "proxy_n": 3,
+        "n_top10": 0,
+        "n_benchmark": 3,
+        "weight_top10_pct": 0.0,
+        "weight_benchmark_pct": 4.9,
+        "sector_return_pct": -6.23,
+        "allocation_pct": 0.34
+      },
+      {
+        "sector": "Utilities",
+        "label": "Servicios",
+        "proxy": null,
+        "proxy_kind": "universo",
+        "proxy_n": 1,
+        "n_top10": 0,
+        "n_benchmark": 1,
+        "weight_top10_pct": 0.0,
+        "weight_benchmark_pct": 1.6,
+        "sector_return_pct": -7.57,
+        "allocation_pct": 0.14
+      },
+      {
+        "sector": "Consumer Discretionary",
+        "label": "Consumo discrecional",
+        "proxy": "XLY",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 1,
+        "n_benchmark": 8,
+        "weight_top10_pct": 10.0,
+        "weight_benchmark_pct": 13.1,
+        "sector_return_pct": -2.12,
+        "allocation_pct": 0.09
+      },
+      {
+        "sector": "Industrials",
+        "label": "Industria",
+        "proxy": "XLI",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 0,
+        "n_benchmark": 3,
+        "weight_top10_pct": 0.0,
+        "weight_benchmark_pct": 4.9,
+        "sector_return_pct": -1.13,
+        "allocation_pct": 0.09
+      },
+      {
+        "sector": "Consumer Staples",
+        "label": "Consumo básico",
+        "proxy": "XLP",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 1,
+        "n_benchmark": 4,
+        "weight_top10_pct": 10.0,
+        "weight_benchmark_pct": 6.6,
+        "sector_return_pct": -1.58,
+        "allocation_pct": -0.08
+      },
+      {
+        "sector": "Health Care",
+        "label": "Salud",
+        "proxy": "XLV",
+        "proxy_kind": "etf",
+        "proxy_n": 1,
+        "n_top10": 1,
+        "n_benchmark": 7,
+        "weight_top10_pct": 10.0,
+        "weight_benchmark_pct": 11.5,
+        "sector_return_pct": 3.23,
+        "allocation_pct": -0.04
+      },
+      {
+        "sector": "Communication",
+        "label": "Comunicación",
+        "proxy": null,
+        "proxy_kind": "universo",
+        "proxy_n": 5,
+        "n_top10": 1,
+        "n_benchmark": 5,
+        "weight_top10_pct": 10.0,
+        "weight_benchmark_pct": 8.2,
+        "sector_return_pct": 0.98,
+        "allocation_pct": 0.0
+      },
+      {
+        "sector": "Benchmark",
+        "label": "Índice",
+        "proxy": "SPY",
+        "proxy_kind": "indice",
+        "proxy_n": 1,
+        "n_top10": 1,
+        "n_benchmark": 0,
+        "weight_top10_pct": 10.0,
+        "weight_benchmark_pct": 0.0,
+        "sector_return_pct": 0.75,
+        "allocation_pct": 0.0
+      }
+    ]
   }
 }

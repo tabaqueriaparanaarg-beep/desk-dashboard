@@ -379,6 +379,136 @@
     if (section) section.setAttribute("data-ready", "1");
   }
 
+  function fmtWeightPct(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Number(n);
+    var digits = Math.abs(v - Math.round(v)) < 0.05 ? 0 : 1;
+    return fmtEsNum(v, digits) + "%";
+  }
+
+  function attrBarHtml(label, value, maxAbs) {
+    var n = Number(value);
+    if (Number.isNaN(n)) n = 0;
+    var width = maxAbs > 0 ? Math.min(100, (Math.abs(n) / maxAbs) * 100) : 0;
+    if (n !== 0 && width < 3) width = 3;
+    var dir = n >= 0 ? "pos" : "neg";
+    return (
+      '<div class="dd-attr-row">' +
+      '<div class="dd-attr-row-h"><span>' + escapeHtml(label) + "</span>" +
+      '<span class="dd-num-' + dir + '">' + escapeHtml(fmtEsSignedPct(n, 2)) + "</span></div>" +
+      '<span class="dd-attr-track" aria-hidden="true">' +
+      '<span class="dd-attr-bar dd-attr-bar-' + dir + '" style="width:' + width.toFixed(1) + '%"></span>' +
+      "</span></div>"
+    );
+  }
+
+  function attrListItem(title, meta, value, extraClass) {
+    var n = value == null ? null : Number(value);
+    var dir = n == null || Number.isNaN(n) ? "" : n >= 0 ? "dd-num-pos" : "dd-num-neg";
+    var shown = n == null || Number.isNaN(n) ? "—" : fmtEsSignedPct(n, 2);
+    return (
+      '<li class="' + (extraClass || "") + '">' +
+      '<span class="dd-attr-sym">' + escapeHtml(title) + "</span>" +
+      '<span class="dd-attr-contrib ' + dir + '">' + escapeHtml(shown) + "</span>" +
+      (meta ? '<span class="dd-attr-meta">' + escapeHtml(meta) + "</span>" : "") +
+      "</li>"
+    );
+  }
+
+  function renderTop10Attribution(block) {
+    var root = document.getElementById("top10-attr");
+    if (!root) return;
+    var excessEl = document.getElementById("attr-excess");
+    var lineEl = document.getElementById("attr-line");
+    var splitEl = document.getElementById("attr-split");
+    var noteEl = document.getElementById("attr-note");
+    var partialEl = document.getElementById("attr-partial");
+    var moreEl = document.getElementById("attr-more");
+    var ready = block && block.excess_pct != null && block.tickers && block.tickers.length;
+    if (!ready) {
+      root.hidden = true;
+      return;
+    }
+    root.hidden = false;
+    if (excessEl) {
+      excessEl.textContent = fmtEsSignedPct(block.excess_pct, 2);
+      excessEl.className = "dd-attr-value " + distClass(block.excess_pct);
+    }
+    if (lineEl) lineEl.textContent = block.headline || "";
+    if (noteEl) noteEl.textContent = block.que_mide || "";
+    if (partialEl) {
+      if (block.partial_note) {
+        partialEl.hidden = false;
+        partialEl.textContent = block.partial_note;
+      } else {
+        partialEl.hidden = true;
+        partialEl.textContent = "";
+      }
+    }
+    var alloc = Number(block.allocation_pct);
+    var sel = Number(block.selection_pct);
+    if (Number.isNaN(alloc)) alloc = 0;
+    if (Number.isNaN(sel)) sel = 0;
+    var maxAbs = Math.max(Math.abs(alloc), Math.abs(sel), Math.abs(Number(block.excess_pct) || 0), 0.01);
+    if (splitEl) {
+      splitEl.innerHTML = attrBarHtml("Efecto sector", alloc, maxAbs) + attrBarHtml("Efecto selección", sel, maxAbs);
+      splitEl.setAttribute(
+        "role",
+        "img"
+      );
+      splitEl.setAttribute(
+        "aria-label",
+        "Efecto sector " + fmtEsSignedPct(alloc, 2) +
+        ", efecto selección " + fmtEsSignedPct(sel, 2) +
+        ". Juntos suman el exceso " + fmtEsSignedPct(block.excess_pct, 2) + "."
+      );
+    }
+    if (!moreEl) return;
+    var tickerItems = (block.tickers || []).map(function (t) {
+      var meta = (t.sector_label || "Sin sector") + " · retorno " + fmtEsSignedPct(t.return_pct, 2);
+      return attrListItem(t.symbol || "—", meta, t.contribution_pct, "");
+    }).join("");
+    var sectors = block.sectors || [];
+    var notable = sectors.filter(function (s) {
+      if (s.proxy_kind === "indice" || s.proxy_kind === "sin_sector") return (s.n_top10 || 0) > 0;
+      return (s.n_top10 || 0) > 0 || Math.abs(Number(s.allocation_pct) || 0) >= 0.05;
+    });
+    var rest = sectors.filter(function (s) { return notable.indexOf(s) === -1 && s.allocation_pct != null; });
+    var restSum = rest.reduce(function (acc, s) { return acc + Number(s.allocation_pct || 0); }, 0);
+    var sectorItems = notable.map(function (s) {
+      var bits = [
+        "Top 10 " + fmtWeightPct(s.weight_top10_pct),
+        "universo " + fmtWeightPct(s.weight_benchmark_pct)
+      ];
+      if (s.proxy_kind === "etf" && s.proxy) {
+        bits.push(s.proxy + " " + fmtEsSignedPct(s.sector_return_pct, 2));
+      } else if (s.proxy_kind === "universo") {
+        bits.push("media de " + (s.proxy_n || 0) + " acciones " + fmtEsSignedPct(s.sector_return_pct, 2));
+      } else if (s.proxy_kind === "indice") {
+        bits.push("no es una apuesta de sector");
+      } else if (s.sector_return_pct == null) {
+        bits.push("sin retorno de sector");
+      }
+      return attrListItem(s.label || s.sector || "—", bits.join(" · "), s.allocation_pct, "");
+    }).join("");
+    if (rest.length) {
+      sectorItems += attrListItem(
+        "Otros sectores",
+        rest.length + (rest.length === 1 ? " sector con aporte chico" : " sectores con aporte chico"),
+        Math.round(restSum * 100) / 100,
+        ""
+      );
+    }
+    sectorItems += attrListItem("Efecto sector", "Suma de los aportes de arriba", alloc, "is-total");
+    sectorItems += attrListItem("Efecto selección", "Lo que queda después del sector", sel, "is-total");
+    sectorItems += attrListItem("Exceso", "Sector + selección", block.excess_pct, "is-total");
+    moreEl.innerHTML =
+      '<h4 class="dd-attr-h">Por ticker</h4>' +
+      '<ul class="dd-attr-list">' + tickerItems + "</ul>" +
+      '<h4 class="dd-attr-h">Por sector</h4>' +
+      '<ul class="dd-attr-list">' + sectorItems + "</ul>";
+  }
+
   function fmtSignedPct2(n) {
     if (n == null || Number.isNaN(Number(n))) return "—";
     var v = Math.round(Number(n) * 100) / 100;
@@ -1971,6 +2101,7 @@
     regime: "Régimen del universo",
     market_regime: "Régimen de mercado",
     top10_return: "Retorno Top 10",
+    top10_attribution: "Atribución del exceso Top 10",
     top10_entry: "Entró al Top 10",
     top10_walkforward: "Simulación walk-forward",
     pillar_points: "Puntos de cada pilar",
@@ -2104,6 +2235,7 @@
     renderResumen(data);
     renderToday(data);
     renderTop10(data.top10_return);
+    renderTop10Attribution(data.top10_attribution);
     renderWalkforward(data.top10_walkforward);
     renderHistorial(data.historial_semaforo);
     renderEarnings(data.earnings);
