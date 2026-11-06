@@ -294,3 +294,88 @@ class ScoringWalkforwardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MonthlyBooksTests(unittest.TestCase):
+    def test_rebalance_marks_are_first_and_month_ends(self):
+        marks = ["2026-01-09", "2026-01-16", "2026-01-30", "2026-02-06", "2026-02-27", "2026-03-06"]
+        self.assertEqual(
+            b.monthly_rebalance_marks(marks),
+            ["2026-01-09", "2026-01-30", "2026-02-27"],
+        )
+        # La última marca solo valúa el libro, aunque cierre un mes.
+        self.assertNotIn("2026-03-06", b.monthly_rebalance_marks(marks))
+
+    def test_holdings_only_change_at_rebalances(self):
+        marks = ["2026-01-09", "2026-01-16", "2026-01-30", "2026-02-06", "2026-02-13"]
+        rebal = b.monthly_rebalance_marks(marks)
+        picks = {"2026-01-09": ["A"], "2026-01-30": ["B"]}
+        held = b._held_at(marks, rebal, picks)
+        self.assertEqual(held["2026-01-16"], ["A"])
+        self.assertEqual(held["2026-01-30"], ["B"])
+        self.assertEqual(held["2026-02-06"], ["B"])
+
+    def test_books_for_every_variant_with_universe_line(self):
+        meta, bars_by, dates = universe(14, 340)
+        got = b.compute_top10_walkforward(meta, bars_by, weeks=12)
+        self.assertEqual(got["rebalance"], b.WALKFORWARD_REBALANCE)
+        self.assertEqual(got["default_variant"], b.TOP10_DEFAULT_VARIANT)
+        self.assertEqual(set(got["books"]), set(b.TOP10_VARIANTS))
+        for book in got["books"].values():
+            self.assertTrue(book["weeks"] > 0)
+            self.assertIn("universe", book["curve"][-1])
+            self.assertIsNotNone(book["universe_total_return_pct"])
+        # El nivel de arriba es el libro por defecto, para la página que ya lo leía.
+        self.assertEqual(got["total_return_pct"], got["books"][b.TOP10_DEFAULT_VARIANT]["total_return_pct"])
+        pub = b.walkforward_public(got)
+        self.assertNotIn("periods", pub)
+        self.assertNotIn("periods", pub["books"]["todas"])
+
+
+class VariantPickTests(unittest.TestCase):
+    def rows(self):
+        return [
+            {"symbol": "A", "desk_score": 90, "desk_score_cons": 10, "cedear": False},
+            {"symbol": "B", "desk_score": 80, "desk_score_cons": 95, "cedear": True},
+            {"symbol": "C", "desk_score": 70, "desk_score_cons": 50, "cedear": True},
+        ]
+
+    def test_cedear_variants_filter_and_cons_variants_resort(self):
+        pick = lambda v: [r["symbol"] for r in b.top10_pick(self.rows(), v)]
+        self.assertEqual(pick("todas"), ["A", "B", "C"])
+        self.assertEqual(pick("cedear"), ["B", "C"])
+        self.assertEqual(pick("todas_cons"), ["B", "C", "A"])
+        self.assertEqual(pick("cedear_cons"), ["B", "C"])
+        self.assertEqual(b.TOP10_DEFAULT_VARIANT, "cedear")
+
+    def test_etfs_never_enter_the_top10(self):
+        rows = self.rows() + [{"symbol": "XLE", "kind": "etf", "desk_score": 99, "desk_score_cons": 99, "cedear": True}]
+        for v in b.TOP10_VARIANTS:
+            self.assertNotIn("XLE", [r["symbol"] for r in b.top10_pick(rows, v)])
+
+    def test_universe_without_cedear_mark_is_not_filtered(self):
+        rows = [{"symbol": s, "desk_score": v} for s, v in (("A", 9), ("B", 8))]
+        self.assertEqual([r["symbol"] for r in b.top10_pick(rows, "cedear")], ["A", "B"])
+
+    def test_top10_return_uses_the_variant_score(self):
+        meta, bars_by, dates = universe(12, 300)
+        rows = b.rank_universe_asof(meta, bars_by, dates[-1].isoformat())
+        self.assertTrue(all("desk_score_cons" in r and "rank_cons" in r for r in rows))
+        block = b.compute_top10_return(rows, bars_by, 10, "todas_cons")
+        self.assertEqual(block["variant"], "todas_cons")
+        by = {r["symbol"]: r for r in rows}
+        for row in block["rows"]:
+            self.assertEqual(row["desk_score"], by[row["symbol"]]["desk_score_cons"])
+
+
+class RealizedVolTests(unittest.TestCase):
+    def test_flat_series_has_zero_vol_and_short_series_none(self):
+        self.assertEqual(b.realized_vol([100.0] * 200), 0.0)
+        self.assertIsNone(b.realized_vol([100.0] * 50))
+
+    def test_known_alternating_series(self):
+        closes = [100.0]
+        for i in range(200):
+            closes.append(closes[-1] * (1.01 if i % 2 == 0 else 1 / 1.01))
+        vol = b.realized_vol(closes, 126)
+        self.assertAlmostEqual(vol, 0.00995 * (126 / 125) ** 0.5 * 252 ** 0.5, places=3)

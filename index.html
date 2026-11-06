@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=39" />
+  <link rel="stylesheet" href="styles.css?v=40" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -159,6 +159,26 @@
           <p>Ordena el Desk Score de hoy y mira cómo les fue en las últimas ruedas. No es una ventaja de compra. Tocá una fila para abrir la ficha.</p>
         </details>
       </div>
+      <div class="dd-variant-bar" aria-label="Qué Top 10 mostrar">
+        <div class="dd-variant-group" role="group" aria-label="Acciones">
+          <button type="button" class="dd-chip dd-variant is-active" data-variant-cedear="1" aria-pressed="true">Con CEDEAR</button>
+          <button type="button" class="dd-chip dd-variant" data-variant-cedear="0" aria-pressed="false">Todas</button>
+        </div>
+        <div class="dd-variant-group" role="group" aria-label="Versión">
+          <button type="button" class="dd-chip dd-variant is-active" data-variant-cons="0" aria-pressed="true">Normal</button>
+          <button type="button" class="dd-chip dd-variant" data-variant-cons="1" aria-pressed="false">Conservadora</button>
+        </div>
+      </div>
+      <p class="dd-variant-note" id="variant-note">Solo acciones con CEDEAR en BYMA: se pueden comprar desde Argentina.</p>
+      <div class="dd-rule" id="top10-rule">
+        <h3 class="dd-rule-title">Cómo usar el Top 10</h3>
+        <ul class="dd-rule-list">
+          <li><strong>Una vez por mes</strong>, en el último cierre: se vende lo que salió del Top 10 y se compra lo que entró, en partes iguales. Entre revisiones no se toca.</li>
+          <li><strong>Va en la parte chica de la cartera.</strong> El resto, en un índice como el SPY.</li>
+          <li><strong>Se mueve mucho.</strong> En la prueba de 2021 a 2026 se movió entre 1,5 y 3 veces más que el SPY, con caídas máximas de 20 % a 40 %. La versión conservadora cae menos y rinde menos.</li>
+        </ul>
+        <p class="dd-rule-foot">Es una regla para usar el filtro con disciplina, no una recomendación de inversión. Los resultados pasados no garantizan resultados futuros.</p>
+      </div>
       <div class="dd-top10-summary" id="top10-summary" aria-label="Resumen de retornos">
         <article class="dd-top10-card" data-kpi="avg_top10">
           <h3 class="dd-kpi-label">Retorno medio Top 10</h3>
@@ -289,25 +309,24 @@
       <summary class="dd-fold-summary">
         <span>
           <span class="dd-fold-title">Simulación Top 10 vs SPY</span>
-          <span class="dd-fold-hint">Walk-forward semanal</span>
+          <span class="dd-fold-hint">Rebalanceo mensual, contra SPY y el universo</span>
         </span>
       </summary>
       <div class="dd-fold-body">
         <section class="dd-wf dd-panel" data-section="top10-walkforward" aria-label="Simulación del Top 10 contra SPY">
           <div class="dd-top10-head">
             <h2 class="dd-sr-only">Simulación Top 10 vs SPY</h2>
-            <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward semanal · base 100</p>
+            <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward mensual · base 100</p>
             <p class="dd-universe-mark">Universo ampliado el 02/10/2026. Las semanas de antes usan el universo de ese momento.</p>
           </div>
           <details class="dd-help">
             <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
             <p class="dd-wf-caption" id="wf-caption">
-              Simulación semanal: en el último cierre de cada semana se recalcula el Desk Score
-              solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada
-              nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a
-              ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia
-              atrás. Sin comisiones. Es una simulación de un filtro, no una ventaja de compra ni una
-              recomendación. Los resultados pasados no garantizan resultados futuros.
+              Simulación mensual: en el último cierre de cada mes se recalcula el Desk Score solo
+              con los datos hasta ese cierre, se arma el Top 10 elegido arriba con el mismo peso
+              para cada nombre y se mantiene hasta el último cierre del mes siguiente. «Universo» es
+              comprar todas las acciones con el mismo peso. Sin comisiones. Es una simulación de un
+              filtro, no una recomendación. Los resultados pasados no garantizan resultados futuros.
             </p>
           </details>
           <div class="dd-wf-kpis" id="wf-kpis" aria-label="Resultados de la simulación">
@@ -319,8 +338,12 @@
               <h3 class="dd-kpi-label">SPY</h3>
               <p class="dd-kpi-value" id="wf-spy">—</p>
             </article>
+            <article class="dd-top10-card" data-kpi="wf_uni">
+              <h3 class="dd-kpi-label">Universo</h3>
+              <p class="dd-kpi-value" id="wf-uni">—</p>
+            </article>
             <article class="dd-top10-card" data-kpi="wf_excess">
-              <h3 class="dd-kpi-label">Exceso</h3>
+              <h3 class="dd-kpi-label">Exceso vs SPY</h3>
               <p class="dd-kpi-value" id="wf-excess">—</p>
             </article>
             <article class="dd-top10-card" data-kpi="wf_beat">
@@ -350,6 +373,7 @@
             <p class="dd-wf-legend">
               <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-port" aria-hidden="true"></span>Cartera Top 10</span>
               <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-spy" aria-hidden="true"></span>SPY</span>
+              <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-uni" aria-hidden="true"></span>Universo (mismo peso)</span>
             </p>
             <div id="wf-chart" class="dd-wf-chart" role="img" aria-label="Curva de la cartera contra SPY, base 100"></div>
           </div>
@@ -616,6 +640,6 @@
     </p>
   </footer>
 
-  <script src="app.js?v=39" defer></script>
+  <script src="app.js?v=40" defer></script>
 </body>
 </html>

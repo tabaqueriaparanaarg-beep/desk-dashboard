@@ -159,10 +159,18 @@ class BuildModeTests(unittest.TestCase):
 
     def test_walkforward_from_another_score_version_is_not_reused(self) -> None:
         block = {
+            "rebalance": build.WALKFORWARD_REBALANCE,
             "window_end": "2026-09-30",
             "curve": [{"date": "2026-09-30", "portfolio": 100, "spy": 100}],
         }
         same = {"score_version": build.SCORE_VERSION, "top10_walkforward": block}
+        # Una simulación semanal (la de antes del cambio a mensual) no se reutiliza.
+        weekly = dict(block, rebalance="ultimo_cierre_semana_iso")
+        self.assertIsNone(
+            build.previous_walkforward_reusable(
+                {"score_version": build.SCORE_VERSION, "top10_walkforward": weekly}, "2026-10-01"
+            )
+        )
         self.assertIsNotNone(build.previous_walkforward_reusable(same, "2026-10-01"))
         # Publicado antes de que existiera score_version (v2) o con otra versión.
         self.assertIsNone(build.previous_walkforward_reusable({"top10_walkforward": block}, "2026-10-01"))
@@ -173,6 +181,7 @@ class BuildModeTests(unittest.TestCase):
         previous = {
             "score_version": build.SCORE_VERSION,
             "top10_walkforward": {
+                "rebalance": build.WALKFORWARD_REBALANCE,
                 "window_end": "2026-09-30",
                 "curve": [{"date": "2026-09-30", "portfolio": 100, "spy": 100}],
             }
@@ -181,6 +190,7 @@ class BuildModeTests(unittest.TestCase):
         tainted = {
             "score_version": build.SCORE_VERSION,
             "top10_walkforward": {
+                "rebalance": build.WALKFORWARD_REBALANCE,
                 "window_end": "2026-10-01",
                 "curve": [{"date": "2026-10-01", "portfolio": 101, "spy": 100}],
             }
@@ -294,11 +304,11 @@ class WorkflowTests(unittest.TestCase):
         sw = (ROOT / "sw.js").read_text(encoding="utf-8")
         self.assertIn(ms.LIVE_BANNER, js)
         self.assertIn('id="session-banner"', html)
-        self.assertIn('VERSION = "dd-v39"', sw)
-        self.assertIn("app.js?v=39", html)
-        self.assertIn("styles.css?v=39", html)
-        self.assertIn("app.js?v=39", sw)
-        self.assertIn("styles.css?v=39", sw)
+        self.assertIn('VERSION = "dd-v40"', sw)
+        self.assertIn("app.js?v=40", html)
+        self.assertIn("styles.css?v=40", html)
+        self.assertIn("app.js?v=40", sw)
+        self.assertIn("styles.css?v=40", sw)
 
 
 if __name__ == "__main__":

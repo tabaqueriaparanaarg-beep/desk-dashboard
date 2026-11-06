@@ -92,6 +92,21 @@ Hasta v2 el score era `0.30·Tendencia + 0.35·Fuerza_RS + 0.35·Contracción` c
 - **Límites:** el universo es el de hoy (sesgo de supervivencia, que infla mucho el número del universo amplio); son ~5 años de un mercado que premió a los líderes; el Top 10 por momentum tiene más volatilidad que el SPY (24 % anual en las 61, 41 % en el amplio) y el momentum tiene caídas bruscas cuando el mercado da vuelta.
 - Para repetirlo: `python3 backtest_largo.py` (baja barras de Alpaca a `.cache_backtest_bars.json`) y después `python3 backtest_pilares.py` (usa la cache, mide cada pilar y el universo de 61).
 
+### Variantes del Top 10 y simulación mensual (nov-2026)
+
+La página arranca en el **Top 10 con CEDEAR** (`TOP10_DEFAULT_VARIANT = "cedear"`): solo acciones con la marca `cedear` de `universe.json`, para que todo lo que muestra se pueda comprar desde Argentina. Un selector cambia entre **Con CEDEAR / Todas** y **Normal / Conservadora**. Los ETFs no entran a ningún Top 10.
+
+- **Conservadora** (`desk_score_cons`, `rank_cons`): percentil de momentum 12-1 ÷ volatilidad anualizada de 126 ruedas (`vol_126d_pct`), × 0,5 bajo la EMA200. En el backtest cae menos que el v3 y rinde menos.
+- `top10_variants` trae el retorno y la atribución de cada variante. `top10_return` y `top10_attribution` siguen siendo los de la variante por defecto. «Entró» se calcula solo para esa.
+- La **simulación** rebalancea una vez por mes (último cierre semanal del mes), mide 52 semanas y trae un libro por variante en `top10_walkforward.books`, cada uno con la línea del **universo equiponderado** (`universe` en la curva). Una simulación publicada con otro tipo de rebalanceo no se reutiliza.
+
+| Top 10 mensual, ago-2021 a nov-2026 | Amplio | Caída máx. | 61 originales | Caída máx. |
+|---|---|---|---|---|
+| Todas | 66,7 % | −33,5 % | 22,7 % | −18,4 % |
+| Con CEDEAR | 33,1 % | −31,5 % | 21,7 % | −23,8 % |
+| Con CEDEAR, conservadora | 22,6 % | −22,0 % | 19,8 % | −15,1 % |
+| SPY | 11,9 % | −23,9 % | 11,9 % | −23,9 % |
+
 `SCORE_VERSION = 3` va en `datos.json` → `score_version`. Los Desk Score guardados en el historial del semáforo antes de este cambio son de v2.
 
 Detalle completo también en `datos.json` → clave `formulas`.

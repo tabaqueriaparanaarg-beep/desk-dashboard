@@ -31,6 +31,15 @@
     listScroll: 0,
     baseTitle: "",
     walkforward: null,
+    // Top 10 elegido: con CEDEAR (por defecto) o todas; normal o conservador.
+    variantCedear: true,
+    variantCons: false,
+    variants: null,
+    wfBooks: null,
+    top10Default: null,
+    attrDefault: null,
+    wfDefault: null,
+    defaultVariant: "cedear",
     historial: null,
     patternTab: "breakout_52w",
     patternScan: null,
@@ -324,6 +333,43 @@
     );
   }
 
+  var VARIANT_NOTES = {
+    cedear: "Solo acciones con CEDEAR en BYMA: se pueden comprar desde Argentina.",
+    todas: "Todas las acciones del universo. Las que tienen CEDEAR llevan un punto verde (●); el resto no se puede comprar desde Argentina.",
+    cons: " Versión conservadora: el mismo momentum, dividido por la volatilidad. Cae menos y rinde menos."
+  };
+
+  function variantKey() {
+    return (state.variantCedear ? "cedear" : "todas") + (state.variantCons ? "_cons" : "");
+  }
+
+  function renderVariant() {
+    var key = variantKey();
+    var v = state.variants && state.variants[key];
+    var isDefault = key === state.defaultVariant;
+    // Sin variantes (datos.json viejo): solo existe el Top 10 de siempre.
+    renderTop10(v ? v.top10_return : (isDefault ? state.top10Default : null));
+    renderTop10Attribution(v ? v.top10_attribution : (isDefault ? state.attrDefault : null));
+    var book = state.wfBooks && state.wfBooks[key];
+    renderWalkforward(book || (isDefault ? state.wfDefault : null));
+    document.querySelectorAll(".dd-variant").forEach(function (btn) {
+      var on;
+      if (btn.hasAttribute("data-variant-cedear")) {
+        on = (btn.getAttribute("data-variant-cedear") === "1") === state.variantCedear;
+      } else {
+        on = (btn.getAttribute("data-variant-cons") === "1") === state.variantCons;
+      }
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    var note = document.getElementById("variant-note");
+    if (note) {
+      note.textContent = (state.variantCedear ? VARIANT_NOTES.cedear : VARIANT_NOTES.todas) +
+        (state.variantCons ? VARIANT_NOTES.cons : "") +
+        (isDefault ? "" : " La columna «Entró» se calcula solo para el Top 10 con CEDEAR normal.");
+    }
+  }
+
   function renderTop10(block) {
     var avgEl = document.getElementById("top10-avg");
     var spyEl = document.getElementById("top10-spy");
@@ -362,7 +408,9 @@
       markRowLink(tr, r.symbol);
       tr.innerHTML =
         '<td class="dd-col-rank" data-col="rank">' + escapeHtml(r.rank != null ? r.rank : "") + "</td>" +
-        '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") + "</td>" +
+        '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") +
+        (!state.variantCedear && r.cedear ? '<span class="dd-cedear-dot" title="Tiene CEDEAR en BYMA" aria-label="Tiene CEDEAR">●</span>' : "") +
+        "</td>" +
         '<td data-col="entro" class="dd-col-entro">' + entroHtml(r.entro) + "</td>" +
         '<td data-col="spark" class="dd-col-spark">' + sparklineSvg(r.spark) + "</td>" +
         '<td data-col="score"><span class="dd-score' +
@@ -551,8 +599,10 @@
     var padT = 14;
     var padB = 26;
     var vals = [];
+    var hasUni = curve.every(function (p) { return p.universe != null && !Number.isNaN(Number(p.universe)); });
     curve.forEach(function (p) {
       vals.push(Number(p.portfolio), Number(p.spy));
+      if (hasUni) vals.push(Number(p.universe));
     });
     var minV = Math.min.apply(null, vals);
     var maxV = Math.max.apply(null, vals);
@@ -608,6 +658,7 @@
       '<svg viewBox="0 0 ' + width + " " + height + '" width="' + width + '" height="' + height + '" role="presentation">' +
       grid + baseLine +
       '<polygon points="' + areaPts + '" fill="rgba(255,107,53,0.14)" stroke="none"></polygon>' +
+      (hasUni ? '<polyline fill="none" stroke="#A7ADB8" stroke-width="1.6" stroke-dasharray="5 3" stroke-linecap="round" stroke-linejoin="round" points="' + poly("universe") + '"></polyline>' : "") +
       '<polyline fill="none" stroke="#7EB6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + poly("spy") + '"></polyline>' +
       '<polyline fill="none" stroke="#FF6B35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="' + poly("portfolio") + '"></polyline>' +
       dot + xLabels +
@@ -629,7 +680,7 @@
     if (caption && block && block.note) caption.textContent = block.note;
 
     function clearKpis() {
-      ["wf-port", "wf-spy", "wf-excess", "wf-dd", "wf-dd-spy"].forEach(function (id) {
+      ["wf-port", "wf-spy", "wf-uni", "wf-excess", "wf-dd", "wf-dd-spy"].forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.textContent = "—";
@@ -644,7 +695,7 @@
 
     if (!block || !block.weeks) {
       clearKpis();
-      if (sub) sub.textContent = "Walk-forward semanal · base 100";
+      if (sub) sub.textContent = "Walk-forward mensual · base 100";
       drawWalkforwardChart(null);
       if (body) {
         body.innerHTML = '<tr><td colspan="4" class="dd-empty">Sin simulación todavía. Se calcula al correr build.py.</td></tr>';
@@ -653,10 +704,12 @@
     }
 
     if (sub && block.window_start && block.window_end) {
-      sub.textContent = "Del " + fmtIso(block.window_start) + " al " + fmtIso(block.window_end) + " · base 100";
+      sub.textContent = "Del " + fmtIso(block.window_start) + " al " + fmtIso(block.window_end) + " · base 100" +
+        (block.label ? " · " + block.label : "");
     }
     setSignedValue("wf-port", block.total_return_pct);
     setSignedValue("wf-spy", block.spy_total_return_pct);
+    setSignedValue("wf-uni", block.universe_total_return_pct);
     setSignedValue("wf-excess", block.excess_return_pct);
     setSignedValue("wf-dd", block.max_drawdown_pct);
     setSignedValue("wf-dd-spy", block.spy_max_drawdown_pct);
@@ -668,7 +721,7 @@
       setText("wf-turn-sub", "");
     } else {
       setText("wf-turn", fmtNum(block.avg_names_changed, 2));
-      setText("wf-turn-sub", "nombres que salen / semana");
+      setText("wf-turn-sub", block.rebalance === "ultimo_cierre_del_mes" ? "nombres que salen / mes" : "nombres que salen / semana");
     }
     drawWalkforwardChart(block);
 
@@ -2234,9 +2287,13 @@
     renderMarketRegime(data);
     renderResumen(data);
     renderToday(data);
-    renderTop10(data.top10_return);
-    renderTop10Attribution(data.top10_attribution);
-    renderWalkforward(data.top10_walkforward);
+    state.top10Default = data.top10_return || null;
+    state.attrDefault = data.top10_attribution || null;
+    state.wfDefault = data.top10_walkforward || null;
+    state.variants = data.top10_variants || null;
+    state.wfBooks = (data.top10_walkforward && data.top10_walkforward.books) || null;
+    state.defaultVariant = data.top10_default_variant || "cedear";
+    renderVariant();
     renderHistorial(data.historial_semaforo);
     renderEarnings(data.earnings);
     renderSectors(data.sectors);
@@ -2316,6 +2373,17 @@
         applyFilters();
       });
     }
+
+    document.querySelectorAll(".dd-variant").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.hasAttribute("data-variant-cedear")) {
+          state.variantCedear = btn.getAttribute("data-variant-cedear") === "1";
+        } else {
+          state.variantCons = btn.getAttribute("data-variant-cons") === "1";
+        }
+        renderVariant();
+      });
+    });
 
     document.querySelectorAll(".dd-chip-toggle").forEach(function (btn) {
       btn.addEventListener("click", function () {

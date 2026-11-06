@@ -1044,6 +1044,65 @@ body {
   background: #7eb6ff;
 }
 
+.dd-wf-swatch-uni {
+  background: repeating-linear-gradient(90deg, #a7adb8 0 5px, transparent 5px 8px);
+}
+
+.dd-variant-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.25rem 0 0.4rem;
+}
+
+.dd-variant-group {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.dd-variant-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--dd-muted);
+}
+
+.dd-rule {
+  border: 1px solid var(--dd-border-strong);
+  border-radius: 12px;
+  padding: 0.75rem 0.95rem;
+  margin: 0 0 1rem;
+  background: var(--dd-bg-elevated);
+}
+
+.dd-rule-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.dd-rule-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.dd-rule-list li + li {
+  margin-top: 0.3rem;
+}
+
+.dd-rule-foot {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--dd-muted);
+}
+
+.dd-cedear-dot {
+  margin-left: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--dd-ok);
+  vertical-align: middle;
+}
+
 .dd-wf-chart {
   width: 100%;
   min-height: 180px;
