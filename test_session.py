@@ -157,8 +157,21 @@ class BuildModeTests(unittest.TestCase):
         holiday = datetime(2026, 11, 26, 12, 0, tzinfo=NY)
         self.assertEqual(build.finalize_session_mode("cierre", "2026-11-25", holiday), "cierre")
 
+    def test_walkforward_from_another_score_version_is_not_reused(self) -> None:
+        block = {
+            "window_end": "2026-09-30",
+            "curve": [{"date": "2026-09-30", "portfolio": 100, "spy": 100}],
+        }
+        same = {"score_version": build.SCORE_VERSION, "top10_walkforward": block}
+        self.assertIsNotNone(build.previous_walkforward_reusable(same, "2026-10-01"))
+        # Publicado antes de que existiera score_version (v2) o con otra versión.
+        self.assertIsNone(build.previous_walkforward_reusable({"top10_walkforward": block}, "2026-10-01"))
+        old = {"score_version": build.SCORE_VERSION - 1, "top10_walkforward": block}
+        self.assertIsNone(build.previous_walkforward_reusable(old, "2026-10-01"))
+
     def test_live_session_is_not_reused_as_a_walkforward_point(self) -> None:
         previous = {
+            "score_version": build.SCORE_VERSION,
             "top10_walkforward": {
                 "window_end": "2026-09-30",
                 "curve": [{"date": "2026-09-30", "portfolio": 100, "spy": 100}],
@@ -166,6 +179,7 @@ class BuildModeTests(unittest.TestCase):
         }
         self.assertIsNotNone(build.previous_walkforward_reusable(previous, "2026-10-01"))
         tainted = {
+            "score_version": build.SCORE_VERSION,
             "top10_walkforward": {
                 "window_end": "2026-10-01",
                 "curve": [{"date": "2026-10-01", "portfolio": 101, "spy": 100}],
