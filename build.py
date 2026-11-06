@@ -1720,9 +1720,18 @@ def bars_without_session(all_bars: dict[str, list[dict]], session: str | None) -
     return out
 
 
+def same_score_version(previous: dict | None) -> bool:
+    """El datos.json anterior se armó con la misma fórmula del Desk Score."""
+    return isinstance(previous, dict) and previous.get("score_version") == SCORE_VERSION
+
+
 def previous_walkforward_reusable(previous: dict | None, live_session: str | None) -> dict | None:
-    """La simulación ya publicada, si ningún punto es de la rueda en curso."""
-    if not live_session or not isinstance(previous, dict):
+    """La simulación ya publicada, si ningún punto es de la rueda en curso.
+
+    Si el Desk Score cambió de versión, la simulación publicada eligió sus Top 10
+    con la fórmula vieja: no se reutiliza.
+    """
+    if not live_session or not same_score_version(previous):
         return None
     block = previous.get("top10_walkforward")
     if not isinstance(block, dict):
@@ -1749,7 +1758,7 @@ def choose_walkforward(
     """En intradía no se agrega el punto de la rueda abierta."""
     if mode == "intradia":
         if not live_session:
-            block = previous.get("top10_walkforward") if isinstance(previous, dict) else None
+            block = previous.get("top10_walkforward") if same_score_version(previous) else None
             if isinstance(block, dict) and block.get("curve"):
                 return block, (
                     "Simulación: todavía no hay barra de hoy. Se deja la del último cierre."
@@ -3415,7 +3424,13 @@ def main() -> None:
         "disclaimer": "No es recomendación de compra ni de inversión. Uso interno / educativo.",
     }
     try:
-        prev_snap = signals.snapshot_from_payload(previous_payload) if previous_payload else None
+        # Con otra versión del Desk Score, comparar el Top 10 contra el anterior
+        # mostraría el cambio de fórmula como si fuera un movimiento del mercado.
+        prev_snap = (
+            signals.snapshot_from_payload(previous_payload)
+            if previous_payload and same_score_version(previous_payload)
+            else None
+        )
         resumen = signals.compose_resumen(signals.snapshot_from_payload(payload), prev_snap)
         if mode == "intradia":
             mark_resumen_provisional(resumen)
