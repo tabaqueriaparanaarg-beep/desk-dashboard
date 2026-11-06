@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=40" />
+  <link rel="stylesheet" href="styles.css?v=41" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -54,14 +54,6 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.2M12 19.3V21.5M2.5 12h2.2M19.3 12H21.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         <span>Score</span>
       </a>
-      <a href="#senales" data-page="senales">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-        <span>Señales</span>
-      </a>
-      <a href="#rotacion" data-page="rotacion">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="16.2" cy="8.2" r="1.6" fill="currentColor"/></svg>
-        <span>Rotación</span>
-      </a>
       <a href="#analisis" data-page="analisis">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.8 15.8 20.5 20.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         <span>Análisis</span>
@@ -74,11 +66,6 @@
     <div id="hoy" class="dd-hoy dd-pane is-on" data-page="resumen">
       <h2 class="dd-sr-only">Qué pasa hoy</h2>
 
-      <section class="dd-podio dd-panel" id="podio" aria-label="Podio del día" hidden>
-        <h2 class="dd-section-title">Podio del día</h2>
-        <p class="dd-section-sub">Los tres Desk Score más altos de esta lectura. No es una compra.</p>
-        <div id="podio-body" class="dd-podio-grid"></div>
-      </section>
 
       <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
         <h2 class="dd-section-title">Régimen de mercado</h2>
@@ -107,40 +94,6 @@
         </a>
       </div>
 
-      <section class="dd-kpis-wrap dd-panel" data-section="kpis" aria-label="KPIs del universo">
-        <h2 class="dd-section-title">Números del universo</h2>
-        <div class="dd-kpis">
-          <article class="dd-kpi-card" data-kpi="activos">
-            <h3 class="dd-kpi-label">Activos</h3>
-            <p class="dd-kpi-value" id="kpi-activos">—</p>
-          </article>
-          <article class="dd-kpi-card" data-kpi="above_ema200">
-            <h3 class="dd-kpi-label">Sobre EMA200</h3>
-            <p class="dd-kpi-value" id="kpi-ema200">—</p>
-            <p class="dd-kpi-sub" id="kpi-ema200-pct"></p>
-          </article>
-          <article class="dd-kpi-card" data-kpi="above_sma50">
-            <h3 class="dd-kpi-label">Sobre SMA50</h3>
-            <p class="dd-kpi-value" id="kpi-sma50">—</p>
-            <p class="dd-kpi-sub" id="kpi-sma50-pct"></p>
-          </article>
-          <article class="dd-kpi-card" data-kpi="rs_gt_70">
-            <h3 class="dd-kpi-label">RS &gt; 70</h3>
-            <p class="dd-kpi-value" id="kpi-rs70">—</p>
-            <p class="dd-kpi-sub" id="kpi-rs70-pct"></p>
-          </article>
-          <article class="dd-kpi-card" data-kpi="volumen_inusual">
-            <h3 class="dd-kpi-label">Vol. inusual (&gt;50%)</h3>
-            <p class="dd-kpi-value" id="kpi-vol">—</p>
-            <p class="dd-kpi-sub" id="kpi-vol-pct"></p>
-          </article>
-          <article class="dd-kpi-card" data-kpi="regime" id="kpi-regime-card">
-            <h3 class="dd-kpi-label">Régimen del universo</h3>
-            <p class="dd-kpi-value" id="kpi-regime">—</p>
-            <p class="dd-kpi-sub" id="kpi-regime-sub"></p>
-          </article>
-        </div>
-      </section>
 
       <section class="dd-earnings dd-panel" id="earnings" data-section="earnings" aria-label="Calendario de resultados">
         <h2 class="dd-section-title">Resultados de la semana</h2>
@@ -227,7 +180,7 @@
 
     <section class="dd-ranking dd-panel dd-pane" id="ranking" data-page="score" data-section="ranking" aria-label="Ranking Desk Score">
       <h2 class="dd-section-title">Ranking</h2>
-      <p class="dd-section-sub">Tocá una fila para abrir la ficha.</p>
+      <p class="dd-section-sub">Tocá una fila para abrir la ficha. El punto verde (●) marca las que tienen CEDEAR.</p>
       <details class="dd-help">
         <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué significa</summary>
         <p>El Desk Score es el percentil del momentum 12-1: cuánto subió cada acción en los últimos 12 meses, sin contar el último mes, comparada con el resto del universo. Si el cierre está bajo la EMA200, el score se divide por 2. Ni el verde ni el Top 10 son una señal de compra. El verde es «sin alertas de riesgo».</p>
@@ -245,7 +198,6 @@
         <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="cedear" aria-pressed="false" title="Tiene CEDEAR en BYMA, según el listado de enero 2026. No es el filtro de tipo «CEDEAR proxy».">Con CEDEAR</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
-          <button type="button" class="dd-chip dd-chip-toggle" data-flag="rs_gt_70" aria-pressed="false">RS &gt; 70</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="solo_verdes" aria-pressed="false" title="Solo nombres sin alertas de riesgo. No es un filtro de compra.">Sin alertas</button>
         </div>
         <div class="dd-filter-search">
@@ -266,17 +218,12 @@
             <tr>
               <th scope="col" class="dd-sticky-col dd-col-rank">#</th>
               <th scope="col" class="dd-sticky-col dd-col-ticker">Ticker</th>
-              <th scope="col" class="dd-col-luz" title="Alerta de riesgo. El verde es sin alertas, no una compra. No entra en el Desk Score.">Luz</th>
-              <th scope="col" class="dd-col-compra" title="Porcentaje de analistas en compra fuerte o compra. No entra en el Desk Score.">Compra</th>
               <th scope="col">Score</th>
-              <th scope="col" title="Fecha en que entró al Top 10 en la racha actual">Entró</th>
-              <th scope="col">Flags</th>
               <th scope="col" title="Percentil del momentum 12-1. Es lo que arma el Desk Score.">Momentum</th>
-              <th scope="col">RS</th>
-              <th scope="col" title="Referencia. No entra en el Desk Score.">Contracción</th>
-              <th scope="col">Dist EMA200</th>
-              <th scope="col">Vol rel</th>
-              <th scope="col">kind</th>
+              <th scope="col" class="dd-col-luz" title="Alerta de riesgo. El verde es sin alertas, no una compra. No entra en el Desk Score.">Luz</th>
+              <th scope="col" title="Fecha en que entró al Top 10 con CEDEAR en la racha actual">Entró</th>
+              <th scope="col" title="Distancia del cierre a la EMA200">Dist EMA200</th>
+              <th scope="col" title="Alertas informativas. No restan puntos.">Alertas</th>
             </tr>
           </thead>
           <tbody id="ranking-body">
@@ -285,25 +232,6 @@
       </div>
     </section>
 
-    <details class="dd-fold dd-pane" id="historial" data-page="score">
-      <summary class="dd-fold-summary">
-        <span>
-          <span class="dd-fold-title">Historial del semáforo</span>
-          <span class="dd-fold-hint">Qué pasó después de cada luz</span>
-        </span>
-      </summary>
-      <div class="dd-fold-body">
-        <section class="dd-hist dd-panel" data-section="historial" aria-label="Historial del semáforo">
-          <h2 class="dd-sr-only">Historial del semáforo</h2>
-          <p class="dd-section-sub">El verde es «sin alertas de riesgo», no una compra. Se compara con SPY y con el promedio del universo.</p>
-          <p class="dd-universe-mark">Universo ampliado el 02/10/2026. Lo anterior queda con el universo chico: no se reescribió el pasado.</p>
-          <div id="hist-root">
-            <p class="dd-empty">Cargando…</p>
-          </div>
-          <p class="dd-hist-disclaimer" id="hist-disclaimer">Resultados pasados no garantizan resultados futuros.</p>
-        </section>
-      </div>
-    </details>
 
     <details class="dd-fold dd-pane" id="simulacion" data-page="score">
       <summary class="dd-fold-summary">
@@ -397,7 +325,7 @@
 
     <section class="dd-analisis dd-panel dd-pane" id="analisis" data-page="analisis" aria-label="Análisis de un ticker">
       <h2 class="dd-section-title">Análisis</h2>
-      <p class="dd-section-sub">Un ticker por vez. Buscalo acá o tocá una fila en Score, Señales o Rotación.</p>
+      <p class="dd-section-sub">Un ticker por vez: score, alertas, resultados, analistas e insiders. Buscalo acá o tocá una fila en Score.</p>
       <div class="dd-filter-search">
         <label class="dd-sr-only" for="analisis-search">Buscar ticker</label>
         <input type="search" id="analisis-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
@@ -406,128 +334,10 @@
       <div id="ficha" class="dd-ficha" role="region" aria-label="Ficha del ticker"></div>
     </section>
 
-    <details class="dd-fold dd-pane" id="insiders" data-page="analisis">
-      <summary class="dd-fold-summary">
-        <span>
-          <span class="dd-fold-title">Qué compran los grandes</span>
-          <span class="dd-fold-hint" id="insider-caption">Compras netas de insiders, últimos 90 días.</span>
-        </span>
-      </summary>
-      <div class="dd-fold-body">
-        <section class="dd-insiders dd-panel" data-section="insiders" aria-label="Qué compran los grandes">
-          <h2 class="dd-sr-only">Qué compran los grandes</h2>
-          <div id="insider-list" class="dd-link-list">
-            <p class="dd-empty">Cargando…</p>
-          </div>
-        </section>
-      </div>
-    </details>
 
-    <section class="dd-senales dd-panel dd-pane" id="senales" data-page="senales" aria-label="Matriz de confluencia">
-      <h2 class="dd-section-title">Confluencia</h2>
-      <p class="dd-section-sub">Un punto verde es una lectura activa del precio. No es una recomendación de compra.</p>
-      <details class="dd-help">
-        <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué mide cada columna</summary>
-        <p id="senales-def">Sale del precio que ya baja Angus. El diario y el semanal son lecturas distintas.</p>
-      </details>
-      <div class="dd-sig-tools">
-        <label class="dd-sr-only" for="sig-search">Buscar en señales</label>
-        <input type="search" id="sig-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
-        <label class="dd-sr-only" for="sig-sector">Sector</label>
-        <select id="sig-sector" class="dd-select">
-          <option value="">Todos los sectores</option>
-        </select>
-        <button type="button" id="sig-only" class="dd-chip dd-chip-toggle" aria-pressed="false">Con señales</button>
-      </div>
-      <p class="dd-scroll-hint">Deslizá la tabla para ver el diario y el semanal.</p>
-      <div class="dd-pager" id="sig-pager" hidden>
-        <button type="button" id="sig-prev">Anterior</button>
-        <span id="sig-page">1</span>
-        <button type="button" id="sig-next">Siguiente</button>
-      </div>
-      <div class="dd-table-wrap">
-        <table class="dd-table dd-sig-table" id="senales-table">
-          <thead id="senales-head"></thead>
-          <tbody id="senales-body"></tbody>
-        </table>
-      </div>
-      <div id="senales-lists" class="dd-sig-lists"></div>
-    </section>
 
-    <details class="dd-fold dd-pane" id="patrones" data-page="senales">
-      <summary class="dd-fold-summary">
-        <span>
-          <span class="dd-fold-title">Escáner de patrones</span>
-          <span class="dd-fold-hint">Tocá un nombre para abrir la ficha</span>
-        </span>
-      </summary>
-      <div class="dd-fold-body">
-        <section class="dd-scan dd-panel" id="pattern-panel" data-section="patterns" aria-label="Escáner de patrones">
-          <h2 class="dd-sr-only">Escáner de patrones</h2>
-          <details class="dd-help">
-            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> De dónde sale</summary>
-            <p>Sale del precio que ya baja Alpaca. No es una señal de compra.</p>
-          </details>
-          <div class="dd-filter-group" id="pattern-tabs" role="tablist" aria-label="Patrones"></div>
-          <div id="pattern-list" class="dd-link-list">
-            <p class="dd-empty">Cargando…</p>
-          </div>
-        </section>
-      </div>
-    </details>
 
-    <details class="dd-fold dd-pane" id="analistas" data-page="analisis">
-      <summary class="dd-fold-summary">
-        <span>
-          <span class="dd-fold-title">Analistas</span>
-          <span class="dd-fold-hint">% en compra. No entra en el Desk Score</span>
-        </span>
-      </summary>
-      <div class="dd-fold-body">
-        <section class="dd-analysts dd-panel" data-section="analysts" aria-label="Opinión de los analistas">
-          <h2 class="dd-sr-only">Analistas</h2>
-          <details class="dd-help">
-            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo leerlo</summary>
-            <p>Los analistas suelen ser optimistas y reaccionan tarde. Es contexto, no señal. El detalle de cada nombre está en la ficha.</p>
-          </details>
-          <div id="analyst-list" class="dd-link-list">
-            <p class="dd-empty">Cargando…</p>
-          </div>
-        </section>
-      </div>
-    </details>
 
-    <section class="dd-rotacion dd-panel dd-pane" id="rotacion" data-page="rotacion" aria-label="Rotación relativa">
-      <h2 class="dd-section-title">Rotación</h2>
-      <p class="dd-section-sub">Cada punto es un ticker contra el SPY. A la derecha está adelante; arriba, el ritmo acompaña.</p>
-      <details class="dd-help">
-        <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
-        <p id="rrg-def"></p>
-      </details>
-      <div class="dd-filter-group" id="rrg-filters" role="group" aria-label="Qué mostrar en el gráfico">
-        <button type="button" class="dd-chip is-active" data-rrg="sector">Sectores</button>
-        <button type="button" class="dd-chip" data-rrg="etf">ETFs</button>
-        <button type="button" class="dd-chip" data-rrg="stock">Acciones</button>
-        <button type="button" class="dd-chip" data-rrg="all">Todos</button>
-      </div>
-      <div class="dd-rrg-extra" id="rrg-extra" hidden>
-        <label class="dd-sr-only" for="rrg-sector">Sector de las acciones</label>
-        <select id="rrg-sector" class="dd-select">
-          <option value="">Mayor RS, todos los sectores</option>
-        </select>
-        <p id="rrg-cap" class="dd-rrg-cap"></p>
-      </div>
-      <div class="dd-rrg-stage">
-        <div id="rrg-chart" class="dd-rrg-chart" role="img" aria-label="Gráfico de rotación relativa"></div>
-        <div id="rrg-tip" class="dd-rrg-tip" hidden></div>
-      </div>
-      <div class="dd-rrg-controls">
-        <button type="button" id="rrg-play" class="dd-rrg-play" aria-pressed="false">Play</button>
-        <input type="range" id="rrg-slider" min="0" max="0" value="0" aria-label="Semana de la estela" />
-        <span id="rrg-frame-label" class="dd-rrg-frame">—</span>
-      </div>
-      <ul id="rrg-notes" class="dd-rrg-notes"></ul>
-    </section>
 
     <details class="dd-fold dd-pane" id="sectores" data-page="score">
       <summary class="dd-fold-summary">
@@ -560,38 +370,6 @@
       </div>
     </details>
 
-    <details class="dd-fold dd-pane" id="rs" data-page="score">
-      <summary class="dd-fold-summary">
-        <span>
-          <span class="dd-fold-title">RS semanal</span>
-          <span class="dd-fold-hint">Fuerza relativa de las últimas semanas</span>
-        </span>
-      </summary>
-      <div class="dd-fold-body">
-        <section class="dd-rsboard dd-panel" data-section="rs-weekly" aria-label="RS semanal">
-          <h2 class="dd-sr-only">RS semanal</h2>
-          <details class="dd-help">
-            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Definición</summary>
-            <p id="rs-definition"></p>
-          </details>
-          <div class="dd-table-wrap">
-            <table class="dd-table dd-rs-table">
-              <caption class="dd-sr-only">RS Score semanal del universo</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Ticker</th>
-                  <th scope="col">RS ahora</th>
-                  <th scope="col">Hace 4 sem</th>
-                  <th scope="col">Cambio</th>
-                  <th scope="col">Serie</th>
-                </tr>
-              </thead>
-              <tbody id="rs-body"></tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    </details>
 
     <details class="dd-fold dd-pane is-on" id="formulas" data-page="resumen">
       <summary class="dd-fold-summary">
@@ -640,6 +418,6 @@
     </p>
   </footer>
 
-  <script src="app.js?v=40" defer></script>
+  <script src="app.js?v=41" defer></script>
 </body>
 </html>

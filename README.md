@@ -107,6 +107,17 @@ La página arranca en el **Top 10 con CEDEAR** (`TOP10_DEFAULT_VARIANT = "cedear
 | Con CEDEAR, conservadora | 22,6 % | −22,0 % | 19,8 % | −15,1 % |
 | SPY | 11,9 % | −23,9 % | 11,9 % | −23,9 % |
 
+### Limpieza de secciones (nov-2026)
+
+Una auditoría de todas las señales (276 semanas, ago-2021 a nov-2026, universo amplio y 61 originales) encontró que el escáner de patrones, la confluencia y la rotación (RRG) no anticipan el retorno de las 4 semanas siguientes; la rotación incluso funciona al revés (lo «rezagado» rindió más que lo «liderando» en 5 de 6 años). Por eso:
+
+- **Salen de la página:** Señales (confluencia y escáner), Rotación (RRG), RS semanal, Podio del día, Números del universo e Historial del semáforo. La barra queda en Resumen, Score y Análisis; los links viejos (`#senales`, `#rotacion`) llevan a Score.
+- **Siguen calculándose por dentro:** los patrones (el semáforo usa el cruce bajista de la EMA200) y el RS semanal (la Vista por sectores lo usa). `signals.py` y `rrg.py` quedan para repetir estudios. `historial_semaforo.json` se sigue guardando.
+- **Analistas e insiders** solo en la ficha. La ficha arranca por el Desk Score, el semáforo y los resultados.
+- **Ranking:** #, Ticker (● = tiene CEDEAR), Score, Momentum, Luz, Entró, Dist EMA200 y Alertas.
+- **Régimen de mercado:** pasa a ser una lectura de riesgo (tranquilo / normal / movido / turbulento). Anticipa la volatilidad del SPY (≈12 % anual con 75–100, ≈23 % por debajo de 50) pero no la dirección, así que ya no sugiere cuánto invertir.
+- **Resumen del día:** compara el Top 10 que muestra la página (con CEDEAR) y no menciona patrones.
+
 `SCORE_VERSION = 3` va en `datos.json` → `score_version`. Los Desk Score guardados en el historial del semáforo antes de este cambio son de v2.
 
 Detalle completo también en `datos.json` → clave `formulas`.

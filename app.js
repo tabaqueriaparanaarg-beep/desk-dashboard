@@ -898,50 +898,24 @@
       markRowLink(tr, r.symbol);
 
       var dist = r.dist_ema200_pct;
-      var cells = [
-        r.rank != null ? r.rank : "",
-        tickerWithLogo(r, "dd-ticker"),
-        luzHtml(r),
-        buyPctHtml(r),
-        '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>",
-        entroInline(r.entro),
-        formatFlags(r.flags, insiderBadgeHtml(r)),
-        fmtNum(p.momentum, 1),
-        fmtNum(r.rs_score, 1),
-        fmtNum(p.contraccion, 1),
-        '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>",
-        fmtNum(r.vol_rel_20d, 2),
-        '<span class="dd-kind" data-kind="' + escapeHtml(r.kind || "") + '">' + escapeHtml(r.kind || "") + "</span>",
+      var cols = [
+        ["rank", r.rank != null ? r.rank : "", "dd-sticky-col dd-col-rank"],
+        ["ticker", tickerWithLogo(r, "dd-ticker") +
+          (r.cedear ? '<span class="dd-cedear-dot" title="Tiene CEDEAR en BYMA" aria-label="Tiene CEDEAR">●</span>' : ""),
+          "dd-sticky-col dd-col-ticker"],
+        ["score", '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>"],
+        ["momentum", fmtNum(p.momentum, 1)],
+        ["luz", luzHtml(r), "dd-col-luz"],
+        ["entro", entroInline(r.entro)],
+        ["dist_ema200", '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>"],
+        ["flags", formatFlags(r.flags)],
       ];
 
-      cells.forEach(function (html, i) {
+      cols.forEach(function (c) {
         var td = document.createElement("td");
-        td.innerHTML = html;
-        if (i === 0) {
-          td.setAttribute("data-col", "rank");
-          td.className = "dd-sticky-col dd-col-rank";
-        }
-        if (i === 1) {
-          td.setAttribute("data-col", "ticker");
-          td.className = "dd-sticky-col dd-col-ticker";
-        }
-        if (i === 2) {
-          td.setAttribute("data-col", "luz");
-          td.className = "dd-col-luz";
-        }
-        if (i === 3) {
-          td.setAttribute("data-col", "compra");
-          td.className = "dd-col-compra";
-        }
-        if (i === 4) td.setAttribute("data-col", "score");
-        if (i === 5) td.setAttribute("data-col", "entro");
-        if (i === 6) td.setAttribute("data-col", "flags");
-        if (i === 7) td.setAttribute("data-col", "momentum");
-        if (i === 8) td.setAttribute("data-col", "rs");
-        if (i === 9) td.setAttribute("data-col", "contraccion");
-        if (i === 10) td.setAttribute("data-col", "dist_ema200");
-        if (i === 11) td.setAttribute("data-col", "vol_rel");
-        if (i === 12) td.setAttribute("data-col", "kind");
+        td.innerHTML = c[1];
+        td.setAttribute("data-col", c[0]);
+        if (c[2]) td.className = c[2];
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
@@ -2047,7 +2021,7 @@
     var highs = hl.highs != null ? hl.highs : "—";
     var lows = hl.lows != null ? hl.lows : "—";
     var line = band.line || "—";
-    var disclaimer = block.disclaimer || band.disclaimer || "Guía automática de exposición, no es un consejo de inversión.";
+    var disclaimer = block.disclaimer || band.disclaimer || "Mide cuánto se mueve el mercado, no para dónde va.";
     var footer = block.footer || "";
 
     body.innerHTML =
@@ -2059,7 +2033,7 @@
       '<span class="dd-regime-score-of">de 100</span>' +
       "</div></div>" +
       '<div class="dd-regime-exposure">' +
-      '<p class="dd-regime-kicker">Exposición sugerida</p>' +
+      '<p class="dd-regime-kicker">Riesgo del mercado</p>' +
       '<p class="dd-regime-exposure-line">' + escapeHtml(line) + "</p>" +
       '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
       "</div></div>" +
@@ -2879,21 +2853,17 @@
       '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
       '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
       "</div></header>" +
-      entryBlock(row) +
-      analystBlock(row) +
-      signalFichaBlock(row) +
-      '<section class="dd-ficha-card" aria-label="Patrones">' +
-      '<h2 class="dd-ficha-kicker">Patrones</h2>' +
-      patternChips(row) +
-      "</section>" +
-      healthBlock(row) +
-      insiderFichaBlock(row) +
+      // Orden: lo que decide (score, riesgo, resultados) primero; el contexto (analistas,
+      // insiders, fundamentos) al final. Patrones, confluencia y RS semanal salieron.
       '<section class="dd-ficha-card" aria-label="Desk Score">' +
       '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
       '<div class="dd-pillars">' + pillarsHtml(row) + "</div></div>" +
       scoreFootnote(row) +
       "</section>" +
+      entryBlock(row) +
+      earnBlock +
+      entroBlock +
       '<section class="dd-ficha-card" aria-label="Rango de 52 semanas">' + rangeBlock + "</section>" +
       '<section class="dd-ficha-card" aria-label="Gate de tendencia">' +
       '<h2 class="dd-ficha-kicker">Gate de tendencia</h2>' +
@@ -2906,13 +2876,9 @@
       "</section>" +
       '<section class="dd-ficha-card" aria-label="Alertas">' +
       '<h2 class="dd-ficha-kicker">Alertas (no restan puntos)</h2>' + penaltyBlock + "</section>" +
-      entroBlock +
-      earnBlock +
-      '<section class="dd-ficha-card" aria-label="Evolución del RS Score">' +
-      '<h2 class="dd-ficha-kicker">Evolución del RS Score · últimas ' + weeks + " semanas</h2>" +
-      rsChartSvg(row.rs_weekly, dates) +
-      '<p class="dd-ficha-note">' + escapeHtml(caption) + "</p>" +
-      "</section>" +
+      analystBlock(row) +
+      insiderFichaBlock(row) +
+      healthBlock(row) +
       '<p class="dd-ficha-disclaimer"><strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.</p>';
     document.title = row.symbol + " · Angus";
   }
@@ -2930,9 +2896,10 @@
     rs: "score",
     historial: "score",
     simulacion: "score",
-    senales: "senales",
-    patrones: "senales",
-    rotacion: "rotacion",
+    // Señales, patrones y rotación salieron (auditoría nov-2026): los links viejos van a Score.
+    senales: "score",
+    patrones: "score",
+    rotacion: "score",
     analisis: "analisis",
     insiders: "analisis",
     analistas: "analisis",
@@ -2949,8 +2916,7 @@
   function pageFromHash() {
     if (parseTickerHash()) return "analisis";
     var key = routeKey().toLowerCase();
-    if (key === "señales") return "senales";
-    if (key === "rotación") return "rotacion";
+    if (key === "señales" || key === "rotación") return "score";
     if (key === "análisis" || key === "analisis") return "analisis";
     if (key === "fórmulas") return "resumen";
     return PAGE_BY_HASH[key] || "resumen";
@@ -2984,7 +2950,7 @@
     if (!root) return;
     root.hidden = false;
     root.innerHTML =
-      '<p class="dd-ficha-empty">Elegí un ticker para ver la ficha. Podés buscarlo arriba o tocar una fila en Score, Señales o Rotación.</p>';
+      '<p class="dd-ficha-empty">Elegí un ticker para ver la ficha. Podés buscarlo arriba o tocar una fila en Score.</p>';
     if (state.baseTitle) document.title = state.baseTitle;
     state.fichaSym = null;
   }

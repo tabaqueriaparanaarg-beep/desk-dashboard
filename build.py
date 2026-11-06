@@ -3125,13 +3125,13 @@ def main() -> None:
 
     # RS Score (percentil en el universo) + Desk Score + rank
     apply_cross_section_scores(rows)
+    # La sección RS semanal, el escáner de patrones, la confluencia y la rotación (RRG)
+    # salieron de la página (auditoría nov-2026: no anticipan nada). El RS semanal se sigue
+    # calculando porque la Vista por sectores lo usa para la tendencia de cada sector, y los
+    # patrones porque el semáforo usa el cruce bajista de la EMA200. signals.py y rrg.py
+    # quedan para repetir estudios.
     rs_weekly = compute_rs_weekly(all_bars, RS_WEEKLY_WEEKS)
     attach_rs_weekly(rows, rs_weekly)
-    rs_dates = rs_weekly.get("dates") or []
-    if rs_dates:
-        notes.append(
-            f"RS semanal: {len(rs_dates)} cierres ({rs_dates[0]} → {rs_dates[-1]})."
-        )
 
     # KPIs (universe excl. pure benchmarks optional — include all scored)
     n = len(rows)
@@ -3350,35 +3350,6 @@ def main() -> None:
     except Exception as e:
         print(f"  historial del semáforo falló (soft): {type(e).__name__}")
         notes.append(f"Historial del semáforo: fallo soft ({type(e).__name__}).")
-    insider_buys = signals.insider_panel(rows)
-    pattern_scan = {"source": "alpaca_bars", "groups": signals.pattern_groups(rows)}
-    pat_bits = [
-        f"{g['label']} {g['count']}" for g in pattern_scan["groups"] if g.get("count")
-    ]
-    notes.append(
-        "Escáner: " + (", ".join(pat_bits) if pat_bits else "sin patrones con estos umbrales") + "."
-    )
-
-    rrg_public = None
-    try:
-        # Historia larga (full_bars): el suavizado doble del RRG pide ~30 semanas.
-        rrg_public = rrg.build_rrg(full_bars, meta_by)
-        notes.append(
-            f"Rotación RRG: {len(rrg_public.get('series') or [])} curvas vs SPY "
-            f"({len(rrg_public.get('dates') or [])} semanas en el gráfico)."
-        )
-    except Exception as e:
-        print(f"  RRG falló (soft): {type(e).__name__}")
-        notes.append(f"Rotación RRG: fallo soft ({type(e).__name__}).")
-
-    confluence_public = None
-    try:
-        confluence_public = signals.build_confluence(rows, full_bars)
-        lit = sum(1 for r in (confluence_public.get("rows") or []) if (r.get("count") or 0) > 0)
-        notes.append(f"Señales: {lit} nombres con al menos una lectura activa. No es una compra.")
-    except Exception as e:
-        print(f"  señales falló (soft): {type(e).__name__}")
-        notes.append(f"Señales: fallo soft ({type(e).__name__}).")
     notes.append(
         f"Resumen comparado contra la base {previous_source}. "
         "No incluye tenedores institucionales (13F)."
@@ -3466,12 +3437,7 @@ def main() -> None:
         "top10_default_variant": TOP10_DEFAULT_VARIANT,
         "historial_semaforo": historial_public,
         "sectors": sectors,
-        "insider_buys": insider_buys,
-        "patterns": pattern_scan,
-        "signals": confluence_public,
-        "rrg": rrg_public,
         "analyst_feed": analyst_feed,
-        "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
         "failures": failures,
@@ -3508,20 +3474,7 @@ def main() -> None:
             "range_52w": f"Mínimo y máximo de high/low en las últimas {RANGE_52W_SESSIONS} sesiones (o las disponibles). position_pct = (close − mín) / (máx − mín) × 100",
             "change_pct": "(close / close anterior − 1) × 100",
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
-            "rs_weekly": RS_WEEKLY_DEFINITION,
             "sectors": SECTOR_FORMULA,
-            "rrg": rrg.DEFINITION,
-            "signals": signals.CONFLUENCE_DEFINITION,
-            "patterns": (
-                "breakout_52w: cierre >= máximo de las sesiones previas (hasta 252, mínimo 60), "
-                "o a <=2% de ese máximo con volumen > media de 50 sesiones. "
-                "pullback_sma50: cierre > EMA200, mínimo dentro de ±2% de la SMA50 en las últimas 5 sesiones "
-                "y cierre de hoy > SMA50. "
-                "base: ventana de 15, 20 o 30 sesiones con rango <=6%, deriva <=2%, "
-                "cierre a <=3% del máximo de la ventana y a <=8% del máximo de 52 semanas. "
-                "ema200_cross: último cruce arriba/abajo dentro de las últimas 5 sesiones. "
-                "No entra en el Desk Score."
-            ),
             "insiders": (
                 "Finnhub /stock/insider-transactions, últimos 90 días. "
                 "Solo códigos P (compra) y S (venta) de mercado abierto. "
