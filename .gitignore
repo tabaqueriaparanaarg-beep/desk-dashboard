@@ -18,3 +18,8 @@ resumen.txt
 
 # SO / editores
 .DS_Store
+
+# Backtest local (no commitear)
+.cache_backtest_bars.json
+backtest_resultado.json
+backtest_pilares.json

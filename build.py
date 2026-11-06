@@ -52,11 +52,11 @@ APCA_SECRET = _env_first("ALPACA_SECRET_KEY", "APCA_API_SECRET_KEY")
 # El ranking publicado se recorta a esta ventana para que el Desk Score del día
 # no cambie al pedir historia extra para la simulación.
 LOOKBACK_CALENDAR_DAYS = 400
-# Walk-forward: 200 ruedas de calentamiento (EMA200) + ~26 semanas + feriados y margen.
+# Walk-forward: 253 ruedas de calentamiento (momentum 12-1) + ~26 semanas + feriados y margen.
 # Misma API de Alpaca (un request por lote); el ranking no usa estas barras viejas.
-WALKFORWARD_LOOKBACK_CALENDAR_DAYS = 560
+WALKFORWARD_LOOKBACK_CALENDAR_DAYS = 620
 WALKFORWARD_WEEKS = 26
-WALKFORWARD_WARMUP_SESSIONS = 200
+WALKFORWARD_WARMUP_SESSIONS = 253
 WALKFORWARD_RECENT = 6
 WALKFORWARD_TOP_N = 10
 BATCH_SIZE = 15
@@ -503,21 +503,28 @@ def clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, x))
 
 
-# Pesos del Desk Score. En la ficha se muestran como puntos sobre el máximo
-# (pilar 0–100 × peso): Tendencia 30, Fuerza RS 35, Contracción 35.
-# Setup salió: en un estudio feb-2022 a sep-2026 un Setup alto iba con peor
-# retorno a 20 ruedas, dentro y fuera de muestra. Sus 15 puntos se reparten
-# de a 5 entre los tres pilares que quedan. Contracción se mantiene.
-# La escala sigue siendo 0–100.
-PILLAR_WEIGHTS = {
-    "tendencia": 0.30,
-    "fuerza_rs": 0.35,
-    "contraccion": 0.35,
-}
-PILLAR_MAX_POINTS = {k: int(round(w * 100)) for k, w in PILLAR_WEIGHTS.items()}
+# Desk Score v3 (nov-2026): momentum 12-1.
+# Estudio ago-2021 a nov-2026 (backtest_largo.py / backtest_pilares.py): con
+# 0.30*Tendencia + 0.35*Fuerza_RS + 0.35*Contracción el Top 10 rendía menos que
+# el universo equiponderado, y el quintil de score más alto era el peor a 4
+# semanas. Contracción restaba en los dos universos probados y Tendencia no
+# ordenaba. El momentum 12-1 fue la única señal con el quintil alto claramente
+# arriba en los dos universos. Por eso el score pasa a ser solo eso, con un
+# filtro de tendencia: bajo la EMA200 el score se divide por 2.
+# Tendencia, Fuerza RS y Contracción se siguen calculando y mostrando, sin peso.
+SCORE_VERSION = 3
+MOM_LONG_SESSIONS = 252   # ~12 meses
+MOM_SKIP_SESSIONS = 21    # se saltea el último mes (reversión de corto plazo)
+MOM_SHORT_SESSIONS = 126  # fallback 6-1 si no hay 12 meses de historia
+BELOW_EMA200_FACTOR = 0.5
+PILLAR_WEIGHTS = {"momentum": 1.0}
+PILLAR_MAX_POINTS = {"momentum": 100}
+INFO_PILLARS = ("tendencia", "fuerza_rs", "contraccion")
 DESK_SCORE_FORMULA = (
-    "0.30*Tendencia + 0.35*Fuerza_RS + 0.35*Contracción "
-    "(cada pilar 0–100; Setup no entra)"
+    "Percentil 0–100 del momentum 12-1 (retorno desde hace 252 ruedas hasta hace 21, "
+    "o sea 12 meses salteando el último) dentro del universo de la corrida. "
+    "Si el cierre está bajo la EMA200, el score se multiplica por 0,5. "
+    "Tendencia, Fuerza RS y Contracción se muestran pero no entran. Sin penalizaciones."
 )
 
 # Rango de 52 semanas ≈ 252 sesiones. La serie de Alpaca trae ~250–280 barras.
@@ -625,30 +632,37 @@ def score_contraccion(
     return clamp(score)
 
 
-def desk_score(tend: float, fuerza: float, contr: float) -> float:
-    """Tendencia 30, Fuerza RS 35, Contracción 35. Setup no entra."""
-    return clamp(
-        tend * PILLAR_WEIGHTS["tendencia"]
-        + fuerza * PILLAR_WEIGHTS["fuerza_rs"]
-        + contr * PILLAR_WEIGHTS["contraccion"]
-    )
+def momentum_12_1(closes: list[float]) -> tuple[float | None, str | None]:
+    """(retorno en fracción, horizonte '12-1' | '6-1' | None).
+
+    12-1: cierre de hace 21 ruedas / cierre de hace 252 − 1. Si no hay 253
+    cierres, 6-1 (hace 126 → hace 21). Con menos historia, None.
+    """
+    for long_n, label in ((MOM_LONG_SESSIONS, "12-1"), (MOM_SHORT_SESSIONS, "6-1")):
+        if len(closes) > long_n:
+            c0 = closes[-1 - long_n]
+            c1 = closes[-1 - MOM_SKIP_SESSIONS]
+            if c0 and c0 > 0:
+                return c1 / c0 - 1.0, label
+    return None, None
 
 
-def pillar_points_block(tend: float, fuerza: float, contr: float) -> dict[str, dict]:
-    """Puntos de cada pilar (0–máximo) a partir del score 0–100, antes de penalizaciones."""
-    raw = {
-        "tendencia": tend,
-        "fuerza_rs": fuerza,
-        "contraccion": contr,
-    }
-    out: dict[str, dict] = {}
-    for key, value in raw.items():
-        weight = PILLAR_WEIGHTS[key]
-        out[key] = {
-            "points": safe_round(value * weight, 1),
-            "max": PILLAR_MAX_POINTS[key],
+def desk_score(momentum_pct: float | None, above_ema200: bool) -> float:
+    """Percentil de momentum 0–100; × BELOW_EMA200_FACTOR bajo la EMA200."""
+    if momentum_pct is None:
+        return 0.0
+    factor = 1.0 if above_ema200 else BELOW_EMA200_FACTOR
+    return clamp(momentum_pct * factor)
+
+
+def pillar_points_block(momentum_pct: float | None) -> dict[str, dict]:
+    """Puntos del único pilar que entra (momentum, sobre 100), antes del filtro EMA200."""
+    return {
+        "momentum": {
+            "points": safe_round(momentum_pct, 1),
+            "max": PILLAR_MAX_POINTS["momentum"],
         }
-    return out
+    }
 
 
 def trend_gate_label(relation: str | None, slope_up: bool | None) -> str:
@@ -883,6 +897,8 @@ def compute_symbol(
 
     # Relative strength vs SPY: 126d (~6m) performance vs SPY, percentile later.
     rel_perf, horizon, rs_accel = relative_performance(closes, spy_closes)
+    # Momentum 12-1 (lo único que entra en el Desk Score); percentil más tarde.
+    mom_raw, mom_horizon = momentum_12_1(closes)
 
     change_pct = None
     if len(closes) >= 2 and closes[-2]:
@@ -934,7 +950,10 @@ def compute_symbol(
         "rel_horizon": horizon,
         "rs_accel": safe_round(rs_accel, 2),
         "rs_score": None,  # filled later
+        "mom_12_1_pct": safe_round(mom_raw * 100 if mom_raw is not None else None, 2),
+        "mom_horizon": mom_horizon,
         "pillars": {
+            "momentum": None,  # filled later (percentil)
             "tendencia": safe_round(tend, 1),
             "fuerza_rs": None,
             "contraccion": safe_round(contr, 1),
@@ -948,6 +967,7 @@ def compute_symbol(
         "_tend": tend,
         "_contr": contr,
         "_rs_accel": rs_accel,
+        "_mom_raw": mom_raw,
     }
 
 
@@ -961,11 +981,13 @@ def percentile_rank(values: list[float], x: float) -> float:
 
 
 def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
-    """Percentil de RS, pilar Fuerza, penalizaciones suaves, Desk Score, orden y rank.
+    """Percentil de RS (info), percentil de momentum, Desk Score, orden y rank.
 
     Misma fórmula que el ranking publicado. Mutates each row (drops keys `_`).
+    Los flags quedan como información: ya no restan puntos.
     """
     rels = [r["_rel_perf_raw"] for r in rows if r["_rel_perf_raw"] is not None]
+    moms = [r.get("_mom_raw") for r in rows if r.get("_mom_raw") is not None]
     for r in rows:
         if r["_rel_perf_raw"] is None:
             rs = 50.0
@@ -974,16 +996,15 @@ def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
         r["rs_score"] = safe_round(rs, 1)
         fuerza = score_fuerza_rs(rs, r["_rs_accel"])
         r["pillars"]["fuerza_rs"] = safe_round(fuerza, 1)
-        r["pillar_points"] = pillar_points_block(r["_tend"], fuerza, r["_contr"])
-        ds = desk_score(r["_tend"], fuerza, r["_contr"])
-        # Soft penalty for flags
-        if "extendido_vs_ema200" in r["flags"]:
-            ds = clamp(ds - 5)
-        if "posible_distribucion" in r["flags"]:
-            ds = clamp(ds - 4)
-        if "atr_elevado" in r["flags"]:
-            ds = clamp(ds - 3)
-        r["desk_score"] = safe_round(ds, 1)
+        mom_raw = r.get("_mom_raw")
+        mom_pct = percentile_rank(moms, mom_raw) if mom_raw is not None else None
+        r["pillars"]["momentum"] = safe_round(mom_pct, 1)
+        r["pillar_points"] = pillar_points_block(mom_pct)
+        if mom_raw is None:
+            r["flags"].append("sin_historia_momentum")
+        elif r.get("mom_horizon") == "6-1":
+            r["flags"].append("momentum_6m")
+        r["desk_score"] = safe_round(desk_score(mom_pct, bool(r.get("above_ema200"))), 1)
         for k in list(r.keys()):
             if k.startswith("_"):
                 del r[k]
@@ -1401,7 +1422,7 @@ TOP10_WALKFORWARD_FORMULA = (
     "con barras hasta ese cierre (misma fórmula que el ranking, sin earnings ni Finnhub). "
     "Se compra el Top 10 equiponderado a ese cierre y se mantiene hasta el último cierre de "
     "la semana siguiente; ahí se venden los que salieron y se compran los que entraron. "
-    f"Solo entran fechas con al menos {WALKFORWARD_WARMUP_SESSIONS} ruedas de SPY (EMA200 definida) "
+    f"Solo entran fechas con al menos {WALKFORWARD_WARMUP_SESSIONS} ruedas de SPY (momentum 12-1 definido) "
     f"y se miden como máximo las {WALKFORWARD_WEEKS} semanas más recientes. "
     "Un símbolo sin barra en la sesión de rebalanceo no se rankea ese día. "
     "Si a un nombre del libro le falta el cierre de salida, esa semana se reparte el peso entre "
@@ -3077,7 +3098,7 @@ def main() -> None:
         )
     else:
         notes.append(
-            "Walk-forward Top 10: sin semanas suficientes tras el calentamiento de la EMA200."
+            "Walk-forward Top 10: sin semanas suficientes tras el calentamiento del momentum 12-1."
         )
 
     sectors = compute_sector_view(rows)
@@ -3256,6 +3277,7 @@ def main() -> None:
     payload = {
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
+        "score_version": SCORE_VERSION,
         "brand": "Angus",
         "sesion": mode,
         "sesion_aviso": market_session.session_banner(mode, session_date),
@@ -3297,9 +3319,14 @@ def main() -> None:
                 "Si el universo crece, el percentil se recalcula: el mismo retorno relativo "
                 "puede quedar en otro puesto. La fórmula del Desk Score no cambia."
             ),
-            "tendencia": "Precio vs SMA50/EMA200 + pendientes (~5d) + SMA50>EMA200",
-            "fuerza_rs": "0.75*RS_score + bonus por aceleración relativa 1m",
-            "contraccion": "Proxy VCP: ratio ATR actual/ATR~60d, vol realizada 20/60, RSI no extremo, dry-up volumen",
+            "momentum": (
+                "Momentum 12-1: cierre de hace 21 ruedas / cierre de hace 252 − 1. "
+                "Percentil 0–100 dentro del universo de la corrida. Con menos de 12 meses de "
+                "historia se usa 6-1 (flag momentum_6m); sin 6 meses, el score queda en 0."
+            ),
+            "tendencia": "Informativo, no entra en el Desk Score. Precio vs SMA50/EMA200 + pendientes (~5d) + SMA50>EMA200",
+            "fuerza_rs": "Informativo, no entra en el Desk Score. 0.75*RS_score + bonus por aceleración relativa 1m",
+            "contraccion": "Informativo, no entra en el Desk Score. Proxy VCP: ratio ATR actual/ATR~60d, vol realizada 20/60, RSI no extremo, dry-up volumen",
             "vol_rel_20d": "Volumen último día / media 20 sesiones",
             "dist_ema200_pct": "(close/EMA200 − 1) * 100",
             "regime": rule,
@@ -3312,7 +3339,7 @@ def main() -> None:
             "top10_attribution": TOP10_ATTRIBUTION_FORMULA,
             "top10_entry": TOP10_ENTRY_NOTE,
             "top10_walkforward": TOP10_WALKFORWARD_FORMULA,
-            "pillar_points": "Puntos del pilar = score 0–100 × peso (Tendencia 0.30, Fuerza RS 0.35, Contracción 0.35), antes de las penalizaciones suaves del Desk Score. Setup no entra.",
+            "pillar_points": "Momentum es el único pilar que entra (sobre 100). El Desk Score es ese valor, × 0,5 si el cierre está bajo la EMA200. Tendencia, Fuerza RS y Contracción se muestran sin peso.",
             "range_52w": f"Mínimo y máximo de high/low en las últimas {RANGE_52W_SESSIONS} sesiones (o las disponibles). position_pct = (close − mín) / (máx − mín) × 100",
             "change_pct": "(close / close anterior − 1) × 100",
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",

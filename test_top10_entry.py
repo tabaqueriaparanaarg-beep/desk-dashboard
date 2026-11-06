@@ -161,18 +161,19 @@ class SyntheticMarketTests(unittest.TestCase):
     def test_late_entrant_streak_is_shorter_than_the_window(self):
         dates, meta, bars_by = self._market()
         n = len(dates)
-        # S00 es el más débil. Una suba moderada al final lo mete al Top 10
-        # sin disparar el penalty de extensión (dist EMA200 se queda < 25).
+        # S00 es el más débil. Sube 20 ruedas y después queda plano. El momentum
+        # 12-1 saltea el último mes, así que la suba entra al score con ~21
+        # ruedas de demora y S00 se mete al Top 10 dentro de la ventana.
         base = geometric(n, 40, 1.00015)
-        ramp_at = n - 18
         late = list(base)
-        for i in range(ramp_at, n):
-            late[i] = late[i - 1] * 1.006
+        for i in range(n - 45, n):
+            late[i] = late[i - 1] * (1.004 if i < n - 25 else 1.0)
         bars_by["S00"] = make_bars(late, dates)
-        # S13 (líder) se desarma en las últimas ruedas y sale del Top 10.
+        # S13 (líder) cae de forma sostenida desde hace 40 ruedas: la caída entra
+        # al momentum y además queda bajo la EMA200, así que sale del Top 10.
         leader = geometric(n, 40 + 13, 1.00015 + 13 * 0.00012)
-        for i in range(n - 6, n):
-            leader[i] = leader[i - 1] * 0.94
+        for i in range(n - 40, n):
+            leader[i] = leader[i - 1] * 0.985
         bars_by["S13"] = make_bars(leader, dates)
 
         rows = score_full(meta, bars_by)

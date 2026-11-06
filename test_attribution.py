@@ -316,7 +316,7 @@ class AttributionMathTests(unittest.TestCase):
             {"XLK": bars_for_return(1)},
         )
         self.assertEqual(ranking, before)
-        self.assertIn("0.30*Tendencia", b.DESK_SCORE_FORMULA)
+        self.assertIn("momentum 12-1", b.DESK_SCORE_FORMULA)
         self.assertIn("no hay pesos del SPY", b.TOP10_ATTRIBUTION_FORMULA)
         self.assertIn("efecto_selección = exceso − efecto_sector", b.TOP10_ATTRIBUTION_FORMULA)
         self.assertEqual(b.SECTOR_ETF["Technology"], "XLK")

@@ -62,20 +62,37 @@ Símbolos sin barras suficientes se omiten y quedan en `failures`.
 
 | Pieza | Peso / definición |
 |--------|-------------------|
-| **Desk Score** | `0.30·Tendencia + 0.35·Fuerza_RS + 0.35·Contracción` (pilares 0–100). Setup no entra |
+| **Desk Score (v3)** | Percentil 0–100 del **momentum 12-1** en el universo; × 0,5 si el cierre está bajo la EMA200. Sin penalizaciones. Ver «Desk Score v3» abajo |
+| **Momentum 12-1** | `close[hace 21 ruedas] / close[hace 252 ruedas] − 1` (12 meses salteando el último). Con menos de 12 meses de historia: 6-1 (flag `momentum_6m`); con menos de 6: score 0 (flag `sin_historia_momentum`) |
 | **Entró (Top 10)** | Fecha en que el ticker entró al Top 10 en la racha actual, más las ruedas de esa racha |
 | **Walk-forward Top 10** | Cada último cierre semanal, Top 10 equiponderado con datos solo hasta ese cierre, vs SPY comprar y mantener |
-| **Tendencia (30)** | Precio vs SMA50 / EMA200, pendientes ~5d, estructura SMA50&gt;EMA200 |
-| **Fuerza RS (35)** | Percentil del *relative performance* vs SPY (~126d / 6m; fallback 63d) + bonus por aceleración 1m |
+| **Tendencia (info)** | Precio vs SMA50 / EMA200, pendientes ~5d, estructura SMA50&gt;EMA200 |
+| **Fuerza RS (info)** | Percentil del *relative performance* vs SPY (~126d / 6m; fallback 63d) + bonus por aceleración 1m |
 | **RS Score** | Percentil 0–100 de `(retorno_ticker − retorno_SPY)` en el universo scored |
-| **Contracción (35)** | Proxy VCP: ATR actual / ATR~60d, vol realizada 20 vs 60, RSI no extremo, dry-up de volumen |
+| **Contracción (info)** | Proxy VCP: ATR actual / ATR~60d, vol realizada 20 vs 60, RSI no extremo, dry-up de volumen |
 | **Vol rel** | Volumen último día / media 20 sesiones |
 | **Dist EMA200** | `(close / EMA200 − 1) × 100` |
-| **Puntos de pilar (ficha)** | score 0–100 del pilar × peso: Tendencia /30, Fuerza RS /35, Contracción /35 (antes de penalizaciones) |
+| **Pilares (ficha)** | Momentum sobre 100 (lo único que entra). Tendencia, Fuerza RS y Contracción en 0–100, como referencia |
 | **Rango 52 semanas** | mín/máx de high-low en las últimas 252 sesiones; posición % = (cierre − mín) / (máx − mín) |
 | **RS semanal (ficha)** | mismo percentil de RS Score, recalculado al último cierre de cada una de las últimas 16 semanas ISO. El último punto es el RS Score publicado |
 
-Flags opcionales (penalty suave): `extendido_vs_ema200`, `atr_elevado`, `posible_distribucion`, `rsi_sobrecompra` / `rsi_sobreventa`.
+Flags informativos (desde v3 no restan puntos): `extendido_vs_ema200`, `atr_elevado`, `posible_distribucion`, `rsi_sobrecompra` / `rsi_sobreventa`, `momentum_6m`, `sin_historia_momentum`.
+
+### Desk Score v3 (nov-2026): por qué cambió
+
+Hasta v2 el score era `0.30·Tendencia + 0.35·Fuerza_RS + 0.35·Contracción` con penalizaciones. Un backtest walk-forward de ago-2021 a nov-2026 (Top 10 equiponderado, 10 bps por lado) mostró que no ordenaba:
+
+| Top 10 semanal, anual promedio | v2 | v3 (momentum 12-1) | Universo equiponderado | SPY |
+|---|---|---|---|---|
+| 61 acciones originales | 8,6 % | 25,2 % | 16,6 % | 12,0 % |
+| Universo amplio (380) | 4,8 % | 64,5 % | 17,6 % | 12,0 % |
+
+- En v2, el quintil de score más alto rendía **peor** que el resto a 4 semanas. Contracción restaba en los dos universos y Tendencia no distinguía entre acciones.
+- El momentum 12-1 fue la única señal con el quintil alto claramente arriba en los dos universos.
+- **Límites:** el universo es el de hoy (sesgo de supervivencia, que infla mucho el número del universo amplio); son ~5 años de un mercado que premió a los líderes; el Top 10 por momentum tiene más volatilidad que el SPY (24 % anual en las 61, 41 % en el amplio) y el momentum tiene caídas bruscas cuando el mercado da vuelta.
+- Para repetirlo: `python3 backtest_largo.py` (baja barras de Alpaca a `.cache_backtest_bars.json`) y después `python3 backtest_pilares.py` (usa la cache, mide cada pilar y el universo de 61).
+
+`SCORE_VERSION = 3` va en `datos.json` → `score_version`. Los Desk Score guardados en el historial del semáforo antes de este cambio son de v2.
 
 Detalle completo también en `datos.json` → clave `formulas`.
 
@@ -161,7 +178,7 @@ Reglas (`datos.json` → `top10_walkforward` / `formulas.top10_walkforward`):
 - **Señal:** Desk Score de todo el universo truncando las barras en ese cierre (`rank_universe_asof`, la misma fórmula que el ranking). Un símbolo sin barra ese día no entra. El Top 10 del último cierre de la ventana **no** se usa para el retorno de esa semana: ese cierre solo marca el valor del libro armado la semana anterior.
 - **Cartera:** los 10 nombres con el mismo peso, hasta el cierre semanal siguiente. Los que salen se venden y entran los nuevos. Si a un nombre le falta el cierre de salida, esa semana el peso se reparte entre los que sí tienen ambos cierres.
 - **SPY:** comprar y mantener entre el primer y el último cierre de la ventana.
-- **Historia:** el ranking publicado sigue usando ~400 días calendario (el Desk Score del día no cambia). Para la simulación se piden ~560 días, se descartan las primeras 200 ruedas (recién ahí la EMA200 existe) y se miden como máximo las **26** semanas más recientes. Si el historial no alcanza, el panel dice cuántas semanas hubo.
+- **Historia:** el ranking publicado sigue usando ~400 días calendario (el Desk Score del día no cambia). Para la simulación se piden ~620 días, se descartan las primeras 253 ruedas (recién ahí existe el momentum 12-1) y se miden como máximo las **26** semanas más recientes. Si el historial no alcanza, el panel dice cuántas semanas hubo.
 - **Métricas:** retorno total de la cartera y de SPY, exceso (resta simple), porcentaje de semanas en que la cartera le gana a SPY (un empate no cuenta), caída máxima de las dos curvas (base 100) y rotación media (nombres que salen del Top 10 en cada rebalanceo, sin contar la compra inicial).
 
 Es una simulación, no una recomendación. Los resultados pasados no garantizan resultados futuros.
@@ -180,10 +197,10 @@ Es una lectura del tablero, no una recomendación.
 
 Al tocar una fila del ranking o del Top 10 se abre `#/t/TICKER` (el botón atrás y el retroceso del navegador vuelven al ranking). La ficha usa datos que `build.py` ya calcula:
 
-- **Desk Score** en un gauge, y los tres pilares en puntos reales (Tendencia 30, Fuerza RS 35, Contracción 35). Es el mismo score 0–100 × peso, antes de las penalizaciones suaves (−5 extendido, −4 distribución, −3 ATR alto). Setup no entra en el score.
+- **Desk Score** en un gauge, con el Momentum 12-1 (sobre 100) que lo arma y, debajo, Tendencia, Fuerza RS y Contracción como referencia. Si el cierre está bajo la EMA200, una nota aclara que el score es la mitad del momentum.
 - **Rango de 52 semanas**: mínimo, máximo y posición % del cierre sobre las últimas 252 sesiones (o las que haya).
 - **Gate de tendencia**: precio frente a la EMA200 y si la EMA200 sube o baja contra su valor de ~5 sesiones atrás, con la distancia en %.
-- **Penalizaciones**: los mismos `flags`. Si no hay, «Sin penalizaciones activas».
+- **Alertas**: los mismos `flags`, solo como información (no restan puntos). Si no hay, «Sin alertas activas».
 - **Entró**: la racha del Top 10, si el ticker está adentro.
 - **Resultados**: fecha (y BMO/AMC) si el ticker está en `earnings` de la semana.
 - **Evolución del RS Score**: ver la definición abajo. Fechas compartidas en `rs_weekly.dates`; cada fila trae `rs_weekly` (16 números como mucho).

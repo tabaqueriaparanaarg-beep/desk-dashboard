@@ -201,7 +201,7 @@ class SignalDefinitionTests(unittest.TestCase):
         before = [r["desk_score"] for r in rows]
         block = s.build_confluence(rows, {"HOT": hot, "COLD": cold})
         self.assertEqual([r["desk_score"] for r in rows], before)
-        self.assertEqual(build.desk_score(80, 70, 60), build.desk_score(80, 70, 60))
+        self.assertEqual(build.desk_score(80, True), build.desk_score(80, True))
         self.assertEqual(block["rows"][0]["symbol"], "HOT")
         self.assertGreater(block["rows"][0]["count"], block["rows"][1]["count"])
         ids = [item["id"] for item in block["lists"]]

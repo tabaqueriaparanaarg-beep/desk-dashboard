@@ -1739,9 +1739,10 @@ body.is-ficha .dd-footer {
   min-width: 0;
 }
 
-.dd-pillar-fill[data-pillar="tendencia"] { background: #ff6b35; }
-.dd-pillar-fill[data-pillar="fuerza_rs"] { background: #34d399; }
-.dd-pillar-fill[data-pillar="contraccion"] { background: #a78bfa; }
+.dd-pillar-fill[data-pillar="momentum"] { background: #ff6b35; }
+.dd-pillar-fill[data-pillar="tendencia"] { background: #ff6b35; opacity: 0.45; }
+.dd-pillar-fill[data-pillar="fuerza_rs"] { background: #34d399; opacity: 0.45; }
+.dd-pillar-fill[data-pillar="contraccion"] { background: #a78bfa; opacity: 0.45; }
 .dd-pillar-fill[data-pillar="setup"] { background: #fbbf24; }
 
 .dd-pillar-pts {

@@ -56,17 +56,14 @@
     { key: "dividend_yield", label: "Dividendo", kind: "pct" },
   ];
 
-  var PILLAR_SPEC = [
-    { key: "tendencia", label: "Tendencia", max: 30 },
-    { key: "fuerza_rs", label: "Fuerza RS", max: 35 },
-    { key: "contraccion", label: "Contracción", max: 35 },
+  // Desk Score v3: solo momentum 12-1 entra (sobre 100). Los otros pilares
+  // se muestran como referencia, en escala 0–100 y sin peso.
+  var PILLAR_SPEC = [{ key: "momentum", label: "Momentum 12-1", max: 100 }];
+  var INFO_PILLAR_SPEC = [
+    { key: "tendencia", label: "Tendencia (info)", max: 100 },
+    { key: "fuerza_rs", label: "Fuerza RS (info)", max: 100 },
+    { key: "contraccion", label: "Contracción (info)", max: 100 },
   ];
-
-  var SCORE_PENALTY = {
-    extendido_vs_ema200: 5,
-    posible_distribucion: 4,
-    atr_elevado: 3,
-  };
 
   var RS_CAPTION_FALLBACK =
     "RS Score semanal: percentil 0–100 de (retorno del ticker − retorno de SPY) en ~126 sesiones (6 meses; si no alcanza, 63 sesiones), recalculado al último cierre de cada una de las últimas 16 semanas ISO. No incluye el bonus de aceleración del pilar Fuerza RS. El último punto es el RS Score del ranking.";
@@ -778,6 +775,8 @@
     posible_distribucion: "Distribución",
     rsi_sobrecompra: "RSI alto",
     rsi_sobreventa: "RSI bajo",
+    momentum_6m: "Momentum 6m",
+    sin_historia_momentum: "Sin historia",
   };
 
   function insiderBadgeHtml(row) {
@@ -854,7 +853,7 @@
         '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>",
         entroInline(r.entro),
         formatFlags(r.flags, insiderBadgeHtml(r)),
-        fmtNum(p.tendencia, 1),
+        fmtNum(p.momentum, 1),
         fmtNum(r.rs_score, 1),
         fmtNum(p.contraccion, 1),
         '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>",
@@ -884,7 +883,7 @@
         if (i === 4) td.setAttribute("data-col", "score");
         if (i === 5) td.setAttribute("data-col", "entro");
         if (i === 6) td.setAttribute("data-col", "flags");
-        if (i === 7) td.setAttribute("data-col", "tendencia");
+        if (i === 7) td.setAttribute("data-col", "momentum");
         if (i === 8) td.setAttribute("data-col", "rs");
         if (i === 9) td.setAttribute("data-col", "contraccion");
         if (i === 10) td.setAttribute("data-col", "dist_ema200");
@@ -2092,6 +2091,7 @@
 
   var FORMULA_LABELS = {
     desk_score: "Desk Score",
+    momentum: "Momentum 12-1",
     rs_score: "RS Score",
     tendencia: "Tendencia",
     fuerza_rs: "Fuerza RS",
@@ -2474,10 +2474,10 @@
     return null;
   }
 
-  function pillarRows(row) {
+  function pillarRows(row, spec_list) {
     var src = row.pillar_points || {};
     var raw = row.pillars || {};
-    return PILLAR_SPEC.map(function (spec) {
+    return (spec_list || PILLAR_SPEC).map(function (spec) {
       var item = src[spec.key] || {};
       var max = item.max != null ? Number(item.max) : spec.max;
       var points = item.points != null ? Number(item.points) : null;
@@ -2548,6 +2548,7 @@
 
   function pillarsHtml(row) {
     return pillarRows(row)
+      .concat(pillarRows({ pillars: row.pillars }, INFO_PILLAR_SPEC))
       .map(function (p) {
         var width = 0;
         if (p.points != null && p.max) width = Math.max(0, Math.min(100, (p.points / p.max) * 100));
@@ -2566,21 +2567,20 @@
       .join("");
   }
 
-  function penaltyFootnote(flags) {
-    var bits = (flags || []).filter(function (f) {
-      return SCORE_PENALTY[f];
-    });
-    if (!bits.length) return "";
-    var text = bits
-      .map(function (f) {
-        return (FLAG_LABELS[f] || f) + " −" + SCORE_PENALTY[f];
-      })
-      .join(", ");
-    return (
-      '<p class="dd-ficha-note">El Desk Score resta estas penalizaciones después de sumar los pilares: ' +
-      escapeHtml(text) +
-      ".</p>"
-    );
+  function scoreFootnote(row) {
+    var flags = (row && row.flags) || [];
+    var bits = [];
+    if (row && row.above_ema200 === false && row.pillars && row.pillars.momentum != null) {
+      bits.push("El cierre está bajo la EMA200: el Desk Score es la mitad del momentum.");
+    }
+    if (flags.indexOf("momentum_6m") >= 0) {
+      bits.push("Tiene menos de 12 meses de historia: el momentum se mide en 6 meses.");
+    }
+    if (flags.indexOf("sin_historia_momentum") >= 0) {
+      bits.push("Tiene menos de 6 meses de historia: todavía no hay momentum y el score queda en 0.");
+    }
+    bits.push("Tendencia, Fuerza RS y Contracción se muestran como referencia; no entran en el score.");
+    return '<p class="dd-ficha-note">' + escapeHtml(bits.join(" ")) + "</p>";
   }
 
   function rsChartSvg(values, dates) {
@@ -2763,7 +2763,7 @@
     if (!flags.length) {
       penaltyBlock =
         '<div class="dd-ficha-row"><span class="dd-ficha-mark is-ok" aria-hidden="true">✓</span>' +
-        '<span class="dd-ficha-row-text">Sin penalizaciones activas</span></div>';
+        '<span class="dd-ficha-row-text">Sin alertas activas</span></div>';
     } else {
       penaltyBlock = '<div class="dd-ficha-flags">' + formatFlags(flags) + "</div>";
     }
@@ -2824,7 +2824,7 @@
       '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
       '<div class="dd-pillars">' + pillarsHtml(row) + "</div></div>" +
-      penaltyFootnote(flags) +
+      scoreFootnote(row) +
       "</section>" +
       '<section class="dd-ficha-card" aria-label="Rango de 52 semanas">' + rangeBlock + "</section>" +
       '<section class="dd-ficha-card" aria-label="Gate de tendencia">' +
@@ -2836,8 +2836,8 @@
       escapeHtml(dist == null ? "—" : fmtEsSignedPct(dist, 2)) + "</span></div>" +
       (slopeBits.length ? '<p class="dd-ficha-note">' + escapeHtml(slopeBits.join(" · ")) + "</p>" : "") +
       "</section>" +
-      '<section class="dd-ficha-card" aria-label="Penalizaciones">' +
-      '<h2 class="dd-ficha-kicker">Penalizaciones</h2>' + penaltyBlock + "</section>" +
+      '<section class="dd-ficha-card" aria-label="Alertas">' +
+      '<h2 class="dd-ficha-kicker">Alertas (no restan puntos)</h2>' + penaltyBlock + "</section>" +
       entroBlock +
       earnBlock +
       '<section class="dd-ficha-card" aria-label="Evolución del RS Score">' +

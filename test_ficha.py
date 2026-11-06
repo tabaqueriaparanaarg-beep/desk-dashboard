@@ -68,62 +68,91 @@ def market(n: int = 240, names: int = 14) -> tuple[list[date], dict, dict]:
 
 
 class PillarPointTests(unittest.TestCase):
-    def test_weights_sum_to_one_and_max_points_are_the_ficha_scale(self):
-        self.assertAlmostEqual(sum(b.PILLAR_WEIGHTS.values()), 1.0)
-        self.assertEqual(
-            b.PILLAR_MAX_POINTS,
-            {"tendencia": 30, "fuerza_rs": 35, "contraccion": 35},
-        )
-        self.assertEqual(sum(b.PILLAR_MAX_POINTS.values()), 100)
+    def test_momentum_is_the_only_weighted_pillar(self):
+        self.assertEqual(b.PILLAR_WEIGHTS, {"momentum": 1.0})
+        self.assertEqual(b.PILLAR_MAX_POINTS, {"momentum": 100})
+        self.assertEqual(b.SCORE_VERSION, 3)
+        for key in b.INFO_PILLARS:
+            self.assertNotIn(key, b.PILLAR_WEIGHTS)
 
-    def test_points_come_from_pillar_scores_before_penalties(self):
+    def test_score_is_momentum_percentile_halved_below_ema200(self):
         _dates, meta, bars_by = market()
         rows = score_full(meta, bars_by)
         self.assertGreaterEqual(len(rows), 10)
         for r in rows:
-            pts = r["pillar_points"]
-            pillars = r["pillars"]
-            total = 0.0
-            for key, mx in b.PILLAR_MAX_POINTS.items():
-                self.assertEqual(pts[key]["max"], mx)
-                self.assertIsNotNone(pts[key]["points"])
-                self.assertGreaterEqual(pts[key]["points"], 0)
-                self.assertLessEqual(pts[key]["points"], mx)
-                # El 0–100 guardado ya está redondeado a 1 decimal; los puntos usan
-                # el score sin redondear, así que la diferencia cabe en el redondeo.
-                from_rounded = round(pillars[key] * (mx / 100.0), 1)
-                self.assertAlmostEqual(pts[key]["points"], from_rounded, delta=0.15)
-                total += pts[key]["points"]
-            penalizing = {"extendido_vs_ema200", "posible_distribucion", "atr_elevado"}
-            if not penalizing.intersection(r["flags"]):
-                self.assertAlmostEqual(total, r["desk_score"], delta=0.4)
+            mom = r["pillars"]["momentum"]
+            self.assertIsNotNone(mom)
+            self.assertEqual(r["pillar_points"]["momentum"]["points"], mom)
+            self.assertEqual(r["pillar_points"]["momentum"]["max"], 100)
+            factor = 1.0 if r["above_ema200"] else b.BELOW_EMA200_FACTOR
+            self.assertAlmostEqual(r["desk_score"], mom * factor, delta=0.15)
+            # Los pilares viejos siguen ahí, como información.
+            for key in b.INFO_PILLARS:
+                self.assertIsNotNone(r["pillars"][key])
 
-    def test_extendido_penalty_lowers_desk_score_not_pillar_points(self):
-        n = 240
+    def test_below_ema200_halves_the_score(self):
+        self.assertEqual(b.desk_score(80, True), 80)
+        self.assertEqual(b.desk_score(80, False), 40)
+        self.assertEqual(b.desk_score(None, True), 0)
+
+    def test_flags_no_longer_subtract_points(self):
+        n = 300
         dates = weekdays(n)
         spy = geometric(n, 100, 1.0002)
-        # Rampa final fuerte: el cierre queda muy por encima de la EMA200.
-        px = geometric(n - 25, 50, 1.0003)
+        # Rampa fuerte de 60 ruedas que termina un mes antes: momentum alto y
+        # cierre muy por encima de la EMA200 (flag extendido).
+        px = geometric(n - 60, 50, 1.0003)
         last = px[-1]
-        for _ in range(25):
-            last *= 1.012
+        for i in range(60):
+            last *= 1.012 if i < 39 else 1.004
             px.append(last)
-        bars_by = {
-            "SPY": make_bars(spy, dates),
-            "HOT": make_bars(px, dates),
-        }
+        cold = geometric(n, 50, 1.0001)
+        bars_by = {"SPY": make_bars(spy, dates), "HOT": make_bars(px, dates), "COLD": make_bars(cold, dates)}
         meta = {
             "SPY": {"symbol": "SPY"},
             "HOT": {"symbol": "HOT", "name": "Hot", "kind": "us"},
+            "COLD": {"symbol": "COLD", "name": "Cold", "kind": "us"},
         }
-        # Un universo de un solo nombre deja el percentil en 50; alcanza para el flag.
         rows = score_full(meta, bars_by)
         hot = next(r for r in rows if r["symbol"] == "HOT")
         self.assertIn("extendido_vs_ema200", hot["flags"])
-        self.assertGreater(hot["dist_ema200_pct"], 25)
-        pts = sum(hot["pillar_points"][k]["points"] for k in b.PILLAR_MAX_POINTS)
-        self.assertLessEqual(hot["desk_score"], round(pts - 5, 1) + 0.4)
-        self.assertGreater(pts - hot["desk_score"], 4.0)
+        self.assertEqual(hot["mom_horizon"], "12-1")
+        self.assertEqual(hot["desk_score"], hot["pillars"]["momentum"])
+        self.assertEqual(rows[0]["symbol"], "HOT")
+
+
+class MomentumTests(unittest.TestCase):
+    def test_last_month_does_not_count(self):
+        base = geometric(300, 50, 1.001)
+        spiked = base[:-21] + [c * 1.5 for c in base[-21:]]
+        a, ha = b.momentum_12_1(base)
+        c, hc = b.momentum_12_1(spiked)
+        self.assertEqual((ha, hc), ("12-1", "12-1"))
+        self.assertAlmostEqual(a, c)
+        self.assertAlmostEqual(a, base[-22] / base[-253] - 1)
+
+    def test_short_history_falls_back_then_gives_up(self):
+        mid = geometric(200, 50, 1.001)
+        val, horizon = b.momentum_12_1(mid)
+        self.assertEqual(horizon, "6-1")
+        self.assertAlmostEqual(val, mid[-22] / mid[-127] - 1)
+        self.assertEqual(b.momentum_12_1(geometric(120, 50, 1.001)), (None, None))
+
+    def test_short_history_is_flagged_and_scores_zero(self):
+        n = 300
+        dates = weekdays(n)
+        bars_by = {
+            "SPY": make_bars(geometric(n, 100, 1.0003), dates),
+            "OLD": make_bars(geometric(n, 50, 1.0005), dates),
+            "MID": make_bars(geometric(200, 50, 1.0005), dates[-200:]),
+            "NEW": make_bars(geometric(100, 50, 1.002), dates[-100:]),
+        }
+        meta = {s: {"symbol": s, "kind": "us"} for s in bars_by}
+        rows = {r["symbol"]: r for r in score_full(meta, bars_by)}
+        self.assertIn("momentum_6m", rows["MID"]["flags"])
+        self.assertIn("sin_historia_momentum", rows["NEW"]["flags"])
+        self.assertEqual(rows["NEW"]["desk_score"], 0)
+        self.assertNotIn("momentum_6m", rows["OLD"]["flags"])
 
 
 class SeriesFieldTests(unittest.TestCase):
