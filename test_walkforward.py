@@ -209,14 +209,16 @@ class ScoringWalkforwardTests(unittest.TestCase):
         self.assertNotIn("S00", [r["symbol"] for r in strict])
         self.assertIn("S00", [r["symbol"] for r in loose])
 
-    def test_default_warmup_needs_two_hundred_spy_sessions(self):
-        meta, bars_by, dates = universe(10, 199)
+    def test_default_warmup_needs_a_year_of_spy_sessions(self):
+        # El momentum 12-1 necesita 253 cierres: antes no hay score que simular.
+        self.assertEqual(b.WALKFORWARD_WARMUP_SESSIONS, 253)
+        meta, bars_by, dates = universe(10, b.WALKFORWARD_WARMUP_SESSIONS - 1)
         empty = b.compute_top10_walkforward(meta, bars_by)
         self.assertEqual(empty["weeks"], 0)
         self.assertEqual(empty["curve"], [])
         self.assertIn("simulación", empty["note"].lower())
 
-        meta2, bars2, dates2 = universe(10, 220)
+        meta2, bars2, dates2 = universe(10, b.WALKFORWARD_WARMUP_SESSIONS + 20)
         got = b.compute_top10_walkforward(meta2, bars2, weeks=26)
         self.assertGreaterEqual(got["weeks"], 1)
         spy_dates = [d.isoformat() for d in dates2]
@@ -233,8 +235,8 @@ class ScoringWalkforwardTests(unittest.TestCase):
             self.assertAlmostEqual(period["portfolio_return"], ret * 100.0)
 
     def test_future_prices_do_not_change_the_book_already_chosen(self):
-        meta, bars_by, dates = universe(14, 100)
-        base = b.compute_top10_walkforward(meta, bars_by, warmup_sessions=60, weeks=4)
+        meta, bars_by, dates = universe(14, 300)
+        base = b.compute_top10_walkforward(meta, bars_by, warmup_sessions=260, weeks=4)
         self.assertGreaterEqual(base["weeks"], 2)
         cutoff = base["signals"][0]["date"]
         held = base["signals"][0]["symbols"][0]
@@ -246,7 +248,7 @@ class ScoringWalkforwardTests(unittest.TestCase):
                 for k in ("o", "h", "l", "c"):
                     bar[k] = float(bar[k]) * 0.5
 
-        alt = b.compute_top10_walkforward(meta, alt_bars, warmup_sessions=60, weeks=4)
+        alt = b.compute_top10_walkforward(meta, alt_bars, warmup_sessions=260, weeks=4)
 
         # El libro elegido en el corte no ve los precios posteriores.
         self.assertEqual(base["signals"][0]["symbols"], alt["signals"][0]["symbols"])
@@ -276,7 +278,7 @@ class ScoringWalkforwardTests(unittest.TestCase):
         self.assertNotEqual(later_base[held], later_alt[held])
 
     def test_every_signal_falls_on_the_last_session_of_its_week(self):
-        meta, bars_by, dates = universe(10, 220)
+        meta, bars_by, dates = universe(10, 300)
         got = b.compute_top10_walkforward(meta, bars_by, weeks=6)
         sessions = {d.isoformat() for d in dates}
         marks = [got["window_start"], *[p["end"] for p in got["periods"]]]
