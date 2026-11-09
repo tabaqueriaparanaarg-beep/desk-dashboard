@@ -2,7 +2,7 @@
   "expanded_on": "2026-10-02",
   "stocks": 380,
   "etfs": 11,
-  "cedear_source": "BYMA CEDEARs negociables (PDF 2026-01-21) y programas Comafi (ticker de origen en NYSE/Nasdaq). El flag es true solo si el ticker US está en esa lista.",
+  "cedear_source": "BYMA «CEDEARs Negociables en BYMA» (actualizado 2026-09-16), 404 códigos de mercados de EE.UU. El flag es true si el ticker US (o su equivalente, ej. BRKB → BRK.B) está en ese listado. Se actualiza con actualizar_cedears.py.",
   "selection": "Se conservan las 61 acciones de antes. Se suman el Nasdaq-100, los CEDEARs que están en el S&P 500, NBIS/CLS/BIIB/YPF si cotizan, y el resto del S&P 500 por volumen medio en dólares (3 meses, Yahoo) hasta 380.",
   "tickers": [
     {
@@ -409,7 +409,7 @@
       "name": "ConocoPhillips",
       "kind": "us",
       "sector": "Energy",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "SLB",
@@ -423,14 +423,14 @@
       "name": "NextEra Energy",
       "kind": "us",
       "sector": "Utilities",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "LIN",
       "name": "Linde",
       "kind": "us",
       "sector": "Materials",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "ABNB",
@@ -577,7 +577,7 @@
       "name": "CrowdStrike",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "CRWV",
@@ -710,7 +710,7 @@
       "name": "KLA",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "LITE",
@@ -780,7 +780,7 @@
       "name": "Nebius Group",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "NXPI",
@@ -878,7 +878,7 @@
       "name": "Sandisk",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "SNPS",
@@ -892,7 +892,7 @@
       "name": "SpaceX",
       "kind": "us",
       "sector": "Communication",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "STX",
@@ -962,7 +962,7 @@
       "name": "Western Digital",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "XEL",
@@ -1487,7 +1487,7 @@
       "name": "Dell Technologies",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "BE",
@@ -1501,7 +1501,7 @@
       "name": "GE Vernova",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "COHR",
@@ -1529,7 +1529,7 @@
       "name": "Arista Networks",
       "kind": "us",
       "sector": "Technology",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "HPE",
@@ -1543,7 +1543,7 @@
       "name": "Morgan Stanley",
       "kind": "us",
       "sector": "Financials",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "VLO",
@@ -1648,7 +1648,7 @@
       "name": "Welltower",
       "kind": "us",
       "sector": "Real Estate",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "RCL",
@@ -1676,7 +1676,7 @@
       "name": "Sherwin-Williams",
       "kind": "us",
       "sector": "Materials",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "HCA",
@@ -1739,7 +1739,7 @@
       "name": "Prologis",
       "kind": "us",
       "sector": "Real Estate",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "EQIX",
@@ -2117,14 +2117,14 @@
       "name": "Realty Income",
       "kind": "us",
       "sector": "Real Estate",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "IBKR",
       "name": "Interactive Brokers",
       "kind": "us",
       "sector": "Financials",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "MCO",
@@ -2145,7 +2145,7 @@
       "name": "Fiserv",
       "kind": "us",
       "sector": "Financials",
-      "cedear": false
+      "cedear": true
     },
     {
       "symbol": "YUM",

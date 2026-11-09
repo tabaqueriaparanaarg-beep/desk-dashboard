@@ -107,6 +107,14 @@ La página arranca en el **Top 10 con CEDEAR** (`TOP10_DEFAULT_VARIANT = "cedear
 | Con CEDEAR, conservadora | 22,6 % | −22,0 % | 19,8 % | −15,1 % |
 | SPY | 11,9 % | −23,9 % | 11,9 % | −23,9 % |
 
+### Lista de CEDEARs (nov-2026)
+
+La marca `cedear` de `universe.json` sale del listado público «CEDEARs Negociables en BYMA» (PDF en la página de CEDEARs de BYMA; el nombre del archivo cambia con cada versión). `actualizar_cedears.py` busca el link, baja el PDF, toma los códigos que cotizan en NYSE, Nasdaq o CBOE, traduce los que difieren (BRKB → BRK.B, BA.C → BAC, DISN → DIS…) y actualiza la marca. Con menos de 200 códigos aborta sin tocar nada. Usa `pypdf`, que instala solo su workflow: `build.py` sigue sin dependencias.
+
+- **Workflow `cedears.yml`:** el día 2 de cada mes corre el script y los tests, y commitea `universe.json` si cambió. La marca nueva se publica en la próxima corrida programada del deploy.
+- **A mano:** `pip install pypdf && python3 actualizar_cedears.py --dry-run` muestra qué cambiaría.
+- **Listado del 16/09/2026:** 189 del universo con CEDEAR (antes 170). Se sumaron ANET, COP, CRWD, DELL, FISV, GEV, IBKR, KLAC, LIN, MS, NBIS, NEE, O, PLD, SHW, SNDK, SPCX, WDC y WELL.
+
 ### Limpieza de secciones (nov-2026)
 
 Una auditoría de todas las señales (276 semanas, ago-2021 a nov-2026, universo amplio y 61 originales) encontró que el escáner de patrones, la confluencia y la rotación (RRG) no anticipan el retorno de las 4 semanas siguientes; la rotación incluso funciona al revés (lo «rezagado» rindió más que lo «liderando» en 5 de 6 años). Por eso:
