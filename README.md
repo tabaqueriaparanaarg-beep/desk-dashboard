@@ -113,6 +113,7 @@ La marca `cedear` de `universe.json` sale del listado público «CEDEARs Negocia
 
 - **Workflow `cedears.yml`:** el día 2 de cada mes corre el script y los tests, y commitea `universe.json` si cambió. La marca nueva se publica en la próxima corrida programada del deploy.
 - **A mano:** `pip install pypdf && python3 actualizar_cedears.py --dry-run` muestra qué cambiaría.
+- **Código y ratio:** el script también guarda `cedear_code` (el código en BYMA, que a veces difiere: BRKB, BA.C, DISN…) y `cedear_ratio` (por ejemplo `10:1` = 10 CEDEARs por acción). Van en `ranking[]` y en las filas del Top 10; la página los muestra en la ficha y bajo el ticker del Top 10.
 - **Listado del 16/09/2026:** 189 del universo con CEDEAR (antes 170). Se sumaron ANET, COP, CRWD, DELL, FISV, GEV, IBKR, KLAC, LIN, MS, NBIS, NEE, O, PLD, SHW, SNDK, SPCX, WDC y WELL.
 
 ### Limpieza de secciones (nov-2026)
@@ -128,12 +129,23 @@ Una auditoría de todas las señales (276 semanas, ago-2021 a nov-2026, universo
 
 `SCORE_VERSION = 3` va en `datos.json` → `score_version`. Los Desk Score guardados en el historial del semáforo antes de este cambio son de v2.
 
+### Este mes (plan mensual)
+
+La regla de uso es revisar el Top 10 en el último cierre de cada mes. `compute_monthly_plan` guarda en `datos.json` → `monthly_plan`:
+
+- `since` y `holdings`: el último fin de mes cerrado y el Top 10 de cada variante armado con los datos hasta ese cierre (sin look-ahead). `prev_since` y `prev_holdings`: el fin de mes anterior.
+- `next_review`: el último día hábil del mes (contempla Memorial Day y Viernes Santo). Si el cierre de hoy ya fue el de fin de mes, pasa al mes siguiente.
+- `review_today` (hoy es el día de revisar) y `review_done` (la cartera nueva ya se armó con el cierre de hoy).
+
+En la página, el recuadro «Este mes» compara la cartera con el Top 10 de hoy: qué saldría, qué entraría y qué se mantiene. El día de la revisión dice vender y comprar. Una sesión en vivo nunca cuenta como fin de mes.
+
 Detalle completo también en `datos.json` → clave `formulas`.
 
 ## UI
 
 - Español, estructura semántica + clases `dd-*` y `data-*` para que puedas restylear.
-- Dark fintech (#FF6B35), responsive (KPIs 2-col en móvil, filtros wrap, tabla con scroll y columnas sticky).
+- Marca Angus: carbón cálido (#110F0E), texto cuero (#F3ECE5) y naranja (#FF6B35) como bloque en «Este mes». Tipografía Archivo (ancho expandido para la marca y los títulos).
+- Celular primero: header de una línea, controles segmentados, Top 10 sin scroll horizontal a 390 px (la columna «Entró» se ve en la ficha y en pantallas anchas).
 - **Disclaimer:** no es recomendación de compra. El Desk Score, el Top 10 y el semáforo son un filtro de lectura y de riesgo, no una ventaja de compra.
 
 ### Semáforo de riesgo

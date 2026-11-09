@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/favicon-16.png?v=7" type="image/png" sizes="16x16" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#0D0D0D" />
+  <meta name="theme-color" content="#110F0E" />
   <meta name="color-scheme" content="dark" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,27 +18,23 @@
   <meta name="application-name" content="Angus" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=42" />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=43" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
     <header class="dd-header" data-section="header">
-      <div class="dd-brand">
-        <img class="dd-logo" src="assets/logo.svg?v=7" alt="" width="44" height="40" />
-        <div class="dd-brand-text">
-          <h1 class="dd-title">Angus</h1>
-        </div>
-      </div>
+      <a class="dd-brand" href="#resumen" aria-label="Angus, inicio">
+        <img class="dd-logo" src="assets/logo.svg?v=7" alt="" width="40" height="36" />
+        <h1 class="dd-title">Angus</h1>
+      </a>
       <div class="dd-header-actions">
-        <div class="dd-meta" data-field="generated_at">
-          <span class="dd-label">Actualizado</span>
+        <p class="dd-meta" data-field="generated_at">
           <time id="generated-at" class="dd-value">—</time>
-          <span id="refresh-status" class="dd-refresh-status">Auto cada 5 min</span>
-          <span id="last-ui-refresh" class="dd-last-ui-refresh" hidden></span>
-        </div>
-        <button type="button" id="btn-refresh" class="dd-btn-refresh" aria-label="Actualizar datos">
-          Actualizar
+          <span id="refresh-status" class="dd-refresh-status" hidden></span>
+        </p>
+        <button type="button" id="btn-refresh" class="dd-btn-refresh" aria-label="Actualizar datos" title="Actualizar datos">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
     </header>
@@ -67,33 +63,38 @@
       <h2 class="dd-sr-only">Qué pasa hoy</h2>
 
 
+      <section class="dd-mes" id="este-mes" data-section="monthly-plan" aria-labelledby="mes-title" hidden>
+        <div class="dd-mes-head">
+          <h2 class="dd-mes-title" id="mes-title">Este mes</h2>
+          <p class="dd-mes-when" id="mes-when"></p>
+        </div>
+        <div class="dd-variant-bar dd-mes-variant" aria-label="Qué cartera mostrar">
+          <div class="dd-seg" role="group" aria-label="Acciones">
+            <button type="button" class="dd-variant is-active" data-variant-cedear="1" aria-pressed="true">CEDEAR</button>
+            <button type="button" class="dd-variant" data-variant-cedear="0" aria-pressed="false">Todas</button>
+          </div>
+          <div class="dd-seg" role="group" aria-label="Versión">
+            <button type="button" class="dd-variant is-active" data-variant-cons="0" aria-pressed="true">Normal</button>
+            <button type="button" class="dd-variant" data-variant-cons="1" aria-pressed="false">Conservadora</button>
+          </div>
+        </div>
+        <div id="mes-body" class="dd-mes-body"></div>
+        <p class="dd-mes-rule">El último cierre de cada mes vendés lo que salió del Top 10 y comprás lo que entró, en partes iguales. Va en la parte chica de la cartera; el resto, en el SPY.</p>
+      </section>
+
       <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
-        <h2 class="dd-section-title">Régimen de mercado</h2>
+        <h2 class="dd-section-title">Mercado</h2>
         <div id="market-regime-body"></div>
       </section>
 
-      <section class="dd-resumen dd-panel" data-section="resumen" aria-label="Resumen diario">
+      <section class="dd-resumen dd-panel" id="resumen-box" data-section="resumen" aria-label="Resumen diario" hidden>
         <div class="dd-resumen-head">
           <h2 class="dd-section-title">Resumen del día</h2>
           <time id="resumen-when" class="dd-resumen-when">—</time>
         </div>
-        <p id="resumen-text" class="dd-resumen-text is-clamped">Cargando…</p>
+        <p id="resumen-text" class="dd-resumen-text is-clamped"></p>
         <button type="button" id="resumen-more" class="dd-text-more" data-clamp="resumen-text" hidden>Ver más</button>
       </section>
-
-      <div class="dd-today-stats" aria-label="Alertas y resultados">
-        <button type="button" class="dd-today-stat" id="today-clear-btn">
-          <span class="dd-kpi-label">Sin alertas</span>
-          <span class="dd-kpi-value" id="today-clear">—</span>
-          <span class="dd-kpi-sub" id="today-clear-sub">Acciones</span>
-        </button>
-        <a class="dd-today-stat" href="#earnings">
-          <span class="dd-kpi-label">Resultados próximos</span>
-          <span class="dd-kpi-value" id="today-earn">—</span>
-          <span class="dd-kpi-sub" id="today-earn-sub"></span>
-        </a>
-      </div>
-
 
       <section class="dd-earnings dd-panel" id="earnings" data-section="earnings" aria-label="Calendario de resultados">
         <h2 class="dd-section-title">Resultados de la semana</h2>
@@ -107,41 +108,22 @@
       <div class="dd-top10-head">
         <h2 class="dd-section-title">Top 10</h2>
         <p class="dd-top10-subtitle" id="top10-subtitle">Retorno últimas 10 ruedas</p>
-        <details class="dd-help">
-          <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo leerlo</summary>
-          <p>Ordena el Desk Score de hoy y mira cómo les fue en las últimas ruedas. No es una ventaja de compra. Tocá una fila para abrir la ficha.</p>
-        </details>
       </div>
       <div class="dd-variant-bar" aria-label="Qué Top 10 mostrar">
-        <div class="dd-variant-group" role="group" aria-label="Acciones">
-          <button type="button" class="dd-chip dd-variant is-active" data-variant-cedear="1" aria-pressed="true">Con CEDEAR</button>
-          <button type="button" class="dd-chip dd-variant" data-variant-cedear="0" aria-pressed="false">Todas</button>
+        <div class="dd-seg" role="group" aria-label="Acciones">
+          <button type="button" class="dd-variant is-active" data-variant-cedear="1" aria-pressed="true">CEDEAR</button>
+          <button type="button" class="dd-variant" data-variant-cedear="0" aria-pressed="false">Todas</button>
         </div>
-        <div class="dd-variant-group" role="group" aria-label="Versión">
-          <button type="button" class="dd-chip dd-variant is-active" data-variant-cons="0" aria-pressed="true">Normal</button>
-          <button type="button" class="dd-chip dd-variant" data-variant-cons="1" aria-pressed="false">Conservadora</button>
+        <div class="dd-seg" role="group" aria-label="Versión">
+          <button type="button" class="dd-variant is-active" data-variant-cons="0" aria-pressed="true">Normal</button>
+          <button type="button" class="dd-variant" data-variant-cons="1" aria-pressed="false">Conservadora</button>
         </div>
       </div>
-      <p class="dd-variant-note" id="variant-note">Solo acciones con CEDEAR en BYMA: se pueden comprar desde Argentina.</p>
-      <div class="dd-rule" id="top10-rule">
-        <h3 class="dd-rule-title">Cómo usar el Top 10</h3>
-        <ul class="dd-rule-list">
-          <li><strong>Una vez por mes</strong>, en el último cierre: se vende lo que salió del Top 10 y se compra lo que entró, en partes iguales. Entre revisiones no se toca.</li>
-          <li><strong>Va en la parte chica de la cartera.</strong> El resto, en un índice como el SPY.</li>
-          <li><strong>Se mueve mucho.</strong> En la prueba de 2021 a 2026 se movió entre 1,5 y 3 veces más que el SPY, con caídas máximas de 20 % a 40 %. La versión conservadora cae menos y rinde menos.</li>
-        </ul>
-        <p class="dd-rule-foot">Es una regla para usar el filtro con disciplina, no una recomendación de inversión. Los resultados pasados no garantizan resultados futuros.</p>
-      </div>
-      <div class="dd-top10-summary" id="top10-summary" aria-label="Resumen de retornos">
-        <article class="dd-top10-card" data-kpi="avg_top10">
-          <h3 class="dd-kpi-label">Retorno medio Top 10</h3>
-          <p class="dd-kpi-value" id="top10-avg">—</p>
-        </article>
-        <article class="dd-top10-card" data-kpi="spy_window">
-          <h3 class="dd-kpi-label">SPY (misma ventana)</h3>
-          <p class="dd-kpi-value" id="top10-spy">—</p>
-        </article>
-      </div>
+      <p class="dd-variant-note" id="variant-note"></p>
+      <p class="dd-top10-summary" id="top10-summary" aria-label="Resumen de retornos">
+        <span>Top 10 <strong class="dd-kpi-value" id="top10-avg">—</strong></span>
+        <span>SPY <strong class="dd-kpi-value" id="top10-spy">—</strong></span>
+      </p>
       <div class="dd-table-wrap dd-top10-table-wrap">
         <table class="dd-table dd-top10-table" id="top10-table">
           <thead>
@@ -180,10 +162,9 @@
 
     <section class="dd-ranking dd-panel dd-pane" id="ranking" data-page="score" data-section="ranking" aria-label="Ranking Desk Score">
       <h2 class="dd-section-title">Ranking</h2>
-      <p class="dd-section-sub">Tocá una fila para abrir la ficha. El punto verde (●) marca las que tienen CEDEAR.</p>
       <details class="dd-help">
-        <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué significa</summary>
-        <p>El Desk Score es el percentil del momentum 12-1: cuánto subió cada acción en los últimos 12 meses, sin contar el último mes, comparada con el resto del universo. Si el cierre está bajo la EMA200, el score se divide por 2. Ni el verde ni el Top 10 son una señal de compra. El verde es «sin alertas de riesgo».</p>
+        <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué es el score</summary>
+        <p>Cuánto subió cada acción en los últimos 12 meses (sin el último), comparada con el resto. Bajo la EMA200 vale la mitad. ● = tiene CEDEAR.</p>
       </details>
       <div class="dd-filters" id="ranking-filters" role="toolbar" aria-label="Filtros de ranking">
         <div class="dd-filter-group" data-filter="kind" role="group" aria-label="Tipo">
@@ -211,7 +192,6 @@
         <span id="rank-page">1</span>
         <button type="button" id="rank-next">Siguiente</button>
       </div>
-      <p class="dd-scroll-hint">Deslizá la tabla para ver el resto de columnas.</p>
       <div class="dd-table-wrap">
         <table class="dd-table" id="ranking-table">
           <thead>
@@ -245,7 +225,6 @@
           <div class="dd-top10-head">
             <h2 class="dd-sr-only">Simulación Top 10 vs SPY</h2>
             <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward mensual · base 100</p>
-            <p class="dd-universe-mark">Universo ampliado el 02/10/2026. Las semanas de antes usan el universo de ese momento.</p>
           </div>
           <details class="dd-help">
             <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
@@ -325,7 +304,6 @@
 
     <section class="dd-analisis dd-panel dd-pane" id="analisis" data-page="analisis" aria-label="Análisis de un ticker">
       <h2 class="dd-section-title">Análisis</h2>
-      <p class="dd-section-sub">Un ticker por vez: score, alertas, resultados, analistas e insiders. Buscalo acá o tocá una fila en Score.</p>
       <div class="dd-filter-search">
         <label class="dd-sr-only" for="analisis-search">Buscar ticker</label>
         <input type="search" id="analisis-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
@@ -412,12 +390,10 @@
   </main>
 
   <footer class="dd-footer" data-section="footer">
-    <p class="dd-disclaimer">
-      No es recomendación de compra ni de inversión.
-      El Desk Score ordena por momentum y el semáforo marca riesgos. Que el momentum haya funcionado en el pasado no garantiza que siga funcionando.
-    </p>
+    <img class="dd-footer-mark" src="assets/logo.svg?v=7" alt="" width="28" height="25" />
+    <p class="dd-disclaimer">Angus ordena acciones por momentum. No es una recomendación de inversión y lo que funcionó antes puede no funcionar después.</p>
   </footer>
 
-  <script src="app.js?v=42" defer></script>
+  <script src="app.js?v=43" defer></script>
 </body>
 </html>

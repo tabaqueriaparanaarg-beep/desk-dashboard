@@ -2,7 +2,7 @@
   "expanded_on": "2026-10-02",
   "stocks": 380,
   "etfs": 11,
-  "cedear_source": "BYMA «CEDEARs Negociables en BYMA» (actualizado 2026-09-16), 404 códigos de mercados de EE.UU. El flag es true si el ticker US (o su equivalente, ej. BRKB → BRK.B) está en ese listado. Se actualiza con actualizar_cedears.py.",
+  "cedear_source": "BYMA «CEDEARs Negociables en BYMA» (actualizado 2026-09-16), 405 códigos de mercados de EE.UU. El flag es true si el ticker US (o su equivalente, ej. BRKB → BRK.B) está en ese listado. Se actualiza con actualizar_cedears.py.",
   "selection": "Se conservan las 61 acciones de antes. Se suman el Nasdaq-100, los CEDEARs que están en el S&P 500, NBIS/CLS/BIIB/YPF si cotizan, y el resto del S&P 500 por volumen medio en dólares (3 meses, Yahoo) hasta 380.",
   "tickers": [
     {
@@ -10,182 +10,234 @@
       "name": "Apple",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AAPL",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "MSFT",
       "name": "Microsoft",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MSFT",
+      "cedear_ratio": "30:1"
     },
     {
       "symbol": "NVDA",
       "name": "NVIDIA",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NVDA",
+      "cedear_ratio": "24:1"
     },
     {
       "symbol": "AMZN",
       "name": "Amazon",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AMZN",
+      "cedear_ratio": "144:1"
     },
     {
       "symbol": "META",
       "name": "Meta Platforms",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "META",
+      "cedear_ratio": "24:1"
     },
     {
       "symbol": "GOOGL",
       "name": "Alphabet",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GOOGL",
+      "cedear_ratio": "58:1"
     },
     {
       "symbol": "TSLA",
       "name": "Tesla",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TSLA",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "AMD",
       "name": "AMD",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AMD",
+      "cedear_ratio": "10:1"
     },
     {
       "symbol": "AVGO",
       "name": "Broadcom",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AVGO",
+      "cedear_ratio": "39:1"
     },
     {
       "symbol": "NFLX",
       "name": "Netflix",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NFLX",
+      "cedear_ratio": "48:1"
     },
     {
       "symbol": "JPM",
       "name": "JPMorgan Chase",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "JPM",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "V",
       "name": "Visa",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "V",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "MA",
       "name": "Mastercard",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MA",
+      "cedear_ratio": "33:1"
     },
     {
       "symbol": "XOM",
       "name": "Exxon Mobil",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XOM",
+      "cedear_ratio": "10:1"
     },
     {
       "symbol": "CVX",
       "name": "Chevron",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CVX",
+      "cedear_ratio": "16:1"
     },
     {
       "symbol": "JNJ",
       "name": "Johnson & Johnson",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "JNJ",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "UNH",
       "name": "UnitedHealth",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "UNH",
+      "cedear_ratio": "33:1"
     },
     {
       "symbol": "PEP",
       "name": "PepsiCo",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PEP",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "KO",
       "name": "Coca-Cola",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "KO",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "WMT",
       "name": "Walmart",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "WMT",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "COST",
       "name": "Costco",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "COST",
+      "cedear_ratio": "48:1"
     },
     {
       "symbol": "DIS",
       "name": "Disney",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DISN",
+      "cedear_ratio": "12:1"
     },
     {
       "symbol": "BA",
       "name": "Boeing",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BA",
+      "cedear_ratio": "24:1"
     },
     {
       "symbol": "CAT",
       "name": "Caterpillar",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CAT",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "GE",
       "name": "GE Aerospace",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GE",
+      "cedear_ratio": "8:1"
     },
     {
       "symbol": "MELI",
       "name": "MercadoLibre",
       "kind": "cedear_proxy",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MELI",
+      "cedear_ratio": "120:1"
     },
     {
       "symbol": "GGAL",
@@ -199,259 +251,333 @@
       "name": "Alibaba",
       "kind": "cedear_proxy",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BABA",
+      "cedear_ratio": "9:1"
     },
     {
       "symbol": "BIDU",
       "name": "Baidu",
       "kind": "cedear_proxy",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BIDU",
+      "cedear_ratio": "11:1"
     },
     {
       "symbol": "PBR",
       "name": "Petrobras",
       "kind": "cedear_proxy",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PBR",
+      "cedear_ratio": "1:1"
     },
     {
       "symbol": "VALE",
       "name": "Vale",
       "kind": "cedear_proxy",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "VALE",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "ITUB",
       "name": "Itaú Unibanco",
       "kind": "cedear_proxy",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ITUB",
+      "cedear_ratio": "1:1"
     },
     {
       "symbol": "BBD",
       "name": "Banco Bradesco",
       "kind": "cedear_proxy",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BBD",
+      "cedear_ratio": "1:1"
     },
     {
       "symbol": "B",
       "name": "Barrick Gold",
       "kind": "cedear_proxy",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "B",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "XYZ",
       "name": "Block (XYZ)",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XYZ",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "PYPL",
       "name": "PayPal",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PYPL",
+      "cedear_ratio": "8:1"
     },
     {
       "symbol": "CRM",
       "name": "Salesforce",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CRM",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "ORCL",
       "name": "Oracle",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ORCL",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "INTC",
       "name": "Intel",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "INTC",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "QCOM",
       "name": "Qualcomm",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "QCOM",
+      "cedear_ratio": "11:1"
     },
     {
       "symbol": "MU",
       "name": "Micron",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MU",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "ADBE",
       "name": "Adobe",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ADBE",
+      "cedear_ratio": "44:1"
     },
     {
       "symbol": "CSCO",
       "name": "Cisco",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CSCO",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "IBM",
       "name": "IBM",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "IBM",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "GS",
       "name": "Goldman Sachs",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GS",
+      "cedear_ratio": "13:1"
     },
     {
       "symbol": "BAC",
       "name": "Bank of America",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BA.C",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "C",
       "name": "Citigroup",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "C",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "WFC",
       "name": "Wells Fargo",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "WFC",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "HD",
       "name": "Home Depot",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HD",
+      "cedear_ratio": "32:1"
     },
     {
       "symbol": "NKE",
       "name": "Nike",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NKE",
+      "cedear_ratio": "12:1"
     },
     {
       "symbol": "MCD",
       "name": "McDonald's",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MCD",
+      "cedear_ratio": "24:1"
     },
     {
       "symbol": "SBUX",
       "name": "Starbucks",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SBUX",
+      "cedear_ratio": "12:1"
     },
     {
       "symbol": "TMO",
       "name": "Thermo Fisher",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TMO",
+      "cedear_ratio": "22:1"
     },
     {
       "symbol": "ABBV",
       "name": "AbbVie",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ABBV",
+      "cedear_ratio": "10:1"
     },
     {
       "symbol": "LLY",
       "name": "Eli Lilly",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "LLY",
+      "cedear_ratio": "56:1"
     },
     {
       "symbol": "MRK",
       "name": "Merck",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MRK",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "PFE",
       "name": "Pfizer",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PFE",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "COP",
       "name": "ConocoPhillips",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "COP",
+      "cedear_ratio": "25:1"
     },
     {
       "symbol": "SLB",
       "name": "Schlumberger",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SLB",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "NEE",
       "name": "NextEra Energy",
       "kind": "us",
       "sector": "Utilities",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NEE",
+      "cedear_ratio": "19:1"
     },
     {
       "symbol": "LIN",
       "name": "Linde",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "LIN",
+      "cedear_ratio": "102:1"
     },
     {
       "symbol": "ABNB",
       "name": "Airbnb",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ABNB",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "ADI",
       "name": "Analog Devices",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ADI",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "ADP",
       "name": "Automatic Data Processing",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ADP",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "ADSK",
@@ -472,7 +598,9 @@
       "name": "Astera Labs",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ALAB",
+      "cedear_ratio": "44:1"
     },
     {
       "symbol": "ALNY",
@@ -486,14 +614,18 @@
       "name": "Applied Materials",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AMAT",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "AMGN",
       "name": "Amgen",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AMGN",
+      "cedear_ratio": "30:1"
     },
     {
       "symbol": "APP",
@@ -507,14 +639,18 @@
       "name": "Arm Holdings",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ARM",
+      "cedear_ratio": "27:1"
     },
     {
       "symbol": "ASML",
       "name": "ASML Holding",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ASML",
+      "cedear_ratio": "146:1"
     },
     {
       "symbol": "AXON",
@@ -528,14 +664,18 @@
       "name": "Booking Holdings",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BKNG",
+      "cedear_ratio": "700:1"
     },
     {
       "symbol": "BKR",
       "name": "Baker Hughes",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BKR",
+      "cedear_ratio": "7:1"
     },
     {
       "symbol": "CCEP",
@@ -556,7 +696,9 @@
       "name": "Constellation Energy",
       "kind": "us",
       "sector": "Utilities",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CEG",
+      "cedear_ratio": "45:1"
     },
     {
       "symbol": "CMCSA",
@@ -577,14 +719,18 @@
       "name": "CrowdStrike",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CRWD",
+      "cedear_ratio": "79:1"
     },
     {
       "symbol": "CRWV",
       "name": "CoreWeave",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CRWV",
+      "cedear_ratio": "27:1"
     },
     {
       "symbol": "CSX",
@@ -661,14 +807,18 @@
       "name": "Gilead Sciences",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GILD",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "HON",
       "name": "Honeywell Technologies",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HON",
+      "cedear_ratio": "8:1"
     },
     {
       "symbol": "HONA",
@@ -696,7 +846,9 @@
       "name": "Intuitive Surgical",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ISRG",
+      "cedear_ratio": "90:1"
     },
     {
       "symbol": "KDP",
@@ -710,7 +862,9 @@
       "name": "KLA",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "KLAC",
+      "cedear_ratio": "34:1"
     },
     {
       "symbol": "LITE",
@@ -724,7 +878,9 @@
       "name": "Lam Research",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "LRCX",
+      "cedear_ratio": "56:1"
     },
     {
       "symbol": "MAR",
@@ -745,7 +901,9 @@
       "name": "Mondelez International",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MDLZ",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "MNST",
@@ -766,21 +924,27 @@
       "name": "Marvell Technology",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MRVL",
+      "cedear_ratio": "14:1"
     },
     {
       "symbol": "MSTR",
       "name": "MicroStrategy",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MSTR",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "NBIS",
       "name": "Nebius Group",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NBIS",
+      "cedear_ratio": "27:1"
     },
     {
       "symbol": "NXPI",
@@ -801,14 +965,18 @@
       "name": "O'Reilly Automotive",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ORLY",
+      "cedear_ratio": "222:1"
     },
     {
       "symbol": "PANW",
       "name": "Palo Alto Networks",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PANW",
+      "cedear_ratio": "50:1"
     },
     {
       "symbol": "PAYX",
@@ -822,21 +990,27 @@
       "name": "Paccar",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PCAR",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "PDD",
       "name": "Pinduoduo",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PDD",
+      "cedear_ratio": "25:1"
     },
     {
       "symbol": "PLTR",
       "name": "Palantir Technologies",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PLTR",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "REGN",
@@ -850,7 +1024,9 @@
       "name": "Rocket Lab",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "RKLB",
+      "cedear_ratio": "12:1"
     },
     {
       "symbol": "ROP",
@@ -864,21 +1040,27 @@
       "name": "Ross Stores",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ROST",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "SHOP",
       "name": "Shopify",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SHOP",
+      "cedear_ratio": "107:1"
     },
     {
       "symbol": "SNDK",
       "name": "Sandisk",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SNDK",
+      "cedear_ratio": "170:1"
     },
     {
       "symbol": "SNPS",
@@ -892,7 +1074,9 @@
       "name": "SpaceX",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SPCX",
+      "cedear_ratio": "50:1"
     },
     {
       "symbol": "STX",
@@ -913,7 +1097,9 @@
       "name": "T-Mobile US",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TMUS",
+      "cedear_ratio": "33:1"
     },
     {
       "symbol": "TRI",
@@ -934,14 +1120,18 @@
       "name": "Texas Instruments",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TXN",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "VRTX",
       "name": "Vertex Pharmaceuticals",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "VRTX",
+      "cedear_ratio": "101:1"
     },
     {
       "symbol": "WBD",
@@ -962,7 +1152,9 @@
       "name": "Western Digital",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "WDC",
+      "cedear_ratio": "92:1"
     },
     {
       "symbol": "XEL",
@@ -976,14 +1168,18 @@
       "name": "Celestica",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CLS",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "BIIB",
       "name": "Biogen",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BIIB",
+      "cedear_ratio": "13:1"
     },
     {
       "symbol": "YPF",
@@ -997,497 +1193,639 @@
       "name": "Abbott Laboratories",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ABT",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "ACN",
       "name": "Accenture",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ACN",
+      "cedear_ratio": "75:1"
     },
     {
       "symbol": "AIG",
       "name": "American International Group",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AIG",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "AVY",
       "name": "Avery Dennison",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AVY",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "AXP",
       "name": "American Express",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "AXP",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "BG",
       "name": "Bunge Global",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BNG",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "BMY",
       "name": "Bristol Myers Squibb",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BMY",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "BRK.B",
       "name": "Berkshire Hathaway",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BRKB",
+      "cedear_ratio": "22:1"
     },
     {
       "symbol": "BX",
       "name": "Blackstone",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "BX",
+      "cedear_ratio": "30:1"
     },
     {
       "symbol": "CAH",
       "name": "Cardinal Health",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CAH",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "CCL",
       "name": "Carnival",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CCL",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "CL",
       "name": "Colgate-Palmolive",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CL",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "COIN",
       "name": "Coinbase",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "COIN",
+      "cedear_ratio": "27:1"
     },
     {
       "symbol": "CVS",
       "name": "CVS Health",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "CVS",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "DAL",
       "name": "Delta Air Lines",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DAL",
+      "cedear_ratio": "8:1"
     },
     {
       "symbol": "DD",
       "name": "DuPont",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DD",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "DE",
       "name": "Deere &",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DE",
+      "cedear_ratio": "40:1"
     },
     {
       "symbol": "DECK",
       "name": "Deckers Brands",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DECK",
+      "cedear_ratio": "25:1"
     },
     {
       "symbol": "DHR",
       "name": "Danaher",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DHR",
+      "cedear_ratio": "54:1"
     },
     {
       "symbol": "DOW",
       "name": "Dow",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DOW",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "EBAY",
       "name": "eBay",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "EBAY",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "ECL",
       "name": "Ecolab",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ECL",
+      "cedear_ratio": "56:1"
     },
     {
       "symbol": "EFX",
       "name": "Equifax",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "EFX",
+      "cedear_ratio": "16:1"
     },
     {
       "symbol": "F",
       "name": "Ford Motor",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "F",
+      "cedear_ratio": "1:1"
     },
     {
       "symbol": "FCX",
       "name": "Freeport-McMoRan",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "FCX",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "FDX",
       "name": "FedEx",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "FDX",
+      "cedear_ratio": "10:1"
     },
     {
       "symbol": "FSLR",
       "name": "First Solar",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "FSLR",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "GLW",
       "name": "Corning",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GLW",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "GM",
       "name": "General Motors",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GM",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "GRMN",
       "name": "Garmin",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GRMN",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "HAL",
       "name": "Halliburton",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HAL",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "HOOD",
       "name": "Robinhood Markets",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HOOD",
+      "cedear_ratio": "29:1"
     },
     {
       "symbol": "HPQ",
       "name": "HP",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HPQ",
+      "cedear_ratio": "1:1"
     },
     {
       "symbol": "HSY",
       "name": "Hershey",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HSY",
+      "cedear_ratio": "21:1"
     },
     {
       "symbol": "HWM",
       "name": "Howmet Aerospace",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "HWM",
+      "cedear_ratio": "1:1"
     },
     {
       "symbol": "IFF",
       "name": "International Flavors & Fragrances",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "IFF",
+      "cedear_ratio": "12:1"
     },
     {
       "symbol": "IP",
       "name": "International Paper",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "IP",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "JCI",
       "name": "Johnson Controls",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "JCI",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "KMB",
       "name": "Kimberly-Clark",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "KMB",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "LMT",
       "name": "Lockheed Martin",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "LMT",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "LVS",
       "name": "Las Vegas Sands",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "LVS",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "MDT",
       "name": "Medtronic",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MDT",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "MMM",
       "name": "3M",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MMM",
+      "cedear_ratio": "10:1"
     },
     {
       "symbol": "MO",
       "name": "Altria",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MO",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "MOS",
       "name": "Mosaic",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MOS",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "MRNA",
       "name": "Moderna",
       "kind": "us",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MRNA",
+      "cedear_ratio": "19:1"
     },
     {
       "symbol": "MSI",
       "name": "Motorola Solutions",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MSI",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "NEM",
       "name": "Newmont",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NEM",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "NOW",
       "name": "ServiceNow",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NOW",
+      "cedear_ratio": "172:1"
     },
     {
       "symbol": "NUE",
       "name": "Nucor",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "NUE",
+      "cedear_ratio": "16:1"
     },
     {
       "symbol": "OXY",
       "name": "Occidental Petroleum",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "OXY",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "PG",
       "name": "Procter & Gamble",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PG",
+      "cedear_ratio": "15:1"
     },
     {
       "symbol": "PM",
       "name": "Philip Morris International",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PM",
+      "cedear_ratio": "18:1"
     },
     {
       "symbol": "PSX",
       "name": "Phillips 66",
       "kind": "us",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PSX",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "RTX",
       "name": "RTX",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "RTX",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "SCHW",
       "name": "Charles Schwab",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SCHW",
+      "cedear_ratio": "13:1"
     },
     {
       "symbol": "SNA",
       "name": "Snap-on",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SNA",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "SPGI",
       "name": "S&P Global",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SPGI",
+      "cedear_ratio": "45:1"
     },
     {
       "symbol": "SWKS",
       "name": "Skyworks Solutions",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SWKS",
+      "cedear_ratio": "21:1"
     },
     {
       "symbol": "SYY",
       "name": "Sysco",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SYY",
+      "cedear_ratio": "8:1"
     },
     {
       "symbol": "T",
       "name": "AT&T",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "T",
+      "cedear_ratio": "3:1"
     },
     {
       "symbol": "TGT",
       "name": "Target",
       "kind": "us",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TGT",
+      "cedear_ratio": "24:1"
     },
     {
       "symbol": "TJX",
       "name": "TJX Companies",
       "kind": "us",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TJX",
+      "cedear_ratio": "22:1"
     },
     {
       "symbol": "TRV",
       "name": "Travelers Companies",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "TRVV",
+      "cedear_ratio": "6:1"
     },
     {
       "symbol": "UAL",
       "name": "United Airlines Holdings",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "UAL",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "UBER",
       "name": "Uber",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "UBER",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "UNP",
       "name": "Union Pacific",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "UNP",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "USB",
       "name": "U.S. Bancorp",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "USB",
+      "cedear_ratio": "5:1"
     },
     {
       "symbol": "VST",
       "name": "Vistra",
       "kind": "us",
       "sector": "Utilities",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "VST",
+      "cedear_ratio": "26:1"
     },
     {
       "symbol": "VZ",
       "name": "Verizon",
       "kind": "us",
       "sector": "Communication",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "VZ",
+      "cedear_ratio": "4:1"
     },
     {
       "symbol": "DELL",
       "name": "Dell Technologies",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DELL",
+      "cedear_ratio": "74:1"
     },
     {
       "symbol": "BE",
@@ -1501,7 +1839,9 @@
       "name": "GE Vernova",
       "kind": "us",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "GEV",
+      "cedear_ratio": "180:1"
     },
     {
       "symbol": "COHR",
@@ -1529,7 +1869,9 @@
       "name": "Arista Networks",
       "kind": "us",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "ANET",
+      "cedear_ratio": "29:1"
     },
     {
       "symbol": "HPE",
@@ -1543,7 +1885,9 @@
       "name": "Morgan Stanley",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "MS",
+      "cedear_ratio": "41:1"
     },
     {
       "symbol": "VLO",
@@ -1648,7 +1992,9 @@
       "name": "Welltower",
       "kind": "us",
       "sector": "Real Estate",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "WELL",
+      "cedear_ratio": "48:1"
     },
     {
       "symbol": "RCL",
@@ -1676,7 +2022,9 @@
       "name": "Sherwin-Williams",
       "kind": "us",
       "sector": "Materials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SHW",
+      "cedear_ratio": "69:1"
     },
     {
       "symbol": "HCA",
@@ -1739,7 +2087,9 @@
       "name": "Prologis",
       "kind": "us",
       "sector": "Real Estate",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "PLD",
+      "cedear_ratio": "29:1"
     },
     {
       "symbol": "EQIX",
@@ -2117,14 +2467,18 @@
       "name": "Realty Income",
       "kind": "us",
       "sector": "Real Estate",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "O",
+      "cedear_ratio": "13:1"
     },
     {
       "symbol": "IBKR",
       "name": "Interactive Brokers",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "IBKR",
+      "cedear_ratio": "17:1"
     },
     {
       "symbol": "MCO",
@@ -2145,7 +2499,9 @@
       "name": "Fiserv",
       "kind": "us",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "FISV",
+      "cedear_ratio": "11:1"
     },
     {
       "symbol": "YUM",
@@ -2670,77 +3026,99 @@
       "name": "SPDR S&P 500 ETF",
       "kind": "etf",
       "sector": "Benchmark",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "SPY",
+      "cedear_ratio": "60:1"
     },
     {
       "symbol": "QQQ",
       "name": "Invesco QQQ",
       "kind": "etf",
       "sector": "Benchmark",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "QQQ",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "IWM",
       "name": "iShares Russell 2000",
       "kind": "etf",
       "sector": "Benchmark",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "IWM",
+      "cedear_ratio": "10:1"
     },
     {
       "symbol": "DIA",
       "name": "SPDR Dow Jones",
       "kind": "etf",
       "sector": "Benchmark",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "DIA",
+      "cedear_ratio": "20:1"
     },
     {
       "symbol": "XLK",
       "name": "Technology Select Sector",
       "kind": "etf",
       "sector": "Technology",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLK",
+      "cedear_ratio": "46:1"
     },
     {
       "symbol": "XLF",
       "name": "Financial Select Sector",
       "kind": "etf",
       "sector": "Financials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLF",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "XLE",
       "name": "Energy Select Sector",
       "kind": "etf",
       "sector": "Energy",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLE",
+      "cedear_ratio": "2:1"
     },
     {
       "symbol": "XLV",
       "name": "Health Care Select Sector",
       "kind": "etf",
       "sector": "Health Care",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLV",
+      "cedear_ratio": "29:1"
     },
     {
       "symbol": "XLI",
       "name": "Industrial Select Sector",
       "kind": "etf",
       "sector": "Industrials",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLI",
+      "cedear_ratio": "28:1"
     },
     {
       "symbol": "XLP",
       "name": "Consumer Staples Select",
       "kind": "etf",
       "sector": "Consumer Staples",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLP",
+      "cedear_ratio": "16:1"
     },
     {
       "symbol": "XLY",
       "name": "Consumer Discretionary Select",
       "kind": "etf",
       "sector": "Consumer Discretionary",
-      "cedear": true
+      "cedear": true,
+      "cedear_code": "XLY",
+      "cedear_ratio": "43:1"
     }
   ]
 }

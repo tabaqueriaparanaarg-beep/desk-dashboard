@@ -73,6 +73,15 @@ class ParseTests(unittest.TestCase):
             {"AAPL", "ARKK", "CRWD", "BRKB", "BA.C", "XPEV", "NOW"},
         )
 
+    def test_ratio_next_to_the_market(self):
+        listing = A.parse_listing(PDF_TEXT)
+        self.assertEqual(listing["AAPL"], "20:1")
+        self.assertEqual(listing["CRWD"], "79:1")
+        self.assertEqual(listing["BRKB"], "22:1")
+        self.assertEqual(listing["ARKK"], "10:1")
+        self.assertEqual(A.normalize_ratio("10:01"), "10:1")
+        self.assertIsNone(A.normalize_ratio("x"))
+
     def test_pipe_separated_rows(self):
         self.assertEqual(A.parse_codes(PIPE_TEXT), {"AAPL", "ABBV", "PANW"})
 
@@ -100,6 +109,8 @@ class ParseTests(unittest.TestCase):
             p = Path(tmp) / "codes.txt"
             p.write_text("AAPL:NASDAQ,ABEV3:B3,ADS:XETRA,BRKB:NYSE,XLK:NYSE\n", encoding="utf-8")
             self.assertEqual(A.codes_from_file(p), {"AAPL", "BRKB", "XLK"})
+            p.write_text("AAPL=20:1,CIBR=10:01", encoding="utf-8")
+            self.assertEqual(A.listing_from_file(p), {"AAPL": "20:1", "CIBR": "10:1"})
 
 
 class ApplyTests(unittest.TestCase):
@@ -113,6 +124,14 @@ class ApplyTests(unittest.TestCase):
                 {"symbol": "BRK.B", "cedear": False},
             ],
         }
+
+    def test_listing_sets_code_and_ratio(self):
+        u = self.universe()
+        A.apply_flags(u, {"AAPL": "20:1", "BRKB": "22:1"}, "nuevo")
+        rows = {r["symbol"]: r for r in u["tickers"]}
+        self.assertEqual((rows["BRK.B"]["cedear_code"], rows["BRK.B"]["cedear_ratio"]), ("BRKB", "22:1"))
+        self.assertEqual(rows["AAPL"]["cedear_ratio"], "20:1")
+        self.assertNotIn("cedear_code", rows["HPE"])
 
     def test_flags_follow_the_listing(self):
         u = self.universe()
