@@ -30,15 +30,23 @@ POINTS_MAX = 125.0
 
 CBOE_VIX_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
 
-DISCLAIMER = "Guía automática de exposición, no es un consejo de inversión."
+# Lectura de riesgo (nov-2026). La auditoría de 2021–2026 mostró que el puntaje anticipa
+# bien la volatilidad del SPY en las 4 semanas siguientes, pero no la dirección: después
+# de puntajes bajos el SPY rindió más (rebotes). Por eso ya no sugiere cuánto invertir.
+DISCLAIMER = (
+    "Mide cuánto se está moviendo el mercado, no para dónde va: después de lecturas bajas "
+    "el SPY rebotó seguido. No es una guía de cuánto invertir."
+)
 
 # [lo, hi) salvo el último tramo, que incluye 100. El borde cae en el tramo de arriba
 # (25 es «25–50», no «0–25») para que el número del medidor y el color coincidan.
+# Volatilidad del SPY en las 20 ruedas siguientes, 2021–2026: 12 % anual con 75–100,
+# 16 % con 50–75 y 23 % con menos de 50.
 EXPOSURE_BANDS: tuple[tuple[int, int, str, str, str], ...] = (
-    (0, 25, "red", "0–25%", "mínima, liquidez"),
-    (25, 50, "orange", "25–50%", "posiciones chicas, stops cortos"),
-    (50, 75, "yellow", "50–75%", "exposición normal"),
-    (75, 101, "green", "75–100%", "exposición plena"),
+    (0, 25, "red", "Turbulento", "volatilidad muy alta, caídas más profundas"),
+    (25, 50, "orange", "Movido", "volatilidad alta (≈23 % anual)"),
+    (50, 75, "yellow", "Normal", "volatilidad media (≈16 % anual)"),
+    (75, 101, "green", "Tranquilo", "volatilidad baja (≈12 % anual)"),
 )
 
 FORMULA = (
@@ -65,10 +73,11 @@ FORMULA = (
     "y 7 si el cierre < media de 50. "
     "Si no hay CBOE ni VIXY, el componente queda afuera y el pie dice "
     "«calculado sobre X pts disponibles de 125». "
-    "Exposición: [0, 25) rojo, 0–25% · mínima, liquidez; "
-    "[25, 50) naranja, 25–50% · posiciones chicas, stops cortos; "
-    "[50, 75) amarillo, 50–75% · exposición normal; "
-    "[75, 100] verde, 75–100% · exposición plena. "
+    "Lectura de riesgo: [0, 25) rojo, turbulento; [25, 50) naranja, movido; "
+    "[50, 75) amarillo, normal; [75, 100] verde, tranquilo. Mide volatilidad, no dirección: "
+    "en 2021–2026 la volatilidad del SPY en las 20 ruedas siguientes fue ≈12 % anual con "
+    "75–100, ≈16 % con 50–75 y ≈23 % por debajo de 50, pero el retorno a 4 semanas fue "
+    "mayor después de lecturas bajas. "
     f"Serie: % de activos scored con cierre > EMA200 en cada una de las últimas {BREADTH_SESSIONS} "
     "sesiones del calendario de SPY (o del universo si no hay SPY), con las barras ya descargadas. "
     "Quien no tiene barra ese día no entra en el denominador de esa rueda. "

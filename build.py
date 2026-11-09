@@ -54,8 +54,11 @@ APCA_SECRET = _env_first("ALPACA_SECRET_KEY", "APCA_API_SECRET_KEY")
 LOOKBACK_CALENDAR_DAYS = 400
 # Walk-forward: 253 ruedas de calentamiento (momentum 12-1) + ~26 semanas + feriados y margen.
 # Misma API de Alpaca (un request por lote); el ranking no usa estas barras viejas.
-WALKFORWARD_LOOKBACK_CALENDAR_DAYS = 620
-WALKFORWARD_WEEKS = 26
+WALKFORWARD_LOOKBACK_CALENDAR_DAYS = 800
+WALKFORWARD_WEEKS = 52
+# Rebalanceo mensual (nov-2026): en el backtest rinde parecido al semanal, cae menos
+# y opera menos de la mitad. La curva sigue con un punto por semana.
+WALKFORWARD_REBALANCE = "ultimo_cierre_del_mes"
 WALKFORWARD_WARMUP_SESSIONS = 253
 WALKFORWARD_RECENT = 6
 WALKFORWARD_TOP_N = 10
@@ -517,6 +520,10 @@ MOM_LONG_SESSIONS = 252   # ~12 meses
 MOM_SKIP_SESSIONS = 21    # se saltea el último mes (reversión de corto plazo)
 MOM_SHORT_SESSIONS = 126  # fallback 6-1 si no hay 12 meses de historia
 BELOW_EMA200_FACTOR = 0.5
+# Versión conservadora (nov-2026): el mismo momentum 12-1 dividido por la
+# volatilidad anualizada de 126 ruedas, en percentil, con el mismo filtro de
+# la EMA200. En el backtest cae menos que el v3 en los dos universos y rinde menos.
+VOL_SESSIONS = 126
 PILLAR_WEIGHTS = {"momentum": 1.0}
 PILLAR_MAX_POINTS = {"momentum": 100}
 INFO_PILLARS = ("tendencia", "fuerza_rs", "contraccion")
@@ -645,6 +652,19 @@ def momentum_12_1(closes: list[float]) -> tuple[float | None, str | None]:
             if c0 and c0 > 0:
                 return c1 / c0 - 1.0, label
     return None, None
+
+
+def realized_vol(closes: list[float], n: int = VOL_SESSIONS) -> float | None:
+    """Volatilidad anualizada (fracción) de los últimos `n` retornos logarítmicos diarios."""
+    if len(closes) <= n:
+        return None
+    window = closes[-(n + 1):]
+    rets = [math.log(window[i] / window[i - 1]) for i in range(1, len(window)) if window[i - 1] > 0 and window[i] > 0]
+    if len(rets) < 2:
+        return None
+    m = sum(rets) / len(rets)
+    var = sum((r - m) ** 2 for r in rets) / (len(rets) - 1)
+    return math.sqrt(var) * math.sqrt(252)
 
 
 def desk_score(momentum_pct: float | None, above_ema200: bool) -> float:
@@ -899,6 +919,7 @@ def compute_symbol(
     rel_perf, horizon, rs_accel = relative_performance(closes, spy_closes)
     # Momentum 12-1 (lo único que entra en el Desk Score); percentil más tarde.
     mom_raw, mom_horizon = momentum_12_1(closes)
+    vol_ann = realized_vol(closes, VOL_SESSIONS)
 
     change_pct = None
     if len(closes) >= 2 and closes[-2]:
@@ -967,7 +988,9 @@ def compute_symbol(
         "_tend": tend,
         "_contr": contr,
         "_rs_accel": rs_accel,
+        "vol_126d_pct": safe_round(vol_ann * 100 if vol_ann is not None else None, 1),
         "_mom_raw": mom_raw,
+        "_mom_voladj": (mom_raw / vol_ann) if (mom_raw is not None and vol_ann) else None,
     }
 
 
@@ -988,6 +1011,7 @@ def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
     """
     rels = [r["_rel_perf_raw"] for r in rows if r["_rel_perf_raw"] is not None]
     moms = [r.get("_mom_raw") for r in rows if r.get("_mom_raw") is not None]
+    adjs = [r.get("_mom_voladj") for r in rows if r.get("_mom_voladj") is not None]
     for r in rows:
         if r["_rel_perf_raw"] is None:
             rs = 50.0
@@ -1005,13 +1029,49 @@ def apply_cross_section_scores(rows: list[dict]) -> list[dict]:
         elif r.get("mom_horizon") == "6-1":
             r["flags"].append("momentum_6m")
         r["desk_score"] = safe_round(desk_score(mom_pct, bool(r.get("above_ema200"))), 1)
+        adj = r.get("_mom_voladj")
+        adj_pct = percentile_rank(adjs, adj) if adj is not None else None
+        r["desk_score_cons"] = safe_round(desk_score(adj_pct, bool(r.get("above_ema200"))), 1)
         for k in list(r.keys()):
             if k.startswith("_"):
                 del r[k]
+    by_cons = sorted(rows, key=lambda x: (-(x["desk_score_cons"] or 0), x["symbol"]))
+    for i, r in enumerate(by_cons, 1):
+        r["rank_cons"] = i
     rows.sort(key=lambda x: (-(x["desk_score"] or 0), x["symbol"]))
     for i, r in enumerate(rows, 1):
         r["rank"] = i
     return rows
+
+
+# Variantes del Top 10 (nov-2026). La página arranca en «cedear»: lo que se puede
+# comprar desde Argentina. Si el universo no trae la marca `cedear` (tests, universos
+# viejos), el filtro no se aplica, para no dejar el Top 10 vacío.
+TOP10_DEFAULT_VARIANT = "cedear"
+TOP10_VARIANTS: dict[str, dict[str, Any]] = {
+    "cedear": {"score": "desk_score", "cedear_only": True, "label": "Con CEDEAR"},
+    "cedear_cons": {"score": "desk_score_cons", "cedear_only": True, "label": "Con CEDEAR · conservador"},
+    "todas": {"score": "desk_score", "cedear_only": False, "label": "Todas"},
+    "todas_cons": {"score": "desk_score_cons", "cedear_only": False, "label": "Todas · conservador"},
+}
+
+
+def top10_pick(rows: list[dict] | None, variant: str = TOP10_DEFAULT_VARIANT, n: int = 10) -> list[dict]:
+    """Los `n` primeros de la variante: ordena por su score y filtra CEDEAR si corresponde.
+
+    Solo acciones: los ETFs siguen en el ranking, pero no entran al Top 10 (el backtest
+    que eligió el score se hizo con acciones).
+    """
+    spec = TOP10_VARIANTS[variant]
+    key = spec["score"]
+    rows = [
+        r for r in (rows or [])
+        if isinstance(r, dict) and r.get("symbol") and str(r.get("kind") or "").lower() != "etf"
+    ]
+    filter_cedear = spec["cedear_only"] and any("cedear" in r for r in rows)
+    pool = [r for r in rows if not filter_cedear or r.get("cedear")]
+    pool.sort(key=lambda r: (-(r.get(key) or 0), r["symbol"]))
+    return pool[:n]
 
 
 WINDOW_SESSIONS = 10
@@ -1144,12 +1204,11 @@ def compute_top10_return(
     ranking: list[dict],
     bars_by_symbol: dict[str, list[dict]],
     window: int = WINDOW_SESSIONS,
+    variant: str = TOP10_DEFAULT_VARIANT,
 ) -> dict[str, Any]:
     """Build top10_return block from ranking + daily bars (symbol -> Alpaca bars)."""
-    top = sorted(
-        [r for r in ranking if r.get("symbol")],
-        key=lambda r: (-(r.get("desk_score") or 0), r.get("symbol") or ""),
-    )[:10]
+    top = top10_pick(ranking, variant)
+    score_key = TOP10_VARIANTS[variant]["score"]
 
     asof = None
     rows_out: list[dict] = []
@@ -1172,7 +1231,8 @@ def compute_top10_return(
             {
                 "rank": i,
                 "symbol": sym,
-                "desk_score": r.get("desk_score"),
+                "desk_score": r.get(score_key),
+                "cedear": r.get("cedear"),
                 "return_pct": ret_r,
                 "spark": spark_closes(closes, window),
             }
@@ -1193,6 +1253,7 @@ def compute_top10_return(
         avg = safe_round(sum(returns_for_avg) / len(returns_for_avg), 2)
 
     return {
+        "variant": variant,
         "window_sessions": window,
         "asof": asof,
         "avg_return_pct": avg,
@@ -1379,10 +1440,10 @@ def compute_top10_entry(
     membership: list[tuple[str, list[str]]] = []
     for d in valid:
         if today_rows is not None and d == last:
-            top = [r["symbol"] for r in today_rows[:10] if r.get("symbol")]
+            top = [r["symbol"] for r in top10_pick(today_rows)]
         else:
             ranked = rank_universe_asof(meta_by, all_bars, d)
-            top = [r["symbol"] for r in ranked[:10]]
+            top = [r["symbol"] for r in top10_pick(ranked)]
         membership.append((d, top))
     return {
         "lookback_sessions": lookback,
@@ -1418,18 +1479,19 @@ def copy_entro_from_ranking(ranking: list[dict], top10: dict | None) -> None:
 # Simulación walk-forward del Top 10. No es el panel «Retorno Top 10» (ese arma el
 # Top 10 de hoy y mira esas mismas acciones hacia atrás).
 TOP10_WALKFORWARD_FORMULA = (
-    "Walk-forward semanal: en el último cierre de cada semana ISO se recalcula el Desk Score "
-    "con barras hasta ese cierre (misma fórmula que el ranking, sin earnings ni Finnhub). "
-    "Se compra el Top 10 equiponderado a ese cierre y se mantiene hasta el último cierre de "
-    "la semana siguiente; ahí se venden los que salieron y se compran los que entraron. "
+    "Walk-forward mensual: en el último cierre de cada mes (el último cierre semanal del mes) "
+    "se recalcula el Desk Score con barras hasta ese cierre (misma fórmula que el ranking, sin "
+    "earnings ni Finnhub). Se compra el Top 10 equiponderado de cada variante (con CEDEAR o "
+    "todas, normal o conservador) y se mantiene hasta el rebalanceo siguiente; ahí se venden "
+    "los que salieron y se compran los que entraron. La curva tiene un punto por semana. "
+    "Universo = todas las acciones rankeadas ese día, equiponderadas, mismo calendario. "
     f"Solo entran fechas con al menos {WALKFORWARD_WARMUP_SESSIONS} ruedas de SPY (momentum 12-1 definido) "
     f"y se miden como máximo las {WALKFORWARD_WEEKS} semanas más recientes. "
     "Un símbolo sin barra en la sesión de rebalanceo no se rankea ese día. "
     "Si a un nombre del libro le falta el cierre de salida, esa semana se reparte el peso entre "
     "los que sí tienen ambos cierres. SPY es comprar y mantener entre las mismas fechas. "
     "Sin comisiones. Rotación = cantidad de nombres que salen, promediada en cada rebalanceo "
-    "posterior a la compra inicial. El Top 10 del último cierre no se usa para el retorno de "
-    "esa semana: ese cierre solo marca el valor del libro armado la semana anterior."
+    "mensual posterior a la compra inicial. El último cierre solo marca el valor del libro."
 )
 
 
@@ -1444,7 +1506,7 @@ def walkforward_note(weeks: int, start: str | None, end: str | None, warmup: int
     if weeks and start and end:
         ventana = (
             f" Ventana usada: {weeks} semanas, del {_ddmmyyyy(start)} al {_ddmmyyyy(end)}"
-            f" (calentamiento de {warmup} ruedas para que exista la EMA200)."
+            f" (calentamiento de {warmup} ruedas para que exista el momentum 12-1)."
         )
     else:
         ventana = (
@@ -1452,12 +1514,14 @@ def walkforward_note(weeks: int, start: str | None, end: str | None, warmup: int
             "una semana completa después."
         )
     return (
-        "Simulación semanal: en el último cierre de cada semana se recalcula el Desk Score "
+        "Simulación mensual: en el último cierre de cada mes se recalcula el Desk Score "
         "solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada "
-        "nombre y se mantiene hasta el cierre de la semana siguiente. Se compra y se vende a "
-        "ese mismo cierre. No es el panel de arriba: aquel toma el Top 10 de hoy y mira hacia "
-        "atrás. Sin comisiones. Es una simulación de un filtro, no una ventaja de compra ni una "
-        "recomendación. Los resultados pasados no garantizan resultados futuros."
+        "nombre y se mantiene hasta el último cierre del mes siguiente. Se compra y se vende a "
+        "ese mismo cierre. La curva muestra un punto por semana. «Universo» es comprar todas las "
+        "acciones del universo con el mismo peso, con el mismo calendario. No es el panel de "
+        "arriba: aquel toma el Top 10 de hoy y mira hacia atrás. Sin comisiones. Es una "
+        "simulación de un filtro, no una recomendación. Los resultados pasados no garantizan "
+        "resultados futuros."
         + ventana
     )
 
@@ -1666,12 +1730,43 @@ def top10_symbols_asof(
     all_bars: dict[str, list[dict]],
     session: str,
     top_n: int = WALKFORWARD_TOP_N,
+    variant: str = TOP10_DEFAULT_VARIANT,
 ) -> list[str]:
-    """Top N del Desk Score en `session`, solo con datos hasta ese cierre."""
+    """Top N de la variante en `session`, solo con datos hasta ese cierre."""
     ranked = rank_universe_asof(
         meta_by, all_bars, session, require_exact_session=True
     )
-    return [r["symbol"] for r in ranked[:top_n] if r.get("symbol")]
+    return [r["symbol"] for r in top10_pick(ranked, variant, top_n)]
+
+
+def monthly_rebalance_marks(marks: list[str]) -> list[str]:
+    """Fechas de compra: la primera marca y el último cierre semanal de cada mes.
+
+    La última marca solo valúa el libro, así que no rebalancea.
+    """
+    if not marks:
+        return []
+    out = [marks[0]]
+    body = marks[:-1]
+    for i, d in enumerate(body):
+        if i == 0:
+            continue
+        nxt = marks[i + 1]
+        if nxt[:7] != d[:7]:
+            out.append(d)
+    return out
+
+
+def _held_at(marks: list[str], rebal: list[str], picks: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Para cada marca semanal, el libro del último rebalanceo hasta esa fecha."""
+    held: dict[str, list[str]] = {}
+    current: list[str] = []
+    rebal_set = set(rebal)
+    for d in marks[:-1]:
+        if d in rebal_set:
+            current = list(picks.get(d) or [])
+        held[d] = current
+    return held
 
 
 def compute_top10_walkforward(
@@ -1683,31 +1778,76 @@ def compute_top10_walkforward(
     top_n: int = WALKFORWARD_TOP_N,
     recent: int = WALKFORWARD_RECENT,
 ) -> dict[str, Any]:
-    """Cartera que sigue el Top 10 recomputado cada semana, contra SPY comprar y mantener."""
+    """Libros que siguen cada variante del Top 10, rebalanceados una vez por mes.
+
+    Devuelve el libro de la variante por defecto en el nivel de arriba (los campos que ya
+    leía la página) y todos en `books`. Cada curva trae SPY y el universo equiponderado.
+    """
     spy_dates = session_dates_from_bars(all_bars.get("SPY") or [])
     marks = eligible_weekly_dates(spy_dates, warmup_sessions, weeks)
     if len(marks) < 2:
         return _empty_walkforward(warmup_sessions, weeks)
     closes = close_by_session(all_bars)
-    holdings: dict[str, list[str]] = {}
-    # El último cierre solo marca el valor: no hace falta rankearlo.
-    for d in marks[:-1]:
-        holdings[d] = top10_symbols_asof(meta_by, all_bars, d, top_n=top_n)
-    return walkforward_from_schedule(
-        marks,
-        holdings,
-        closes,
-        warmup_sessions=warmup_sessions,
-        target_weeks=weeks,
-        recent=recent,
+    rebal = monthly_rebalance_marks(marks)
+    picks: dict[str, dict[str, list[str]]] = {v: {} for v in TOP10_VARIANTS}
+    universe: dict[str, list[str]] = {}
+    for d in rebal:
+        ranked = rank_universe_asof(meta_by, all_bars, d, require_exact_session=True)
+        for v in TOP10_VARIANTS:
+            picks[v][d] = [r["symbol"] for r in top10_pick(ranked, v, top_n)]
+        universe[d] = [
+            r["symbol"] for r in ranked
+            if r.get("symbol") and str(r.get("kind") or "").lower() != "etf"
+        ]
+    uni_block = walkforward_from_schedule(
+        marks, _held_at(marks, rebal, universe), closes,
+        warmup_sessions=warmup_sessions, target_weeks=weeks, recent=recent,
     )
+    uni_curve = [p["portfolio"] for p in uni_block.get("curve") or []]
+    books: dict[str, dict[str, Any]] = {}
+    for v, spec in TOP10_VARIANTS.items():
+        block = walkforward_from_schedule(
+            marks, _held_at(marks, rebal, picks[v]), closes,
+            warmup_sessions=warmup_sessions, target_weeks=weeks, recent=recent,
+        )
+        if not block.get("weeks"):
+            books[v] = block
+            continue
+        for i, point in enumerate(block.get("curve") or []):
+            point["universe"] = uni_curve[i] if i < len(uni_curve) else None
+        changes = [
+            p["names_changed"] for p in block.get("periods") or []
+            if p.get("names_changed") is not None and p["start"] in rebal
+        ]
+        block.update(
+            {
+                "variant": v,
+                "label": spec["label"],
+                "rebalance": WALKFORWARD_REBALANCE,
+                "rebalances": len(rebal),
+                "avg_names_changed": safe_round(sum(changes) / len(changes), 2) if changes else None,
+                "universe_total_return_pct": uni_block.get("total_return_pct"),
+                "universe_max_drawdown_pct": uni_block.get("max_drawdown_pct"),
+            }
+        )
+        books[v] = block
+    out = dict(books[TOP10_DEFAULT_VARIANT])
+    out["default_variant"] = TOP10_DEFAULT_VARIANT
+    out["books"] = books
+    return out
 
 
 def walkforward_public(block: dict | None) -> dict[str, Any]:
     """Payload de datos.json: sin el detalle interno de cada libro."""
     if not block:
         return _empty_walkforward(WALKFORWARD_WARMUP_SESSIONS, WALKFORWARD_WEEKS)
-    return {k: v for k, v in block.items() if k not in ("signals", "periods")}
+    out = {k: v for k, v in block.items() if k not in ("signals", "periods", "books")}
+    if isinstance(block.get("books"), dict):
+        out["books"] = {
+            v: {k: x for k, x in b.items() if k not in ("signals", "periods")}
+            for v, b in block["books"].items()
+        }
+    return out
 
 
 def bars_without_session(all_bars: dict[str, list[dict]], session: str | None) -> dict[str, list[dict]]:
@@ -1734,7 +1874,7 @@ def previous_walkforward_reusable(previous: dict | None, live_session: str | Non
     if not live_session or not same_score_version(previous):
         return None
     block = previous.get("top10_walkforward")
-    if not isinstance(block, dict):
+    if not isinstance(block, dict) or block.get("rebalance") != WALKFORWARD_REBALANCE:
         return None
     curve = block.get("curve")
     if not isinstance(curve, list) or not curve:
@@ -1759,7 +1899,7 @@ def choose_walkforward(
     if mode == "intradia":
         if not live_session:
             block = previous.get("top10_walkforward") if same_score_version(previous) else None
-            if isinstance(block, dict) and block.get("curve"):
+            if isinstance(block, dict) and block.get("curve") and block.get("rebalance") == WALKFORWARD_REBALANCE:
                 return block, (
                     "Simulación: todavía no hay barra de hoy. Se deja la del último cierre."
                 )
@@ -2985,13 +3125,13 @@ def main() -> None:
 
     # RS Score (percentil en el universo) + Desk Score + rank
     apply_cross_section_scores(rows)
+    # La sección RS semanal, el escáner de patrones, la confluencia y la rotación (RRG)
+    # salieron de la página (auditoría nov-2026: no anticipan nada). El RS semanal se sigue
+    # calculando porque la Vista por sectores lo usa para la tendencia de cada sector, y los
+    # patrones porque el semáforo usa el cruce bajista de la EMA200. signals.py y rrg.py
+    # quedan para repetir estudios.
     rs_weekly = compute_rs_weekly(all_bars, RS_WEEKLY_WEEKS)
     attach_rs_weekly(rows, rs_weekly)
-    rs_dates = rs_weekly.get("dates") or []
-    if rs_dates:
-        notes.append(
-            f"RS semanal: {len(rs_dates)} cierres ({rs_dates[0]} → {rs_dates[-1]})."
-        )
 
     # KPIs (universe excl. pure benchmarks optional — include all scored)
     n = len(rows)
@@ -3073,6 +3213,20 @@ def main() -> None:
         meta_by, all_bars, ENTRY_LOOKBACK_SESSIONS, today_rows=rows
     )
     attach_entro(rows, top10_return, top10_entry.get("by_symbol") or {})
+    # Las otras variantes del Top 10 (todas las acciones / conservador). «Entró» solo
+    # se calcula para la variante por defecto.
+    top10_variants: dict[str, Any] = {}
+    for variant in TOP10_VARIANTS:
+        if variant == TOP10_DEFAULT_VARIANT:
+            t10_v, attr_v = top10_return, top10_attribution
+        else:
+            t10_v = compute_top10_return(rows, all_bars, WINDOW_SESSIONS, variant)
+            attr_v = compute_top10_attribution(rows, t10_v, all_bars)
+        top10_variants[variant] = {
+            "label": TOP10_VARIANTS[variant]["label"],
+            "top10_return": t10_v,
+            "top10_attribution": attr_v,
+        }
     t_wf = time.perf_counter()
     # Historia larga (full_bars). El ranking de arriba ya quedó calculado con all_bars recortado.
     # En intradía no entra la barra de la rueda abierta: no suma un punto nuevo.
@@ -3196,35 +3350,6 @@ def main() -> None:
     except Exception as e:
         print(f"  historial del semáforo falló (soft): {type(e).__name__}")
         notes.append(f"Historial del semáforo: fallo soft ({type(e).__name__}).")
-    insider_buys = signals.insider_panel(rows)
-    pattern_scan = {"source": "alpaca_bars", "groups": signals.pattern_groups(rows)}
-    pat_bits = [
-        f"{g['label']} {g['count']}" for g in pattern_scan["groups"] if g.get("count")
-    ]
-    notes.append(
-        "Escáner: " + (", ".join(pat_bits) if pat_bits else "sin patrones con estos umbrales") + "."
-    )
-
-    rrg_public = None
-    try:
-        # Historia larga (full_bars): el suavizado doble del RRG pide ~30 semanas.
-        rrg_public = rrg.build_rrg(full_bars, meta_by)
-        notes.append(
-            f"Rotación RRG: {len(rrg_public.get('series') or [])} curvas vs SPY "
-            f"({len(rrg_public.get('dates') or [])} semanas en el gráfico)."
-        )
-    except Exception as e:
-        print(f"  RRG falló (soft): {type(e).__name__}")
-        notes.append(f"Rotación RRG: fallo soft ({type(e).__name__}).")
-
-    confluence_public = None
-    try:
-        confluence_public = signals.build_confluence(rows, full_bars)
-        lit = sum(1 for r in (confluence_public.get("rows") or []) if (r.get("count") or 0) > 0)
-        notes.append(f"Señales: {lit} nombres con al menos una lectura activa. No es una compra.")
-    except Exception as e:
-        print(f"  señales falló (soft): {type(e).__name__}")
-        notes.append(f"Señales: fallo soft ({type(e).__name__}).")
     notes.append(
         f"Resumen comparado contra la base {previous_source}. "
         "No incluye tenedores institucionales (13F)."
@@ -3308,14 +3433,11 @@ def main() -> None:
         "top10_attribution": top10_attribution,
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
+        "top10_variants": top10_variants,
+        "top10_default_variant": TOP10_DEFAULT_VARIANT,
         "historial_semaforo": historial_public,
         "sectors": sectors,
-        "insider_buys": insider_buys,
-        "patterns": pattern_scan,
-        "signals": confluence_public,
-        "rrg": rrg_public,
         "analyst_feed": analyst_feed,
-        "rs_weekly": rs_weekly_public(rs_weekly),
         "ranking": rows,
         "earnings": earnings,
         "failures": failures,
@@ -3352,20 +3474,7 @@ def main() -> None:
             "range_52w": f"Mínimo y máximo de high/low en las últimas {RANGE_52W_SESSIONS} sesiones (o las disponibles). position_pct = (close − mín) / (máx − mín) × 100",
             "change_pct": "(close / close anterior − 1) × 100",
             "trend_gate": "Precio frente a EMA200 y pendiente de la EMA200 contra su valor de ~5 sesiones atrás",
-            "rs_weekly": RS_WEEKLY_DEFINITION,
             "sectors": SECTOR_FORMULA,
-            "rrg": rrg.DEFINITION,
-            "signals": signals.CONFLUENCE_DEFINITION,
-            "patterns": (
-                "breakout_52w: cierre >= máximo de las sesiones previas (hasta 252, mínimo 60), "
-                "o a <=2% de ese máximo con volumen > media de 50 sesiones. "
-                "pullback_sma50: cierre > EMA200, mínimo dentro de ±2% de la SMA50 en las últimas 5 sesiones "
-                "y cierre de hoy > SMA50. "
-                "base: ventana de 15, 20 o 30 sesiones con rango <=6%, deriva <=2%, "
-                "cierre a <=3% del máximo de la ventana y a <=8% del máximo de 52 semanas. "
-                "ema200_cross: último cruce arriba/abajo dentro de las últimas 5 sesiones. "
-                "No entra en el Desk Score."
-            ),
             "insiders": (
                 "Finnhub /stock/insider-transactions, últimos 90 días. "
                 "Solo códigos P (compra) y S (venta) de mercado abierto. "

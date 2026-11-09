@@ -92,6 +92,40 @@ Hasta v2 el score era `0.30·Tendencia + 0.35·Fuerza_RS + 0.35·Contracción` c
 - **Límites:** el universo es el de hoy (sesgo de supervivencia, que infla mucho el número del universo amplio); son ~5 años de un mercado que premió a los líderes; el Top 10 por momentum tiene más volatilidad que el SPY (24 % anual en las 61, 41 % en el amplio) y el momentum tiene caídas bruscas cuando el mercado da vuelta.
 - Para repetirlo: `python3 backtest_largo.py` (baja barras de Alpaca a `.cache_backtest_bars.json`) y después `python3 backtest_pilares.py` (usa la cache, mide cada pilar y el universo de 61).
 
+### Variantes del Top 10 y simulación mensual (nov-2026)
+
+La página arranca en el **Top 10 con CEDEAR** (`TOP10_DEFAULT_VARIANT = "cedear"`): solo acciones con la marca `cedear` de `universe.json`, para que todo lo que muestra se pueda comprar desde Argentina. Un selector cambia entre **Con CEDEAR / Todas** y **Normal / Conservadora**. Los ETFs no entran a ningún Top 10.
+
+- **Conservadora** (`desk_score_cons`, `rank_cons`): percentil de momentum 12-1 ÷ volatilidad anualizada de 126 ruedas (`vol_126d_pct`), × 0,5 bajo la EMA200. En el backtest cae menos que el v3 y rinde menos.
+- `top10_variants` trae el retorno y la atribución de cada variante. `top10_return` y `top10_attribution` siguen siendo los de la variante por defecto. «Entró» se calcula solo para esa.
+- La **simulación** rebalancea una vez por mes (último cierre semanal del mes), mide 52 semanas y trae un libro por variante en `top10_walkforward.books`, cada uno con la línea del **universo equiponderado** (`universe` en la curva). Una simulación publicada con otro tipo de rebalanceo no se reutiliza.
+
+| Top 10 mensual, ago-2021 a nov-2026 | Amplio | Caída máx. | 61 originales | Caída máx. |
+|---|---|---|---|---|
+| Todas | 66,7 % | −33,5 % | 22,7 % | −18,4 % |
+| Con CEDEAR | 33,1 % | −31,5 % | 21,7 % | −23,8 % |
+| Con CEDEAR, conservadora | 22,6 % | −22,0 % | 19,8 % | −15,1 % |
+| SPY | 11,9 % | −23,9 % | 11,9 % | −23,9 % |
+
+### Lista de CEDEARs (nov-2026)
+
+La marca `cedear` de `universe.json` sale del listado público «CEDEARs Negociables en BYMA» (PDF en la página de CEDEARs de BYMA; el nombre del archivo cambia con cada versión). `actualizar_cedears.py` busca el link, baja el PDF, toma los códigos que cotizan en NYSE, Nasdaq o CBOE, traduce los que difieren (BRKB → BRK.B, BA.C → BAC, DISN → DIS…) y actualiza la marca. Con menos de 200 códigos aborta sin tocar nada. Usa `pypdf`, que instala solo su workflow: `build.py` sigue sin dependencias.
+
+- **Workflow `cedears.yml`:** el día 2 de cada mes corre el script y los tests, y commitea `universe.json` si cambió. La marca nueva se publica en la próxima corrida programada del deploy.
+- **A mano:** `pip install pypdf && python3 actualizar_cedears.py --dry-run` muestra qué cambiaría.
+- **Listado del 16/09/2026:** 189 del universo con CEDEAR (antes 170). Se sumaron ANET, COP, CRWD, DELL, FISV, GEV, IBKR, KLAC, LIN, MS, NBIS, NEE, O, PLD, SHW, SNDK, SPCX, WDC y WELL.
+
+### Limpieza de secciones (nov-2026)
+
+Una auditoría de todas las señales (276 semanas, ago-2021 a nov-2026, universo amplio y 61 originales) encontró que el escáner de patrones, la confluencia y la rotación (RRG) no anticipan el retorno de las 4 semanas siguientes; la rotación incluso funciona al revés (lo «rezagado» rindió más que lo «liderando» en 5 de 6 años). Por eso:
+
+- **Salen de la página:** Señales (confluencia y escáner), Rotación (RRG), RS semanal, Podio del día, Números del universo e Historial del semáforo. La barra queda en Resumen, Score y Análisis; los links viejos (`#senales`, `#rotacion`) llevan a Score.
+- **Siguen calculándose por dentro:** los patrones (el semáforo usa el cruce bajista de la EMA200) y el RS semanal (la Vista por sectores lo usa). `signals.py` y `rrg.py` quedan para repetir estudios. `historial_semaforo.json` se sigue guardando.
+- **Analistas e insiders** solo en la ficha. La ficha arranca por el Desk Score, el semáforo y los resultados.
+- **Ranking:** #, Ticker (● = tiene CEDEAR), Score, Momentum, Luz, Entró, Dist EMA200 y Alertas.
+- **Régimen de mercado:** pasa a ser una lectura de riesgo (tranquilo / normal / movido / turbulento). Anticipa la volatilidad del SPY (≈12 % anual con 75–100, ≈23 % por debajo de 50) pero no la dirección, así que ya no sugiere cuánto invertir.
+- **Resumen del día:** compara el Top 10 que muestra la página (con CEDEAR) y no menciona patrones.
+
 `SCORE_VERSION = 3` va en `datos.json` → `score_version`. Los Desk Score guardados en el historial del semáforo antes de este cambio son de v2.
 
 Detalle completo también en `datos.json` → clave `formulas`.

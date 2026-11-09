@@ -427,7 +427,8 @@ class ResumenTests(unittest.TestCase):
         self.assertIn("BA", text)
         self.assertIn("AVGO", text)
         self.assertIn("USD 2,4 millones", text)
-        self.assertIn("máximo de 52 semanas", text)
+        # El escáner salió de la página: el resumen ya no habla de patrones.
+        self.assertNotIn("máximo de 52 semanas", text)
         self.assertNotIn("cruce alcista", text)  # JPM ya lo tenía: no es nuevo
         self.assertEqual(out["compared_to"], prev["generated_at"])
         self.assertIn("29/09/2026 18:40 ART", out["headline"])
@@ -445,7 +446,7 @@ class ResumenTests(unittest.TestCase):
         self.assertNotIn("Perdieron la EMA200", text)
         self.assertNotIn("Recuperaron la EMA200", text)
         self.assertNotIn("aparecieron", text)
-        self.assertIn("Hoy el escáner marca", text)
+        self.assertNotIn("escáner", text)
         self.assertIn("No hay una publicación anterior", text)
 
     def test_snapshot_from_old_payload_has_no_pattern_baseline(self):
@@ -543,3 +544,16 @@ class ScoreUntouchedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SnapshotTop10Tests(unittest.TestCase):
+    def test_snapshot_uses_the_top10_the_page_shows(self):
+        data = {
+            "ranking": [{"symbol": s, "rank": i} for i, s in enumerate("ABCDEFGHIJKL", 1)],
+            "top10_return": {"rows": [{"symbol": "C"}, {"symbol": "L"}]},
+        }
+        self.assertEqual(s.snapshot_from_payload(data)["top10"], ["C", "L"])
+
+    def test_without_top10_block_falls_back_to_rank(self):
+        data = {"ranking": [{"symbol": s, "rank": i} for i, s in enumerate("ABCDEFGHIJKL", 1)]}
+        self.assertEqual(s.snapshot_from_payload(data)["top10"], list("ABCDEFGHIJ"))

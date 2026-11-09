@@ -31,6 +31,15 @@
     listScroll: 0,
     baseTitle: "",
     walkforward: null,
+    // Top 10 elegido: con CEDEAR (por defecto) o todas; normal o conservador.
+    variantCedear: true,
+    variantCons: false,
+    variants: null,
+    wfBooks: null,
+    top10Default: null,
+    attrDefault: null,
+    wfDefault: null,
+    defaultVariant: "cedear",
     historial: null,
     patternTab: "breakout_52w",
     patternScan: null,
@@ -324,6 +333,43 @@
     );
   }
 
+  var VARIANT_NOTES = {
+    cedear: "Solo acciones con CEDEAR en BYMA: se pueden comprar desde Argentina.",
+    todas: "Todas las acciones del universo. Las que tienen CEDEAR llevan un punto verde (●); el resto no se puede comprar desde Argentina.",
+    cons: " Versión conservadora: el mismo momentum, dividido por la volatilidad. Cae menos y rinde menos."
+  };
+
+  function variantKey() {
+    return (state.variantCedear ? "cedear" : "todas") + (state.variantCons ? "_cons" : "");
+  }
+
+  function renderVariant() {
+    var key = variantKey();
+    var v = state.variants && state.variants[key];
+    var isDefault = key === state.defaultVariant;
+    // Sin variantes (datos.json viejo): solo existe el Top 10 de siempre.
+    renderTop10(v ? v.top10_return : (isDefault ? state.top10Default : null));
+    renderTop10Attribution(v ? v.top10_attribution : (isDefault ? state.attrDefault : null));
+    var book = state.wfBooks && state.wfBooks[key];
+    renderWalkforward(book || (isDefault ? state.wfDefault : null));
+    document.querySelectorAll(".dd-variant").forEach(function (btn) {
+      var on;
+      if (btn.hasAttribute("data-variant-cedear")) {
+        on = (btn.getAttribute("data-variant-cedear") === "1") === state.variantCedear;
+      } else {
+        on = (btn.getAttribute("data-variant-cons") === "1") === state.variantCons;
+      }
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    var note = document.getElementById("variant-note");
+    if (note) {
+      note.textContent = (state.variantCedear ? VARIANT_NOTES.cedear : VARIANT_NOTES.todas) +
+        (state.variantCons ? VARIANT_NOTES.cons : "") +
+        (isDefault ? "" : " La columna «Entró» se calcula solo para el Top 10 con CEDEAR normal.");
+    }
+  }
+
   function renderTop10(block) {
     var avgEl = document.getElementById("top10-avg");
     var spyEl = document.getElementById("top10-spy");
@@ -362,7 +408,9 @@
       markRowLink(tr, r.symbol);
       tr.innerHTML =
         '<td class="dd-col-rank" data-col="rank">' + escapeHtml(r.rank != null ? r.rank : "") + "</td>" +
-        '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") + "</td>" +
+        '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") +
+        (!state.variantCedear && r.cedear ? '<span class="dd-cedear-dot" title="Tiene CEDEAR en BYMA" aria-label="Tiene CEDEAR">●</span>' : "") +
+        "</td>" +
         '<td data-col="entro" class="dd-col-entro">' + entroHtml(r.entro) + "</td>" +
         '<td data-col="spark" class="dd-col-spark">' + sparklineSvg(r.spark) + "</td>" +
         '<td data-col="score"><span class="dd-score' +
@@ -551,8 +599,10 @@
     var padT = 14;
     var padB = 26;
     var vals = [];
+    var hasUni = curve.every(function (p) { return p.universe != null && !Number.isNaN(Number(p.universe)); });
     curve.forEach(function (p) {
       vals.push(Number(p.portfolio), Number(p.spy));
+      if (hasUni) vals.push(Number(p.universe));
     });
     var minV = Math.min.apply(null, vals);
     var maxV = Math.max.apply(null, vals);
@@ -608,6 +658,7 @@
       '<svg viewBox="0 0 ' + width + " " + height + '" width="' + width + '" height="' + height + '" role="presentation">' +
       grid + baseLine +
       '<polygon points="' + areaPts + '" fill="rgba(255,107,53,0.14)" stroke="none"></polygon>' +
+      (hasUni ? '<polyline fill="none" stroke="#A7ADB8" stroke-width="1.6" stroke-dasharray="5 3" stroke-linecap="round" stroke-linejoin="round" points="' + poly("universe") + '"></polyline>' : "") +
       '<polyline fill="none" stroke="#7EB6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + poly("spy") + '"></polyline>' +
       '<polyline fill="none" stroke="#FF6B35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="' + poly("portfolio") + '"></polyline>' +
       dot + xLabels +
@@ -629,7 +680,7 @@
     if (caption && block && block.note) caption.textContent = block.note;
 
     function clearKpis() {
-      ["wf-port", "wf-spy", "wf-excess", "wf-dd", "wf-dd-spy"].forEach(function (id) {
+      ["wf-port", "wf-spy", "wf-uni", "wf-excess", "wf-dd", "wf-dd-spy"].forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.textContent = "—";
@@ -644,7 +695,7 @@
 
     if (!block || !block.weeks) {
       clearKpis();
-      if (sub) sub.textContent = "Walk-forward semanal · base 100";
+      if (sub) sub.textContent = "Walk-forward mensual · base 100";
       drawWalkforwardChart(null);
       if (body) {
         body.innerHTML = '<tr><td colspan="4" class="dd-empty">Sin simulación todavía. Se calcula al correr build.py.</td></tr>';
@@ -653,10 +704,12 @@
     }
 
     if (sub && block.window_start && block.window_end) {
-      sub.textContent = "Del " + fmtIso(block.window_start) + " al " + fmtIso(block.window_end) + " · base 100";
+      sub.textContent = "Del " + fmtIso(block.window_start) + " al " + fmtIso(block.window_end) + " · base 100" +
+        (block.label ? " · " + block.label : "");
     }
     setSignedValue("wf-port", block.total_return_pct);
     setSignedValue("wf-spy", block.spy_total_return_pct);
+    setSignedValue("wf-uni", block.universe_total_return_pct);
     setSignedValue("wf-excess", block.excess_return_pct);
     setSignedValue("wf-dd", block.max_drawdown_pct);
     setSignedValue("wf-dd-spy", block.spy_max_drawdown_pct);
@@ -668,7 +721,7 @@
       setText("wf-turn-sub", "");
     } else {
       setText("wf-turn", fmtNum(block.avg_names_changed, 2));
-      setText("wf-turn-sub", "nombres que salen / semana");
+      setText("wf-turn-sub", block.rebalance === "ultimo_cierre_del_mes" ? "nombres que salen / mes" : "nombres que salen / semana");
     }
     drawWalkforwardChart(block);
 
@@ -845,50 +898,24 @@
       markRowLink(tr, r.symbol);
 
       var dist = r.dist_ema200_pct;
-      var cells = [
-        r.rank != null ? r.rank : "",
-        tickerWithLogo(r, "dd-ticker"),
-        luzHtml(r),
-        buyPctHtml(r),
-        '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>",
-        entroInline(r.entro),
-        formatFlags(r.flags, insiderBadgeHtml(r)),
-        fmtNum(p.momentum, 1),
-        fmtNum(r.rs_score, 1),
-        fmtNum(p.contraccion, 1),
-        '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>",
-        fmtNum(r.vol_rel_20d, 2),
-        '<span class="dd-kind" data-kind="' + escapeHtml(r.kind || "") + '">' + escapeHtml(r.kind || "") + "</span>",
+      var cols = [
+        ["rank", r.rank != null ? r.rank : "", "dd-sticky-col dd-col-rank"],
+        ["ticker", tickerWithLogo(r, "dd-ticker") +
+          (r.cedear ? '<span class="dd-cedear-dot" title="Tiene CEDEAR en BYMA" aria-label="Tiene CEDEAR">●</span>' : ""),
+          "dd-sticky-col dd-col-ticker"],
+        ["score", '<span class="dd-score' + scoreTierClass(r.desk_score) + '">' + fmtNum(r.desk_score, 1) + "</span>"],
+        ["momentum", fmtNum(p.momentum, 1)],
+        ["luz", luzHtml(r), "dd-col-luz"],
+        ["entro", entroInline(r.entro)],
+        ["dist_ema200", '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>"],
+        ["flags", formatFlags(r.flags)],
       ];
 
-      cells.forEach(function (html, i) {
+      cols.forEach(function (c) {
         var td = document.createElement("td");
-        td.innerHTML = html;
-        if (i === 0) {
-          td.setAttribute("data-col", "rank");
-          td.className = "dd-sticky-col dd-col-rank";
-        }
-        if (i === 1) {
-          td.setAttribute("data-col", "ticker");
-          td.className = "dd-sticky-col dd-col-ticker";
-        }
-        if (i === 2) {
-          td.setAttribute("data-col", "luz");
-          td.className = "dd-col-luz";
-        }
-        if (i === 3) {
-          td.setAttribute("data-col", "compra");
-          td.className = "dd-col-compra";
-        }
-        if (i === 4) td.setAttribute("data-col", "score");
-        if (i === 5) td.setAttribute("data-col", "entro");
-        if (i === 6) td.setAttribute("data-col", "flags");
-        if (i === 7) td.setAttribute("data-col", "momentum");
-        if (i === 8) td.setAttribute("data-col", "rs");
-        if (i === 9) td.setAttribute("data-col", "contraccion");
-        if (i === 10) td.setAttribute("data-col", "dist_ema200");
-        if (i === 11) td.setAttribute("data-col", "vol_rel");
-        if (i === 12) td.setAttribute("data-col", "kind");
+        td.innerHTML = c[1];
+        td.setAttribute("data-col", c[0]);
+        if (c[2]) td.className = c[2];
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
@@ -1994,7 +2021,7 @@
     var highs = hl.highs != null ? hl.highs : "—";
     var lows = hl.lows != null ? hl.lows : "—";
     var line = band.line || "—";
-    var disclaimer = block.disclaimer || band.disclaimer || "Guía automática de exposición, no es un consejo de inversión.";
+    var disclaimer = block.disclaimer || band.disclaimer || "Mide cuánto se mueve el mercado, no para dónde va.";
     var footer = block.footer || "";
 
     body.innerHTML =
@@ -2006,7 +2033,7 @@
       '<span class="dd-regime-score-of">de 100</span>' +
       "</div></div>" +
       '<div class="dd-regime-exposure">' +
-      '<p class="dd-regime-kicker">Exposición sugerida</p>' +
+      '<p class="dd-regime-kicker">Riesgo del mercado</p>' +
       '<p class="dd-regime-exposure-line">' + escapeHtml(line) + "</p>" +
       '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
       "</div></div>" +
@@ -2234,9 +2261,13 @@
     renderMarketRegime(data);
     renderResumen(data);
     renderToday(data);
-    renderTop10(data.top10_return);
-    renderTop10Attribution(data.top10_attribution);
-    renderWalkforward(data.top10_walkforward);
+    state.top10Default = data.top10_return || null;
+    state.attrDefault = data.top10_attribution || null;
+    state.wfDefault = data.top10_walkforward || null;
+    state.variants = data.top10_variants || null;
+    state.wfBooks = (data.top10_walkforward && data.top10_walkforward.books) || null;
+    state.defaultVariant = data.top10_default_variant || "cedear";
+    renderVariant();
     renderHistorial(data.historial_semaforo);
     renderEarnings(data.earnings);
     renderSectors(data.sectors);
@@ -2316,6 +2347,17 @@
         applyFilters();
       });
     }
+
+    document.querySelectorAll(".dd-variant").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.hasAttribute("data-variant-cedear")) {
+          state.variantCedear = btn.getAttribute("data-variant-cedear") === "1";
+        } else {
+          state.variantCons = btn.getAttribute("data-variant-cons") === "1";
+        }
+        renderVariant();
+      });
+    });
 
     document.querySelectorAll(".dd-chip-toggle").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -2811,21 +2853,17 @@
       '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
       '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
       "</div></header>" +
-      entryBlock(row) +
-      analystBlock(row) +
-      signalFichaBlock(row) +
-      '<section class="dd-ficha-card" aria-label="Patrones">' +
-      '<h2 class="dd-ficha-kicker">Patrones</h2>' +
-      patternChips(row) +
-      "</section>" +
-      healthBlock(row) +
-      insiderFichaBlock(row) +
+      // Orden: lo que decide (score, riesgo, resultados) primero; el contexto (analistas,
+      // insiders, fundamentos) al final. Patrones, confluencia y RS semanal salieron.
       '<section class="dd-ficha-card" aria-label="Desk Score">' +
       '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
       '<div class="dd-pillars">' + pillarsHtml(row) + "</div></div>" +
       scoreFootnote(row) +
       "</section>" +
+      entryBlock(row) +
+      earnBlock +
+      entroBlock +
       '<section class="dd-ficha-card" aria-label="Rango de 52 semanas">' + rangeBlock + "</section>" +
       '<section class="dd-ficha-card" aria-label="Gate de tendencia">' +
       '<h2 class="dd-ficha-kicker">Gate de tendencia</h2>' +
@@ -2838,13 +2876,9 @@
       "</section>" +
       '<section class="dd-ficha-card" aria-label="Alertas">' +
       '<h2 class="dd-ficha-kicker">Alertas (no restan puntos)</h2>' + penaltyBlock + "</section>" +
-      entroBlock +
-      earnBlock +
-      '<section class="dd-ficha-card" aria-label="Evolución del RS Score">' +
-      '<h2 class="dd-ficha-kicker">Evolución del RS Score · últimas ' + weeks + " semanas</h2>" +
-      rsChartSvg(row.rs_weekly, dates) +
-      '<p class="dd-ficha-note">' + escapeHtml(caption) + "</p>" +
-      "</section>" +
+      analystBlock(row) +
+      insiderFichaBlock(row) +
+      healthBlock(row) +
       '<p class="dd-ficha-disclaimer"><strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.</p>';
     document.title = row.symbol + " · Angus";
   }
@@ -2862,9 +2896,10 @@
     rs: "score",
     historial: "score",
     simulacion: "score",
-    senales: "senales",
-    patrones: "senales",
-    rotacion: "rotacion",
+    // Señales, patrones y rotación salieron (auditoría nov-2026): los links viejos van a Score.
+    senales: "score",
+    patrones: "score",
+    rotacion: "score",
     analisis: "analisis",
     insiders: "analisis",
     analistas: "analisis",
@@ -2881,8 +2916,7 @@
   function pageFromHash() {
     if (parseTickerHash()) return "analisis";
     var key = routeKey().toLowerCase();
-    if (key === "señales") return "senales";
-    if (key === "rotación") return "rotacion";
+    if (key === "señales" || key === "rotación") return "score";
     if (key === "análisis" || key === "analisis") return "analisis";
     if (key === "fórmulas") return "resumen";
     return PAGE_BY_HASH[key] || "resumen";
@@ -2916,7 +2950,7 @@
     if (!root) return;
     root.hidden = false;
     root.innerHTML =
-      '<p class="dd-ficha-empty">Elegí un ticker para ver la ficha. Podés buscarlo arriba o tocar una fila en Score, Señales o Rotación.</p>';
+      '<p class="dd-ficha-empty">Elegí un ticker para ver la ficha. Podés buscarlo arriba o tocar una fila en Score.</p>';
     if (state.baseTitle) document.title = state.baseTitle;
     state.fichaSym = null;
   }

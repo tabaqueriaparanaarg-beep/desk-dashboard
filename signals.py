@@ -1164,7 +1164,13 @@ def snapshot_from_payload(payload: dict | None) -> dict[str, Any]:
                         "notable": bool(ins.get("notable")),
                     }
                 )
-    top10 = [sym for sym, rank in sorted(ranks.items(), key=lambda kv: (kv[1], kv[0])) if rank <= 10]
+    # El Top 10 que muestra la página (variante por defecto, con CEDEAR) si viene publicado.
+    shown = [
+        str(r.get("symbol")).upper()
+        for r in ((data.get("top10_return") or {}).get("rows") or [])
+        if isinstance(r, dict) and r.get("symbol")
+    ]
+    top10 = shown or [sym for sym, rank in sorted(ranks.items(), key=lambda kv: (kv[1], kv[0])) if rank <= 10]
     regime = data.get("regime") or data.get("regime_stub") or {}
     sectors_out: list[dict[str, Any]] = []
     for sec in ((data.get("sectors") or {}).get("rows") or []):
@@ -1503,7 +1509,6 @@ def compose_resumen(today: dict, previous: dict | None) -> dict[str, Any]:
     sentences.append(_sentence_earnings(today))
     if previous is not None:
         sentences.append(_sentence_ema(today, previous))
-    sentences.append(_sentence_patterns(today, previous))
     sentences.append(_sentence_insiders(today))
     if previous is None:
         sentences.append(
