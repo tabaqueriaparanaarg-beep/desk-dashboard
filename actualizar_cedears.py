@@ -5,13 +5,14 @@ BYMA publica «CEDEARs Negociables en BYMA» como PDF en
 https://www.byma.com.ar/productos/productos-financieros/cedears
 y el nombre del archivo cambia con cada actualización. Este script busca el link
 en esa página, baja el PDF, saca los códigos que cotizan en un mercado de EE.UU.
-y marca `cedear: true` en cada ticker del universo que esté en la lista.
+y marca `cedear: true` en cada ticker del universo que esté en la lista, con su
+código en BYMA (`cedear_code`) y su ratio (`cedear_ratio`, CEDEARs por acción).
 
 Uso:
     pip install pypdf                     # solo para este script; build.py no lo usa
     python3 actualizar_cedears.py         # baja el PDF vigente y actualiza
     python3 actualizar_cedears.py --pdf listado.pdf
-    python3 actualizar_cedears.py --codes codigos.txt   # "AAPL:NASDAQ,MSFT:NASDAQ,…"
+    python3 actualizar_cedears.py --codes codigos.txt   # "AAPL=20:1,…" o "AAPL:NASDAQ,…"
     python3 actualizar_cedears.py --dry-run             # muestra el cambio sin escribir
 
 Nunca saca la marca de un ticker si el listado parece incompleto: con menos de
@@ -35,8 +36,13 @@ MIN_US_CODES = 200
 
 # Mercados de EE.UU. tal como los escribe BYMA ("NASDAQ GS", "NYSE Arca", "New York"…).
 US_MARKET = r"(?:NYSE|NASDAQ|CBOE|New\s+York)"
+MARKET_SUFFIX = r"(?:[ \t]+(?:Arca|ARCA|GS|GM|CM|American))?"
 CODE = r"[A-Z][A-Z0-9]{0,5}(?:\.[A-Z])?"
-PAIR_RX = re.compile(r"(?<![A-Za-z0-9.])(" + CODE + r")\s*\|?\s*" + US_MARKET + r"\b")
+RATIO = r"\d{1,4}:\d{1,4}"
+PAIR_RX = re.compile(
+    r"(?<![A-Za-z0-9.])(" + CODE + r")\s*\|?\s*" + US_MARKET + r"\b" + MARKET_SUFFIX
+    + r"(?:\s*\|?\s*(" + RATIO + r"))?"
+)
 DATE_RX = re.compile(r"Actualizado\s+(\d{2})/(\d{2})/(\d{4})")
 PDF_LINK_RX = re.compile(r"https://[^\"'\s<>]+?BYMA-CEDEARs\.pdf", re.IGNORECASE)
 
@@ -75,9 +81,27 @@ def pdf_text(data: bytes) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
+def normalize_ratio(ratio: str | None) -> str | None:
+    """"10:01" → "10:1"; None si no es un ratio."""
+    if not ratio or not re.fullmatch(RATIO, ratio.strip()):
+        return None
+    a, b = ratio.strip().split(":")
+    return f"{int(a)}:{int(b)}"
+
+
+def parse_listing(text: str) -> dict[str, str | None]:
+    """Código BYMA → ratio (o None si no está al lado), solo mercados de EE.UU."""
+    out: dict[str, str | None] = {}
+    for m in PAIR_RX.finditer(text):
+        ratio = normalize_ratio(m.group(2))
+        if ratio or m.group(1) not in out:
+            out[m.group(1)] = ratio
+    return out
+
+
 def parse_codes(text: str) -> set[str]:
     """Códigos BYMA que cotizan en un mercado de EE.UU."""
-    return {m.group(1) for m in PAIR_RX.finditer(text)}
+    return set(parse_listing(text))
 
 
 def listing_date(text: str) -> str | None:
@@ -85,36 +109,64 @@ def listing_date(text: str) -> str | None:
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else None
 
 
-def codes_from_file(path: Path) -> set[str]:
-    """Lista "CODIGO:MERCADO,…" (o un código por línea); solo mercados de EE.UU."""
+def listing_from_file(path: Path) -> dict[str, str | None]:
+    """Lista ya extraída: "CODIGO=RATIO,…" (todos de EE.UU.) o "CODIGO:MERCADO,…"."""
     raw = path.read_text(encoding="utf-8")
-    out = set()
+    out: dict[str, str | None] = {}
     for item in re.split(r"[,\n]", raw):
         item = item.strip()
         if not item:
             continue
+        if "=" in item:
+            code, _, ratio = item.partition("=")
+            out[code.strip()] = normalize_ratio(ratio) or out.get(code.strip())
+            continue
         code, _, market = item.partition(":")
         if not market or re.match(US_MARKET, market, re.IGNORECASE):
-            out.add(code.strip())
+            out.setdefault(code.strip(), None)
     return out
 
 
-def us_tickers(codes: set[str]) -> set[str]:
+def codes_from_file(path: Path) -> set[str]:
+    return set(listing_from_file(path))
+
+
+def us_tickers(codes) -> set[str]:
     return {BYMA_TO_US.get(c, c) for c in codes}
 
 
-def apply_flags(universe: dict, tickers: set[str], source: str) -> tuple[list[str], list[str]]:
-    """Marca cada ticker del universo. Devuelve (los que se suman, los que se pierden)."""
+def by_us_ticker(listing: dict[str, str | None]) -> dict[str, tuple[str, str | None]]:
+    """Ticker de EE.UU. → (código BYMA, ratio)."""
+    return {BYMA_TO_US.get(code, code): (code, ratio) for code, ratio in listing.items()}
+
+
+def apply_flags(universe: dict, listing, source: str) -> tuple[list[str], list[str]]:
+    """Marca cada ticker del universo. Devuelve (los que se suman, los que se pierden).
+
+    `listing` es {código BYMA: ratio} (o un set de tickers de EE.UU., sin ratios).
+    """
+    if isinstance(listing, dict):
+        info = by_us_ticker(listing)
+    else:
+        info = {t: (t, None) for t in listing}
     added, removed = [], []
     for row in universe.get("tickers") or []:
         sym = row.get("symbol")
-        new = sym in tickers
+        new = sym in info
         old = bool(row.get("cedear"))
         if new and not old:
             added.append(sym)
         if old and not new:
             removed.append(sym)
         row["cedear"] = new
+        if new:
+            code, ratio = info[sym]
+            row["cedear_code"] = code
+            if ratio:
+                row["cedear_ratio"] = ratio
+        else:
+            row.pop("cedear_code", None)
+            row.pop("cedear_ratio", None)
     universe["cedear_source"] = source
     return sorted(added), sorted(removed)
 
@@ -129,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
 
     date = args.date
     if args.codes:
-        codes = codes_from_file(args.codes)
+        listing = listing_from_file(args.codes)
         origin = f"lista extraída ({args.codes.name})"
     else:
         if args.pdf:
@@ -144,9 +196,10 @@ def main(argv: list[str] | None = None) -> int:
             data = http_get(url)
             origin = url
         text = pdf_text(data)
-        codes = parse_codes(text)
+        listing = parse_listing(text)
         date = date or listing_date(text)
 
+    codes = set(listing)
     if len(codes) < MIN_US_CODES:
         print(
             f"Solo leí {len(codes)} códigos de EE.UU. (mínimo {MIN_US_CODES}). "
@@ -161,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         "(o su equivalente, ej. BRKB → BRK.B) está en ese listado. Se actualiza con "
         "actualizar_cedears.py."
     )
-    added, removed = apply_flags(universe, us_tickers(codes), source)
+    added, removed = apply_flags(universe, listing, source)
     total = sum(1 for r in universe["tickers"] if r.get("cedear"))
     print(f"Fuente: {origin}")
     print(f"Listado del {date or '?'}: {len(codes)} códigos de EE.UU.")

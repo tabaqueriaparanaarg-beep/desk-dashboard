@@ -9,18 +9,12 @@
     ranking: [],
     logos: {},
     earnings: [],
-    rsWeekly: null,
     kind: "",
     sector: "",
     sectorLabel: "",
     sectors: null,
     flags: { above_ema200: false, rs_gt_70: false, solo_verdes: false, cedear: false },
     rankPage: 0,
-    sigPage: 0,
-    sigSearch: "",
-    sigSector: "",
-    sigOnly: false,
-    rrgSector: "",
     fichas: null,
     search: "",
     autoTimer: null,
@@ -44,11 +38,6 @@
     patternTab: "breakout_52w",
     patternScan: null,
     page: "resumen",
-    rrg: null,
-    rrgFilter: "sector",
-    rrgFrame: 0,
-    rrgTimer: null,
-    signalsBlock: null,
   };
 
   var HEALTH_SPECS = [
@@ -74,8 +63,7 @@
     { key: "contraccion", label: "Contracción (info)", max: 100 },
   ];
 
-  var RS_CAPTION_FALLBACK =
-    "RS Score semanal: percentil 0–100 de (retorno del ticker − retorno de SPY) en ~126 sesiones (6 meses; si no alcanza, 63 sesiones), recalculado al último cierre de cada una de las últimas 16 semanas ISO. No incluye el bonus de aceleración del pilar Fuerza RS. El último punto es el RS Score del ranking.";
+
 
   function fmtPct(n) {
     if (n == null || Number.isNaN(n)) return "—";
@@ -217,42 +205,6 @@
     true
   );
 
-  function getRegime(data) {
-    return data.regime || data.regime_stub || null;
-  }
-
-  function renderKpis(data) {
-    var k = data.kpis || {};
-    setText("kpi-activos", String(k.activos != null ? k.activos : "—"));
-    setText("kpi-ema200", String(k.above_ema200 != null ? k.above_ema200 : "—"));
-    setText("kpi-ema200-pct", k.above_ema200_pct != null ? fmtPct(k.above_ema200_pct) : "");
-    setText("kpi-sma50", String(k.above_sma50 != null ? k.above_sma50 : "—"));
-    setText("kpi-sma50-pct", k.above_sma50_pct != null ? fmtPct(k.above_sma50_pct) : "");
-    setText("kpi-rs70", String(k.rs_gt_70 != null ? k.rs_gt_70 : "—"));
-    setText("kpi-rs70-pct", k.rs_gt_70_pct != null ? fmtPct(k.rs_gt_70_pct) : "");
-    setText("kpi-vol", String(k.volumen_inusual != null ? k.volumen_inusual : "—"));
-    setText("kpi-vol-pct", k.volumen_inusual_pct != null ? fmtPct(k.volumen_inusual_pct) : "");
-
-    var reg = getRegime(data);
-    var label = (reg && reg.label) || "—";
-    setText("kpi-regime", label);
-    var sub = "";
-    if (reg && reg.pct_above_ema200 != null) {
-      sub = Math.round(reg.pct_above_ema200 * 10) / 10 + "% sobre EMA200";
-    }
-    setText("kpi-regime-sub", sub);
-
-    var card = document.getElementById("kpi-regime-card");
-    if (card) {
-      card.setAttribute("data-regime", label === "—" ? "" : label);
-    }
-
-    var when = fmtArt(data.generated_at);
-    setText("generated-at", when || data.generated_at || "—");
-    var stamp = document.getElementById("generated-at");
-    if (stamp && data.generated_at) stamp.setAttribute("datetime", data.generated_at);
-  }
-
 
   function fmtSignedPct(n) {
     if (n == null || Number.isNaN(n)) return "—";
@@ -334,9 +286,9 @@
   }
 
   var VARIANT_NOTES = {
-    cedear: "Solo acciones con CEDEAR en BYMA: se pueden comprar desde Argentina.",
-    todas: "Todas las acciones del universo. Las que tienen CEDEAR llevan un punto verde (●); el resto no se puede comprar desde Argentina.",
-    cons: " Versión conservadora: el mismo momentum, dividido por la volatilidad. Cae menos y rinde menos."
+    cedear: "Solo las que se compran en BYMA. Bajo el ticker, el ratio del CEDEAR.",
+    todas: "Todo el universo. ● = tiene CEDEAR.",
+    cons: " Conservadora: momentum dividido por volatilidad. Cae menos, rinde menos."
   };
 
   function variantKey() {
@@ -365,9 +317,91 @@
     var note = document.getElementById("variant-note");
     if (note) {
       note.textContent = (state.variantCedear ? VARIANT_NOTES.cedear : VARIANT_NOTES.todas) +
-        (state.variantCons ? VARIANT_NOTES.cons : "") +
-        (isDefault ? "" : " La columna «Entró» se calcula solo para el Top 10 con CEDEAR normal.");
+        (state.variantCons ? VARIANT_NOTES.cons : "");
     }
+    renderMonthlyPlan(v ? v.top10_return : (isDefault ? state.top10Default : null));
+  }
+
+  // ── Este mes ──────────────────────────────────────────────────────────────
+  // La cartera se arma el último cierre de cada mes (monthly_plan.holdings). Entre
+  // revisiones se compara con el Top 10 de hoy para ver qué cambiaría.
+
+  var WEEKDAYS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
+  function isoDate(iso) {
+    var m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  }
+
+  function reviewWhen(plan) {
+    var day = isoDate(plan.next_review);
+    if (!day) return "";
+    var label = WEEKDAYS[day.getDay()] + " " + fmtDayMonth(plan.next_review);
+    var today = isoDate(artTodayIso()) || isoDate(plan.data_date);
+    var left = today ? Math.round((day - today) / 86400000) : null;
+    if (left === 0) return "Hoy toca revisar, con el cierre";
+    if (left == null || left < 0) return "Próxima revisión: " + label;
+    return "Próxima revisión: " + label + " · faltan " + left + (left === 1 ? " día" : " días");
+  }
+
+  function planChips(list, kind) {
+    return list.map(function (sym) {
+      var row = rowBySymbol(sym) || { symbol: sym };
+      return '<button type="button" class="dd-mes-tk" data-kind="' + kind + '" data-symbol="' + escapeHtml(sym) + '">' +
+        logoHtml(sym, logoFor(row), 20) + "<span>" + escapeHtml(sym) + "</span></button>";
+    }).join("");
+  }
+
+  function planGroup(title, list, kind) {
+    if (!list.length) return "";
+    return '<div class="dd-mes-group" data-kind="' + kind + '">' +
+      '<h3 class="dd-mes-h"><span>' + escapeHtml(title) + '</span><span class="dd-mes-n">' + list.length + "</span></h3>" +
+      '<div class="dd-mes-chips">' + planChips(list, kind) + "</div></div>";
+  }
+
+  function renderMonthlyPlan(top10Block) {
+    var box = document.getElementById("este-mes");
+    var body = document.getElementById("mes-body");
+    var plan = state.plan;
+    var key = variantKey();
+    var held = plan && plan.holdings && plan.holdings[key];
+    if (!box || !body) return;
+    if (!plan || !held || !held.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    setText("mes-when", reviewWhen(plan));
+    var from, to, lead;
+    if (plan.review_done) {
+      // Hoy fue el cierre de fin de mes: la cartera nueva ya está armada.
+      from = (plan.prev_holdings && plan.prev_holdings[key]) || [];
+      to = held;
+      lead = "Cartera nueva desde el cierre de hoy.";
+    } else {
+      from = held;
+      to = ((top10Block && top10Block.rows) || []).map(function (r) { return r.symbol; });
+      lead = plan.review_today
+        ? "Con el cierre de hoy se arma la cartera nueva. Así queda con los precios de ahora:"
+        : "Tu cartera desde el " + fmtDayMonth(plan.since) + ". Si revisaras hoy:";
+    }
+    var sell = from.filter(function (s) { return to.indexOf(s) === -1; });
+    var buy = to.filter(function (s) { return from.indexOf(s) === -1; });
+    var keep = from.filter(function (s) { return to.indexOf(s) !== -1; });
+    var act = plan.review_done || plan.review_today;
+    body.innerHTML =
+      '<p class="dd-mes-lead">' + escapeHtml(lead) + "</p>" +
+      (sell.length || buy.length
+        ? planGroup(act ? "Vender" : "Saldría", sell, "sell") + planGroup(act ? "Comprar" : "Entraría", buy, "buy")
+        : '<p class="dd-mes-same">Sin cambios: la cartera sigue igual.</p>') +
+      planGroup("Mantener", keep, "keep");
+  }
+
+  function ratioHint(ratio) {
+    var m = String(ratio || "").match(/^(\d+):(\d+)$/);
+    if (!m) return "";
+    var a = Number(m[1]), b = Number(m[2]);
+    return a + (a === 1 ? " CEDEAR" : " CEDEARs") + " = " + b + (b === 1 ? " acción" : " acciones");
   }
 
   function renderTop10(block) {
@@ -410,6 +444,9 @@
         '<td class="dd-col-rank" data-col="rank">' + escapeHtml(r.rank != null ? r.rank : "") + "</td>" +
         '<td class="dd-col-ticker" data-col="ticker">' + tickerWithLogo(r, "dd-ticker") +
         (!state.variantCedear && r.cedear ? '<span class="dd-cedear-dot" title="Tiene CEDEAR en BYMA" aria-label="Tiene CEDEAR">●</span>' : "") +
+        (r.cedear && r.cedear_ratio
+          ? '<span class="dd-cedear-sub">' + escapeHtml((r.cedear_code && r.cedear_code !== r.symbol ? r.cedear_code + " · " : "") + r.cedear_ratio) + "</span>"
+          : "") +
         "</td>" +
         '<td data-col="entro" class="dd-col-entro">' + entroHtml(r.entro) + "</td>" +
         '<td data-col="spark" class="dd-col-spark">' + sparklineSvg(r.spark) + "</td>" +
@@ -832,14 +869,6 @@
     sin_historia_momentum: "Sin historia",
   };
 
-  function insiderBadgeHtml(row) {
-    var ins = row && row.insiders;
-    if (!ins || !ins.notable) return "";
-    return (
-      '<span class="dd-flag dd-flag-insider" data-flag="insider_buy" title="Compras netas de insiders, últimos 90 días">Insiders</span>'
-    );
-  }
-
   function luzHtml(row) {
     var entry = row && row.entry;
     if (!entry || !entry.verdict) return '<span class="dd-flags-empty">—</span>';
@@ -847,19 +876,6 @@
     return (
       '<span class="dd-luz" data-verdict="' + escapeHtml(entry.verdict) +
       '" title="' + escapeHtml(label) + '" role="img" aria-label="' + escapeHtml(label) + '"></span>'
-    );
-  }
-
-  function buyPctHtml(row) {
-    if (String((row && row.kind) || "").toLowerCase() === "etf") {
-      return '<span class="dd-flags-empty" title="Los ETF no tienen recomendaciones de analistas">—</span>';
-    }
-    var a = row && row.analysts;
-    if (!a || a.buy_pct == null) return '<span class="dd-flags-empty">—</span>';
-    var tip = (a.total != null ? a.total + " analistas. " : "") + (a.trend_label || "");
-    return (
-      '<span class="dd-buy-pct" title="' + escapeHtml(tip.trim()) + '">' +
-      escapeHtml(fmtEsSmart(a.buy_pct, 1)) + "%</span>"
     );
   }
 
@@ -939,7 +955,7 @@
   function paintPager(id, windowed) {
     var root = document.getElementById(id);
     if (!root) return;
-    var label = document.getElementById(id === "rank-pager" ? "rank-page" : "sig-page");
+    var label = document.getElementById("rank-page");
     var show = windowed.total > PAGE_SIZE;
     root.hidden = !show;
     if (!show) return;
@@ -989,24 +1005,13 @@
     renderRoute();
   }
 
-  function markUiRefreshOk() {
-    var el = document.getElementById("last-ui-refresh");
-    if (!el) return;
-    var now = new Date();
-    var hh = String(now.getHours()).padStart(2, "0");
-    var mm = String(now.getMinutes()).padStart(2, "0");
-    var ss = String(now.getSeconds()).padStart(2, "0");
-    el.hidden = false;
-    el.textContent = "· " + hh + ":" + mm;
-  }
-
   function setLoading(on) {
     state.loading = !!on;
     var btn = document.getElementById("btn-refresh");
     if (!btn) return;
     btn.disabled = !!on;
     btn.classList.toggle("is-loading", !!on);
-    btn.textContent = on ? "Actualizando…" : "Actualizar";
+    btn.setAttribute("aria-label", on ? "Actualizando…" : "Actualizar datos");
   }
 
   function sectorLabelFor(sector) {
@@ -1230,6 +1235,16 @@
     }
   }
 
+  // "10:53" si es de hoy, "25/09 10:53" si no (hora de Buenos Aires).
+  function fmtStamp(iso) {
+    var full = fmtArt(iso);
+    var m = full.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}:\d{2})/);
+    if (!m) return full;
+    var today = artTodayIso();
+    var same = today === m[3] + "-" + m[2] + "-" + m[1];
+    return same ? m[4] : m[1] + "/" + m[2] + " " + m[4];
+  }
+
   function linkRow(item, extraText) {
     var sym = (item && item.symbol) || "";
     var score = item && item.desk_score != null ? fmtEsSmart(item.desk_score, 1) : "—";
@@ -1247,11 +1262,11 @@
     var when = document.getElementById("resumen-when");
     var text = document.getElementById("resumen-text");
     if (!text) return;
+    var box = document.getElementById("resumen-box");
+    if (box) box.hidden = !(block && block.text);
     if (!block || !block.text) {
       if (when) when.textContent = "";
-      text.textContent = "Sin resumen en esta publicación. Se arma al correr build.py.";
-      var emptyBtn = document.getElementById("resumen-more");
-      if (emptyBtn) emptyBtn.hidden = true;
+      text.textContent = "";
       return;
     }
     if (when) {
@@ -1263,98 +1278,6 @@
     text.classList.remove("is-open");
     text.classList.add("is-clamped");
     syncClamp("resumen-text", "resumen-more");
-  }
-
-  function renderInsiders(block) {
-    var root = document.getElementById("insider-list");
-    var cap = document.getElementById("insider-caption");
-    if (cap && block && block.caption) cap.textContent = block.caption;
-    if (!root) return;
-    var rows = (block && block.rows) || [];
-    if (!rows.length) {
-      root.innerHTML =
-        '<p class="dd-empty">Sin compras netas de insiders para mostrar. Si recién arranca, los datos se completan de a poco para no pasarnos del límite de Finnhub.</p>';
-      return;
-    }
-    root.innerHTML = rows
-      .map(function (r) {
-        var bits = [];
-        if (r.net_shares != null) bits.push(fmtShares(r.net_shares) + " acc.");
-        if (r.buyers != null) bits.push(r.buyers === 1 ? "1 compró" : r.buyers + " compraron");
-        if (r.net_value_usd != null) bits.push(fmtUsdShort(r.net_value_usd) + (r.value_approx ? " aprox." : ""));
-        return linkRow(r, bits.join(" · "));
-      })
-      .join("");
-  }
-
-  function renderPatterns(block) {
-    state.patternScan = block || null;
-    var tabs = document.getElementById("pattern-tabs");
-    var list = document.getElementById("pattern-list");
-    var groups = (block && block.groups) || [];
-    if (!groups.length) {
-      if (tabs) tabs.innerHTML = "";
-      if (list) list.innerHTML = '<p class="dd-empty">Sin patrones en esta publicación.</p>';
-      return;
-    }
-    if (!groups.some(function (g) { return g.id === state.patternTab; })) {
-      state.patternTab = groups[0].id;
-    }
-    if (tabs) {
-      tabs.innerHTML = groups
-        .map(function (g) {
-          var on = g.id === state.patternTab;
-          return (
-            '<button type="button" class="dd-chip' + (on ? " is-active" : "") +
-            '" role="tab" aria-selected="' + (on ? "true" : "false") +
-            '" data-pattern="' + escapeHtml(g.id) + '">' +
-            escapeHtml(g.label || g.id) + " · " + g.count + "</button>"
-          );
-        })
-        .join("");
-    }
-    var group = groups.filter(function (g) { return g.id === state.patternTab; })[0] || groups[0];
-    if (!list) return;
-    var hits = (group && group.rows) || [];
-    if (!hits.length) {
-      list.innerHTML = '<p class="dd-empty">Ningún nombre cumple este patrón hoy.</p>';
-      return;
-    }
-    list.innerHTML = hits
-      .map(function (r) {
-        return linkRow(r, r.detail || "");
-      })
-      .join("");
-  }
-
-  function bindPatternTabs() {
-    var panel = document.getElementById("pattern-panel");
-    if (!panel) return;
-    panel.addEventListener("click", function (ev) {
-      var btn = ev.target.closest("[data-pattern]");
-      if (!btn || !panel.contains(btn)) return;
-      state.patternTab = btn.getAttribute("data-pattern") || state.patternTab;
-      renderPatterns(state.patternScan);
-    });
-  }
-
-  function patternChips(row) {
-    var pats = (row && row.patterns) || [];
-    if (!pats.length) {
-      return '<p class="dd-ficha-empty">Sin patrones del escáner en esta rueda.</p>';
-    }
-    return (
-      '<div class="dd-pat-chips">' +
-      pats
-        .map(function (p) {
-          return (
-            '<span class="dd-pat-chip" title="' + escapeHtml(p.detail || "") + '">' +
-            escapeHtml(p.label || p.id || "") + "</span>"
-          );
-        })
-        .join("") +
-      "</div>"
-    );
   }
 
   function healthBlock(row) {
@@ -1551,77 +1474,6 @@
     return s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4);
   }
 
-  function histSvg(curve) {
-    if (!curve || curve.length < 2) return "";
-    var w = 640;
-    var h = 168;
-    var padL = 40;
-    var padR = 12;
-    var padT = 14;
-    var padB = 22;
-    var vals = [];
-    curve.forEach(function (p) {
-      vals.push(Number(p.stocks), Number(p.spy));
-      if (p.universe != null) vals.push(Number(p.universe));
-    });
-    var minV = Math.min.apply(null, vals);
-    var maxV = Math.max.apply(null, vals);
-    if (!isFinite(minV) || !isFinite(maxV)) return "";
-    if (minV === maxV) {
-      minV -= 1;
-      maxV += 1;
-    }
-    var span = maxV - minV;
-    minV -= span * 0.08;
-    maxV += span * 0.08;
-    function xAt(i) {
-      return padL + (i / (curve.length - 1)) * (w - padL - padR);
-    }
-    function yAt(v) {
-      return padT + (1 - (v - minV) / (maxV - minV)) * (h - padT - padB);
-    }
-    function path(key) {
-      return curve
-        .map(function (p, i) {
-          return (i ? "L" : "M") + xAt(i).toFixed(1) + " " + yAt(Number(p[key])).toFixed(1);
-        })
-        .join(" ");
-    }
-    return (
-      '<svg class="dd-hist-svg" viewBox="0 0 ' + w + " " + h +
-      '" role="img" aria-label="Curva de sin alertas contra el universo y SPY, base 100">' +
-      '<path d="' + path("spy") + '" fill="none" stroke="#A0A0A0" stroke-width="2"/>' +
-      (curve[0] && curve[0].universe != null
-        ? '<path d="' + path("universe") + '" fill="none" stroke="#5B8DEF" stroke-width="2"/>'
-        : "") +
-      '<path d="' + path("stocks") + '" fill="none" stroke="#FF8C42" stroke-width="2.4"/>' +
-      "</svg>"
-    );
-  }
-
-  function histCell(stat) {
-    if (!stat || !stat.n) {
-      return '<p class="dd-hist-empty">Sin ventana cerrada</p>';
-    }
-    var hit = stat.hit_pct == null ? "—" : fmtEsSmart(stat.hit_pct, 1) + "% en positivo";
-    var beat = stat.beat_pct == null ? "—" : fmtEsSmart(stat.beat_pct, 1) + "%";
-    var beatU = stat.beat_universe_pct == null ? "" : " · le gana al universo el " + fmtEsSmart(stat.beat_universe_pct, 1) + "%";
-    var vsU = stat.excess_universe == null
-      ? ""
-      : '<p class="dd-hist-vs">exceso vs universo ' + escapeHtml(fmtEsSignedPct(stat.excess_universe, 2)) + "</p>";
-    return (
-      '<p class="dd-hist-n">' + stat.n + (stat.n === 1 ? " señal" : " señales") + "</p>" +
-      '<p class="dd-hist-avg">' + escapeHtml(fmtEsSignedPct(stat.avg, 2)) + "</p>" +
-      '<p class="dd-hist-vs">exceso vs SPY ' + escapeHtml(fmtEsSignedPct(stat.excess, 2)) + "</p>" +
-      vsU +
-      '<p class="dd-hist-hit">' + escapeHtml(hit) + "</p>" +
-      '<p class="dd-hist-more">Mediana ' + escapeHtml(fmtEsSignedPct(stat.median, 2)) +
-      " · le gana a SPY el " + escapeHtml(beat) + escapeHtml(beatU) +
-      " · mejor " + escapeHtml(fmtEsSignedPct(stat.best, 2)) +
-      " · peor " + escapeHtml(fmtEsSignedPct(stat.worst, 2)) + "</p>"
-    );
-  }
-
   function historialFichaLine(symbol) {
     var block = state.historial;
     if (!block || !symbol) return "";
@@ -1642,152 +1494,6 @@
     });
     var extra = pack.count > (pack.signals || []).length ? " Hay " + pack.count + " en total." : "";
     return '<p class="dd-hist-ficha">' + sample + "Sin alertas: " + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
-  }
-
-  function histGroups(source, groupLabels) {
-    var horizons = (source && source.horizons) || [5, 10, 20];
-    return groupLabels
-      .map(function (pair) {
-        var id = pair[0];
-        var cols = horizons
-          .map(function (h) {
-            var stat = source.table && source.table[id] && source.table[id][String(h)];
-            var meta = source.horizons_meta && source.horizons_meta[String(h)];
-            var badge = "";
-            if (meta && meta.provisional) {
-              badge = '<p class="dd-hist-prov">' + escapeHtml(meta.label || "Provisorio (reconstruido)") + "</p>";
-              if (id === "verde" && meta.note) {
-                badge += '<p class="dd-hist-prov-note">' + escapeHtml(meta.note) + "</p>";
-              }
-            }
-            return (
-              '<div class="dd-hist-h"><p class="dd-kpi-label">' + h + " ruedas</p>" +
-              badge + histCell(stat) + "</div>"
-            );
-          })
-          .join("");
-        return (
-          '<article class="dd-hist-group" data-group="' + id + '">' +
-          '<h3><span class="dd-hist-dot" aria-hidden="true"></span>' + pair[1] + "</h3>" +
-          '<div class="dd-hist-horizons">' + cols + "</div></article>"
-        );
-      })
-      .join("");
-  }
-
-  function histEquity(equity, stockLabel) {
-    if (!equity || equity.stocks_return_pct == null) return "";
-    var uni = equity.universe_return_pct == null
-      ? ""
-      : " · universo: " + escapeHtml(fmtEsSignedPct(equity.universe_return_pct, 2));
-    var hasUni = equity.curve && equity.curve.length && equity.curve[0].universe != null;
-    return (
-      '<p class="dd-hist-sentence">' + escapeHtml(stockLabel) + ": " +
-      escapeHtml(fmtEsSignedPct(equity.stocks_return_pct, 2)) +
-      " · con ETF: " + escapeHtml(fmtEsSignedPct(equity.all_return_pct, 2)) +
-      uni +
-      " · SPY: " + escapeHtml(fmtEsSignedPct(equity.spy_return_pct, 2)) + ".</p>" +
-      histSvg(equity.curve) +
-      '<p class="dd-hist-legend"><span><i class="is-stocks"></i>' + escapeHtml(stockLabel) + "</span>" +
-      (hasUni ? '<span><i class="is-universe"></i>Universo</span>' : "") +
-      '<span><i class="is-spy"></i>SPY</span></p>' +
-      '<p class="dd-hist-equity-note">' + escapeHtml(equity.note || "") + "</p>"
-    );
-  }
-
-  function renderHistorial(block) {
-    var root = document.getElementById("hist-root");
-    if (!root) return;
-    if (!block || !block.table) {
-      root.innerHTML = '<p class="dd-empty">Sin historial en esta publicación. Se arma al correr build.py.</p>';
-      return;
-    }
-    var groups = histGroups(block, [
-      ["verde", "Sin alertas"],
-      ["ambar", "Ámbar"],
-      ["rojo", "Alerta"],
-      ["universo", "Universo"],
-    ]);
-    var real = block.real_days || 0;
-    var recon = block.reconstructed_days || 0;
-    var horizons = block.horizons || [5, 10, 20];
-    var anyProv = horizons.some(function (h) {
-      var meta = block.horizons_meta && block.horizons_meta[String(h)];
-      return meta && meta.provisional;
-    });
-    var latest = "";
-    if (block.latest && block.latest.date) {
-      latest =
-        " Última foto: " + fmtIsoFull(block.latest.date) + ", " +
-        (block.latest.after_close ? "después del cierre." : "con la rueda todavía abierta.");
-    }
-    var daysLine = real + (real === 1 ? " rueda real." : " ruedas reales.");
-    if (anyProv && recon) {
-      var purgeAt = block.purge_real_days || 60;
-      daysLine += " Reconstrucción provisoria: " + recon + " ruedas. Se borra al llegar a " + purgeAt + " ruedas reales.";
-    }
-    var sample = block.sample
-      ? '<p class="dd-hist-sample">Muestra de ejemplo para la vista. No son precios reales.</p>'
-      : "";
-    var recent = (block.recent || [])
-      .map(function (item) {
-        var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
-        var vs = item.excess_pct == null ? "vs SPY —" : "vs SPY " + fmtEsSignedPct(item.excess_pct, 1);
-        if (item.excess_universe_pct != null) vs += " · vs universo " + fmtEsSignedPct(item.excess_universe_pct, 1);
-        var status = item.status === "cerrada" ? "cerrada" : "en curso";
-        return (
-          '<a class="dd-hist-signal" href="#/t/' + encodeURIComponent(item.symbol) + '">' +
-          "<span>" + escapeHtml(fmtIsoFull(item.date)) + "</span>" +
-          '<span class="dd-hist-sym">' + escapeHtml(item.symbol) + "</span>" +
-          '<span class="dd-hist-ret">' + escapeHtml(ret + " · " + vs) + "</span>" +
-          "<span>" + escapeHtml(status) + "</span></a>"
-        );
-      })
-      .join("");
-    var eqText = histEquity(block.equity, "Sin alertas");
-    var legacy = block.legacy;
-    var legacyHtml = "";
-    if (legacy && legacy.table) {
-      legacyHtml =
-        '<section class="dd-hist-legacy">' +
-        "<h3>" + escapeHtml(legacy.label || "Definición anterior") + "</h3>" +
-        '<p class="dd-hist-legacy-note">' + escapeHtml(legacy.note || block.definition_note || "") + "</p>" +
-        '<p class="dd-hist-sentence">' + escapeHtml(legacy.sentence || "") + "</p>" +
-        '<div class="dd-hist-groups">' + histGroups(legacy, [
-          ["verde", "Verde (entrada)"],
-          ["ambar", "Ámbar"],
-          ["rojo", "Rojo"],
-          ["universo", "Universo"],
-        ]) + "</div>" +
-        histEquity(legacy.equity, "Verdes (entrada)") +
-        "</section>";
-    }
-    var fine = document.getElementById("hist-disclaimer");
-    if (fine) {
-      var legal = block.disclaimer || "El verde es «sin alertas de riesgo», no una compra. Resultados pasados no garantizan resultados futuros.";
-      if (anyProv && block.earnings_note) legal += " " + block.earnings_note;
-      fine.textContent = legal;
-    }
-    var helpParts = [];
-    if (!legacy && block.definition_note) {
-      helpParts.push('<p class="dd-hist-def">' + escapeHtml(block.definition_note) + "</p>");
-    }
-    if (block.dedup) helpParts.push('<p class="dd-hist-rule">' + escapeHtml(block.dedup) + "</p>");
-    if (block.universe_benchmark) helpParts.push('<p class="dd-hist-rule">' + escapeHtml(block.universe_benchmark) + "</p>");
-    var help = helpParts.length
-      ? '<details class="dd-help"><summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se arma</summary>' +
-        helpParts.join("") + "</details>"
-      : "";
-    root.innerHTML =
-      sample +
-      '<p class="dd-hist-meta">' + daysLine + escapeHtml(latest) + "</p>" +
-      '<p class="dd-hist-sentence">' + escapeHtml(block.sentence || "") + "</p>" +
-      (block.todos_los_dias_sentence ? '<p class="dd-hist-alt">' + escapeHtml(block.todos_los_dias_sentence) + "</p>" : "") +
-      help +
-      '<div class="dd-hist-groups">' + groups + "</div>" +
-      (recent ? '<div class="dd-hist-list">' + recent + "</div>" : '<p class="dd-empty">Sin señales reales de esta definición.</p>') +
-      eqText +
-      legacyHtml;
   }
 
   var LIVE_BANNER = "En vivo · provisorio hasta el cierre · precios con ~15 min de demora";
@@ -1949,7 +1655,7 @@
       if (val < lo - 0.01) continue;
       var yy = yAt(val);
       grid += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(255,255,255,0.07)"/>';
-      yLabels += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" fill="#8d8d8d" font-size="12" font-family="Plus Jakarta Sans, Inter, sans-serif">' + Math.round(val) + "%</text>";
+      yLabels += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" fill="#8d8d8d" font-size="12" font-family="Archivo, sans-serif">' + Math.round(val) + "%</text>";
     }
     var xLabels = "";
     var want = Math.min(7, pts.length);
@@ -1964,7 +1670,7 @@
       var anchor = "middle";
       if (idx === 0) anchor = "start";
       if (idx === pts.length - 1) anchor = "end";
-      xLabels += '<text x="' + xAt(idx).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '" fill="#8d8d8d" font-size="12" font-family="Plus Jakarta Sans, Inter, sans-serif">' + escapeHtml(lab) + "</text>";
+      xLabels += '<text x="' + xAt(idx).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '" fill="#8d8d8d" font-size="12" font-family="Archivo, sans-serif">' + escapeHtml(lab) + "</text>";
     }
     return (
       '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Porcentaje de activos sobre la EMA200 en las últimas ruedas">' +
@@ -2033,12 +1739,10 @@
       '<span class="dd-regime-score-of">de 100</span>' +
       "</div></div>" +
       '<div class="dd-regime-exposure">' +
-      '<p class="dd-regime-kicker">Riesgo del mercado</p>' +
       '<p class="dd-regime-exposure-line">' + escapeHtml(line) + "</p>" +
-      '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
-      "</div></div>" +
       '<details class="dd-help">' +
       '<summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Ver el medidor</summary>' +
+      '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
       rows +
       '<div class="dd-regime-hl">' +
       '<span class="dd-regime-hoy">HOY</span>' +
@@ -2050,7 +1754,7 @@
       '<p class="dd-regime-chart-title">% de activos sobre su EMA200 – últimos ~2 meses</p>' +
       '<div class="dd-regime-chart">' + regimeChartSvg(block.breadth_series) + "</div>" +
       (footer ? '<p class="dd-regime-foot">' + escapeHtml(footer) + "</p>" : "") +
-      "</details>";
+      "</details></div></div>";
   }
 
   function syncClamp(textId, btnId) {
@@ -2079,41 +1783,6 @@
     } catch (e) {
       return "";
     }
-  }
-
-  function renderToday(data) {
-    var rows = (data && data.ranking) || [];
-    var stocks = 0;
-    var etfs = 0;
-    rows.forEach(function (r) {
-      if (!r.entry || r.entry.verdict !== "verde") return;
-      if (String(r.kind || "").toLowerCase() === "etf") etfs += 1;
-      else stocks += 1;
-    });
-    setText("today-clear", String(stocks));
-    var sub = stocks === 1 ? "acción" : "acciones";
-    if (etfs) sub += " · " + etfs + " ETF";
-    setText("today-clear-sub", sub);
-
-    var today = artTodayIso();
-    var upcoming = ((data && data.earnings) || []).filter(function (e) {
-      return today && String(e.date || "") >= today;
-    });
-    setText("today-earn", String(upcoming.length));
-    if (!upcoming.length) {
-      setText("today-earn-sub", "Nada pendiente esta semana");
-      return;
-    }
-    setText(
-      "today-earn-sub",
-      upcoming
-        .map(function (e) {
-          var when = String(e.date) === today ? "hoy" : fmtDayMonth(e.date);
-          var hour = hourLabel(e.hour);
-          return (e.symbol || "—") + " " + when + (hour ? ", " + hour : "");
-        })
-        .join(" · ")
-    );
   }
 
   var FORMULA_LABELS = {
@@ -2168,78 +1837,6 @@
       .join("");
   }
 
-  function renderAnalysts() {
-    var root = document.getElementById("analyst-list");
-    if (!root) return;
-    var rows = (state.ranking || []).filter(function (r) {
-      return String(r.kind || "").toLowerCase() !== "etf" && r.analysts && r.analysts.buy_pct != null;
-    });
-    rows.sort(function (a, b) {
-      return Number(b.analysts.buy_pct) - Number(a.analysts.buy_pct);
-    });
-    if (!rows.length) {
-      root.innerHTML = '<p class="dd-empty">Sin recomendaciones de analistas en esta publicación.</p>';
-      return;
-    }
-    root.innerHTML = rows
-      .map(function (r) {
-        var a = r.analysts;
-        var bits = [fmtEsSmart(a.buy_pct, 1) + "% compra"];
-        var total = (a.latest && a.latest.total) || a.total;
-        if (total) bits.push(total + (Number(total) === 1 ? " analista" : " analistas"));
-        if (a.trend_label) bits.push(a.trend_label);
-        var pt = a.price_target;
-        if (pt && pt.mean != null) bits.push("objetivo USD " + fmtEsNum(pt.mean, 2));
-        else if (pt && pt.median != null) bits.push("objetivo USD " + fmtEsNum(pt.median, 2));
-        if (pt && pt.low != null && pt.high != null) {
-          bits.push("rango " + fmtEsNum(pt.low, 2) + "–" + fmtEsNum(pt.high, 2));
-        }
-        return linkRow(r, bits.join(" · "));
-      })
-      .join("");
-  }
-
-  function fmtSignedPoints(n) {
-    if (n == null || Number.isNaN(Number(n))) return "—";
-    var v = Math.round(Number(n) * 10) / 10;
-    var body = fmtNum(Math.abs(v), Math.abs(v - Math.round(v)) < 0.05 ? 0 : 1);
-    if (v > 0) return "+" + body;
-    if (v < 0) return "−" + body;
-    return body;
-  }
-
-  function renderRsBoard() {
-    var body = document.getElementById("rs-body");
-    var def = document.getElementById("rs-definition");
-    if (def) def.textContent = (state.rsWeekly && state.rsWeekly.definition) || RS_CAPTION_FALLBACK;
-    if (!body) return;
-    var rows = (state.ranking || []).filter(function (r) {
-      return r.rs_weekly && r.rs_weekly.length;
-    });
-    if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="5" class="dd-empty">Sin serie semanal. Se calcula al correr build.py.</td></tr>';
-      return;
-    }
-    rows.sort(function (a, b) {
-      return Number(b.rs_score || 0) - Number(a.rs_score || 0);
-    });
-    body.innerHTML = rows
-      .map(function (r) {
-        var series = r.rs_weekly || [];
-        var now = series[series.length - 1];
-        var ago = series.length > 4 ? series[series.length - 5] : null;
-        var delta = now != null && ago != null ? Number(now) - Number(ago) : null;
-        return (
-          '<tr data-symbol="' + escapeHtml(r.symbol) + '" tabindex="0" role="link" aria-label="Ver ficha de ' +
-          escapeHtml(r.symbol) + '"><td>' + tickerWithLogo(r, "dd-ticker") + "</td><td>" +
-          escapeHtml(now == null ? "—" : fmtNum(now, 1)) + "</td><td>" +
-          escapeHtml(ago == null ? "—" : fmtNum(ago, 1)) + '</td><td class="' + distClass(delta) + '">' +
-          escapeHtml(fmtSignedPoints(delta)) + "</td><td>" + sparklineSvg(series) + "</td></tr>"
-        );
-      })
-      .join("");
-  }
-
   function fmtUsdCompact(n) {
     if (n == null || Number.isNaN(Number(n))) return "";
     var v = Number(n);
@@ -2254,13 +1851,16 @@
     state.historial = data.historial_semaforo || null;
     state.logos = data.logos || {};
     state.earnings = data.earnings || [];
-    state.rsWeekly = data.rs_weekly || null;
     state.ready = true;
     state.loadError = "";
-    renderKpis(data);
     renderMarketRegime(data);
     renderResumen(data);
-    renderToday(data);
+    state.plan = data.monthly_plan || null;
+    var stampEl = document.getElementById("generated-at");
+    if (stampEl) {
+      stampEl.textContent = fmtStamp(data.generated_at) || "—";
+      if (data.generated_at) stampEl.setAttribute("datetime", data.generated_at);
+    }
     state.top10Default = data.top10_return || null;
     state.attrDefault = data.top10_attribution || null;
     state.wfDefault = data.top10_walkforward || null;
@@ -2268,19 +1868,11 @@
     state.wfBooks = (data.top10_walkforward && data.top10_walkforward.books) || null;
     state.defaultVariant = data.top10_default_variant || "cedear";
     renderVariant();
-    renderHistorial(data.historial_semaforo);
     renderEarnings(data.earnings);
     renderSectors(data.sectors);
-    renderInsiders(data.insider_buys);
-    renderPatterns(data.patterns);
     applyFilters();
     renderNotes(data.notes);
-    renderAnalysts();
-    renderRsBoard();
     renderFormulas(data.formulas);
-    renderPodium();
-    renderSignals(data.signals);
-    renderRrg(data.rrg);
     renderSampleNotice(data);
     renderSessionBanner(data);
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
@@ -2300,14 +1892,19 @@
       })
       .then(function (data) {
         applyData(data);
-        markUiRefreshOk();
         var st = document.getElementById("refresh-status");
-        if (st) st.textContent = "Auto cada 5 min";
+        if (st) {
+          st.hidden = true;
+          st.textContent = "";
+        }
       })
       .catch(function (err) {
         if (opts.silent) {
           var st = document.getElementById("refresh-status");
-          if (st) st.textContent = "Error al refrescar";
+          if (st) {
+            st.hidden = false;
+            st.textContent = "No se pudo actualizar";
+          }
         } else {
           fail("No se pudo cargar datos.json (" + err.message + "). Ejecutá python3 build.py");
         }
@@ -2589,8 +2186,8 @@
   }
 
   function pillarsHtml(row) {
+    // Solo el momentum: es lo único que entra en el score.
     return pillarRows(row)
-      .concat(pillarRows({ pillars: row.pillars }, INFO_PILLAR_SPEC))
       .map(function (p) {
         var width = 0;
         if (p.points != null && p.max) width = Math.max(0, Math.min(100, (p.points / p.max) * 100));
@@ -2621,119 +2218,8 @@
     if (flags.indexOf("sin_historia_momentum") >= 0) {
       bits.push("Tiene menos de 6 meses de historia: todavía no hay momentum y el score queda en 0.");
     }
-    bits.push("Tendencia, Fuerza RS y Contracción se muestran como referencia; no entran en el score.");
+    if (!bits.length) return "";
     return '<p class="dd-ficha-note">' + escapeHtml(bits.join(" ")) + "</p>";
-  }
-
-  function rsChartSvg(values, dates) {
-    var nums = (values || []).map(function (v) {
-      if (v == null || v === "") return null;
-      var n = Number(v);
-      return Number.isNaN(n) ? null : n;
-    });
-    var valid = nums.filter(function (v) {
-      return v != null;
-    });
-    if (valid.length < 2) {
-      return '<p class="dd-ficha-empty">Sin serie semanal todavía. Se calcula al correr build.py.</p>';
-    }
-    var w = 360;
-    var h = 168;
-    var padL = 32;
-    var padR = 12;
-    var padT = 16;
-    var padB = 26;
-    var innerW = w - padL - padR;
-    var innerH = h - padT - padB;
-    function xAt(i) {
-      if (nums.length <= 1) return padL;
-      return padL + (i / (nums.length - 1)) * innerW;
-    }
-    function yAt(v) {
-      var c = Math.max(0, Math.min(100, v));
-      return padT + (1 - c / 100) * innerH;
-    }
-    var segments = [];
-    var cur = [];
-    nums.forEach(function (v, i) {
-      if (v == null) {
-        if (cur.length) segments.push(cur);
-        cur = [];
-      } else {
-        cur.push(i);
-      }
-    });
-    if (cur.length) segments.push(cur);
-    var up = valid[valid.length - 1] >= valid[0];
-    var stroke = up ? "#34D399" : "#F87171";
-    var paths = segments
-      .map(function (seg) {
-        var line = seg
-          .map(function (i, k) {
-            return (k ? "L" : "M") + xAt(i).toFixed(1) + "," + yAt(nums[i]).toFixed(1);
-          })
-          .join("");
-        var area = "";
-        if (seg.length >= 2) {
-          var base = (padT + innerH).toFixed(1);
-          area =
-            line +
-            "L" + xAt(seg[seg.length - 1]).toFixed(1) + "," + base +
-            "L" + xAt(seg[0]).toFixed(1) + "," + base + "Z";
-        }
-        var lastI = seg[seg.length - 1];
-        var dot = "";
-        if (lastI === nums.length - 1) {
-          dot =
-            '<circle cx="' + xAt(lastI).toFixed(1) + '" cy="' + yAt(nums[lastI]).toFixed(1) +
-            '" r="4" fill="' + stroke + '" />';
-        }
-        return (
-          (area ? '<path d="' + area + '" fill="url(#ddRsFill)" stroke="none"/>' : "") +
-          '<path d="' + line + '" fill="none" stroke="' + stroke +
-          '" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>' +
-          dot
-        );
-      })
-      .join("");
-    function tickLabel(i) {
-      var d = dates && dates[i];
-      return d ? fmtDayMonth(d) : "";
-    }
-    var tickIdx = [0];
-    if (nums.length > 2) tickIdx.push(Math.floor((nums.length - 1) / 2));
-    if (tickIdx[tickIdx.length - 1] !== nums.length - 1) tickIdx.push(nums.length - 1);
-    var ticks = tickIdx
-      .map(function (i) {
-        var anchor = i === 0 ? "start" : i === nums.length - 1 ? "end" : "middle";
-        return (
-          '<text x="' + xAt(i).toFixed(1) + '" y="' + (h - 6) + '" text-anchor="' + anchor +
-          '" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">' +
-          escapeHtml(tickLabel(i)) + "</text>"
-        );
-      })
-      .join("");
-    var y50 = yAt(50);
-    var grid =
-      '<line x1="' + padL + '" y1="' + y50.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + y50.toFixed(1) +
-      '" stroke="rgba(255,255,255,0.14)" stroke-dasharray="3 4"/>' +
-      '<text x="' + (padL - 6) + '" y="' + (yAt(100) + 4).toFixed(1) +
-      '" text-anchor="end" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">100</text>' +
-      '<text x="' + (padL - 6) + '" y="' + (y50 + 3).toFixed(1) +
-      '" text-anchor="end" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">50</text>' +
-      '<text x="' + (padL - 6) + '" y="' + yAt(0).toFixed(1) +
-      '" text-anchor="end" fill="#8d8d8d" font-size="10" font-family="Plus Jakarta Sans, Inter, sans-serif">0</text>';
-    var aria =
-      "RS Score semanal. Inicio " + fmtEsSmart(valid[0], 1) + ", fin " + fmtEsSmart(valid[valid.length - 1], 1) + ".";
-    return (
-      '<svg class="dd-rs-chart" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="' + escapeHtml(aria) + '">' +
-      '<defs><linearGradient id="ddRsFill" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0%" stop-color="' + stroke + '" stop-opacity="0.38"/>' +
-      '<stop offset="100%" stop-color="' + stroke + '" stop-opacity="0"/>' +
-      "</linearGradient></defs>" +
-      grid + paths + ticks +
-      "</svg>"
-    );
   }
 
   function fichaBackButton() {
@@ -2772,6 +2258,13 @@
     var subBits = [];
     if (row.name) subBits.push(row.name);
     if (row.sector) subBits.push(row.sector);
+    var cedearLine = row.cedear
+      ? '<p class="dd-ficha-cedear"><span class="dd-cedear-dot" aria-hidden="true">●</span>CEDEAR ' +
+        escapeHtml(row.cedear_code || row.symbol) +
+        (row.cedear_ratio ? ' · ratio ' + escapeHtml(row.cedear_ratio) +
+          ' <span class="dd-ficha-cedear-hint">(' + escapeHtml(ratioHint(row.cedear_ratio)) + ")</span>" : "") +
+        "</p>"
+      : '<p class="dd-ficha-cedear is-none">Sin CEDEAR en BYMA</p>';
     var changeCls = distClass(row.change_pct);
     var mark = gateMark(row);
     var dist = row.dist_ema200_pct;
@@ -2832,12 +2325,6 @@
         '<p class="dd-ficha-entro">' + escapeHtml((when || "—") + hour) + "</p>" +
         "</section>";
     }
-    var weeks =
-      (row.rs_weekly && row.rs_weekly.length) ||
-      (state.rsWeekly && state.rsWeekly.weeks) ||
-      16;
-    var caption = (state.rsWeekly && state.rsWeekly.definition) || RS_CAPTION_FALLBACK;
-    var dates = (state.rsWeekly && state.rsWeekly.dates) || [];
     root.innerHTML =
       '<header class="dd-ficha-top">' +
       fichaBackButton() +
@@ -2848,6 +2335,7 @@
       (rank ? '<span class="dd-ficha-rank">' + escapeHtml(rank) + "</span>" : "") +
       "</div>" +
       (subBits.length ? '<p class="dd-ficha-sub">' + escapeHtml(subBits.join(" · ")) + "</p>" : "") +
+      cedearLine +
       "</div>" +
       '<div class="dd-ficha-quote">' +
       '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
@@ -2933,15 +2421,11 @@
       if (on) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
-    if (page !== "rotacion") stopRrgPlay();
     if (page === "score" && state.walkforward) {
       var sim = document.getElementById("simulacion");
       if (sim && sim.open) {
         window.requestAnimationFrame(function () { drawWalkforwardChart(state.walkforward); });
       }
-    }
-    if (page === "rotacion") {
-      window.requestAnimationFrame(drawRrg);
     }
   }
 
@@ -3043,16 +2527,6 @@
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     bindRowOpen("ranking-body");
     bindRowOpen("top10-body");
-    bindRowOpen("rs-body");
-    bindRowOpen("senales-body");
-    var podio = document.getElementById("podio-body");
-    if (podio) {
-      podio.addEventListener("click", function (ev) {
-        var btn = ev.target.closest("[data-symbol]");
-        if (!btn || !podio.contains(btn)) return;
-        openTicker(btn.getAttribute("data-symbol"));
-      });
-    }
     var ficha = document.getElementById("ficha");
     if (ficha) {
       ficha.addEventListener("click", function (ev) {
@@ -3128,484 +2602,6 @@
     ["pivote_w", "Pivote"],
   ];
 
-  function sigCols(block) {
-    var cols = (block && block.columns) || {};
-    function pack(list, fallback) {
-      var out = (list || []).map(function (c) {
-        return [c.id, c.short || c.label || c.id];
-      }).filter(function (c) { return c[0]; });
-      return out.length ? out : fallback;
-    }
-    return { daily: pack(cols.daily, SIG_DAILY), weekly: pack(cols.weekly, SIG_WEEKLY) };
-  }
-
-  function renderPodium() {
-    var root = document.getElementById("podio");
-    var body = document.getElementById("podio-body");
-    if (!root || !body) return;
-    var rows = (state.ranking || []).filter(function (r) { return r && r.rank != null; });
-    rows.sort(function (a, b) { return Number(a.rank) - Number(b.rank); });
-    rows = rows.slice(0, 3);
-    if (!rows.length) {
-      root.hidden = true;
-      body.innerHTML = "";
-      return;
-    }
-    root.hidden = false;
-    body.innerHTML = rows.map(function (r, i) {
-      var sub = [r.name, r.sector].filter(Boolean).join(" · ");
-      var score = i === 0
-        ? gaugeHtml(r.desk_score)
-        : '<p class="dd-podio-score">' + escapeHtml(r.desk_score == null ? "—" : fmtEsSmart(r.desk_score, 1)) + "</p>";
-      return (
-        '<button type="button" class="dd-podio-card' + (i === 0 ? " is-first" : "") +
-        '" data-symbol="' + escapeHtml(r.symbol) + '">' +
-        '<span class="dd-podio-pos">' + (i + 1) + "</span>" +
-        score +
-        '<span class="dd-podio-id">' + logoHtml(r.symbol, logoFor(r), i === 0 ? 36 : 28) +
-        "<span><strong>" + escapeHtml(r.symbol) + "</strong>" +
-        (sub ? "<em>" + escapeHtml(sub) + "</em>" : "") +
-        "</span></span></button>"
-      );
-    }).join("");
-  }
-
-  function filterSignalRows(rows) {
-    var q = (state.sigSearch || "").trim().toUpperCase();
-    return (rows || []).filter(function (r) {
-      if (state.sigOnly && !(r.count > 0)) return false;
-      if (state.sigSector && r.sector !== state.sigSector) return false;
-      if (!q) return true;
-      return String(r.symbol || "").toUpperCase().indexOf(q) !== -1 ||
-        String(r.name || "").toUpperCase().indexOf(q) !== -1;
-    });
-  }
-
-  function fillSignalSectors() {
-    var select = document.getElementById("sig-sector");
-    var rrgSelect = document.getElementById("rrg-sector");
-    var sectors = {};
-    (state.ranking || []).forEach(function (r) {
-      if (!r || !r.sector || String(r.kind || "").toLowerCase() === "etf") return;
-      sectors[r.sector] = true;
-    });
-    function fill(el, current, firstLabel) {
-      if (!el) return;
-      var value = current || "";
-      var html = '<option value="">' + escapeHtml(firstLabel) + "</option>";
-      Object.keys(sectors).sort().forEach(function (sector) {
-        html += '<option value="' + escapeHtml(sector) + '">' + escapeHtml(sectorLabelFor(sector)) + "</option>";
-      });
-      el.innerHTML = html;
-      el.value = value;
-    }
-    fill(select, state.sigSector, "Todos los sectores");
-    fill(rrgSelect, state.rrgSector, "Mayor RS, todos los sectores");
-  }
-
-  function renderSignals(block) {
-    state.signalsBlock = block || null;
-    var head = document.getElementById("senales-head");
-    var body = document.getElementById("senales-body");
-    var lists = document.getElementById("senales-lists");
-    var def = document.getElementById("senales-def");
-    if (def) {
-      def.textContent = (block && block.definition) ||
-        "Sale del precio que ya baja Angus. Una lectura activa no es una compra.";
-    }
-    var cols = sigCols(block);
-    if (head) {
-      function ths(list) {
-        return list.map(function (c) {
-          return '<th scope="col">' + escapeHtml(c[1]) + "</th>";
-        }).join("");
-      }
-      head.innerHTML =
-        "<tr>" +
-        '<th scope="col" class="dd-sticky-col dd-col-ticker" rowspan="2">Ticker</th>' +
-        '<th scope="colgroup" colspan="' + cols.daily.length + '">Diario</th>' +
-        '<th scope="colgroup" colspan="' + cols.weekly.length + '">Semanal</th>' +
-        '<th scope="col" rowspan="2">RS</th>' +
-        "</tr><tr>" + ths(cols.daily) + ths(cols.weekly) + "</tr>";
-    }
-    var allSignalRows = (block && block.rows) || [];
-    var filteredSignals = filterSignalRows(allSignalRows);
-    var windowedSignals = pageWindow(filteredSignals, state.sigPage);
-    state.sigPage = windowedSignals.page;
-    var rows = windowedSignals.rows;
-    paintPager("sig-pager", windowedSignals);
-    fillSignalSectors();
-    if (body) {
-      if (!allSignalRows.length) {
-        body.innerHTML = '<tr><td colspan="14" class="dd-empty">Sin matriz en esta publicación. Se calcula al correr build.py.</td></tr>';
-      } else if (!filteredSignals.length) {
-        body.innerHTML = '<tr><td colspan="14" class="dd-empty">Ningún ticker con ese filtro.</td></tr>';
-      } else {
-        body.innerHTML = rows.map(function (r) {
-          function dots(list) {
-            return list.map(function (c) {
-              var on = r.signals && r.signals[c[0]];
-              return '<td><span class="dd-sigdot' + (on ? " is-on" : "") + '" title="' +
-                escapeHtml(c[1] + (on ? ": activa" : ": no")) + '"></span></td>';
-            }).join("");
-          }
-          var count = r.count != null ? r.count : 0;
-          return (
-            '<tr data-symbol="' + escapeHtml(r.symbol) + '" tabindex="0" role="link" aria-label="Ver ficha de ' +
-            escapeHtml(r.symbol) + '"><td class="dd-sticky-col dd-col-ticker"><span class="dd-sig-ticker">' +
-            tickerWithLogo(r, "dd-ticker") +
-            '<span class="dd-sig-n' + (count >= 4 ? " is-hot" : "") + '" title="Lecturas activas">' +
-            escapeHtml(String(count)) + "</span></span></td>" +
-            dots(cols.daily) + dots(cols.weekly) +
-            "<td>" + escapeHtml(r.rs_score == null ? "—" : fmtNum(r.rs_score, 1)) + "</td></tr>"
-          );
-        }).join("");
-      }
-    }
-    if (!lists) return;
-    var allowed = {};
-    filteredSignals.forEach(function (r) { allowed[r.symbol] = true; });
-    var groups = ((block && block.lists) || []).map(function (g) {
-      var hits = (g.rows || []).filter(function (r) { return allowed[r.symbol]; });
-      return {
-        id: g.id,
-        label: g.label,
-        timeframe: g.timeframe,
-        count: hits.length,
-        rows: hits.slice(0, 12),
-        more: Math.max(0, hits.length - 12),
-      };
-    }).filter(function (g) { return g.count; });
-    if (!block) {
-      lists.innerHTML = '<p class="dd-empty">Las listas por señal aparecen cuando build.py publica la matriz.</p>';
-      return;
-    }
-    var html = groups.map(function (g) {
-      var items = (g.rows || []).map(function (r) {
-        return linkRow(r, r.detail || "");
-      }).join("");
-      var marco = g.timeframe === "W" ? "Semanal" : "Diario";
-      return (
-        '<section class="dd-sig-list"><h3>' + escapeHtml(g.label) +
-        ' <span class="dd-sig-count">' + escapeHtml(marco + " · " + g.count) + "</span></h3>" +
-        '<div class="dd-link-list">' + items + "</div>" +
-        (g.more ? '<p class="dd-sig-quiet">y ' + g.more + " más con esta lectura.</p>" : "") +
-        "</section>"
-      );
-    }).join("");
-    if (block.quiet && block.quiet.length) {
-      html += '<p class="dd-sig-quiet">Sin lecturas: ' + escapeHtml(block.quiet.join(", ")) + ".</p>";
-    }
-    if (block.limitation) {
-      html += '<p class="dd-sig-quiet">' + escapeHtml(block.limitation) + "</p>";
-    }
-    lists.innerHTML = html || '<p class="dd-empty">Ninguna lectura activa con estos umbrales.</p>';
-  }
-
-  function signalFichaBlock(row) {
-    var block = state.signalsBlock;
-    if (!block || !row) return "";
-    var hit = null;
-    (block.rows || []).forEach(function (r) {
-      if (String(r.symbol) === String(row.symbol)) hit = r;
-    });
-    if (!hit) return "";
-    var cols = sigCols(block);
-    var on = cols.daily.concat(cols.weekly).filter(function (c) {
-      return hit.signals && hit.signals[c[0]];
-    });
-    var chips = on.length
-      ? '<div class="dd-sig-chips">' + on.map(function (c) {
-        return '<span class="dd-sig-chip">' + escapeHtml(c[1]) + "</span>";
-      }).join("") + "</div>"
-      : '<p class="dd-ficha-empty">Sin lecturas activas en esta rueda.</p>';
-    return (
-      '<section class="dd-ficha-card" aria-label="Señales">' +
-      '<h2 class="dd-ficha-kicker">Señales · ' + escapeHtml(String(hit.count || 0)) + "</h2>" +
-      chips +
-      '<p class="dd-ficha-note">Lectura del precio. No es una recomendación de compra.</p></section>'
-    );
-  }
-
-  function rrgRs(symbol) {
-    var row = rowBySymbol(symbol);
-    if (!row || row.rs_score == null || Number.isNaN(Number(row.rs_score))) return -1;
-    return Number(row.rs_score);
-  }
-
-  function rrgSeries() {
-    var all = (state.rrg && state.rrg.series) || [];
-    var f = state.rrgFilter || "sector";
-    var base = all.filter(function (s) {
-      if (f === "all") return true;
-      if (f === "stock") return s.group === "stock";
-      if (f === "etf") return s.group === "sector" || s.group === "benchmark";
-      return s.group === "sector";
-    });
-    var extra = document.getElementById("rrg-extra");
-    var cap = document.getElementById("rrg-cap");
-    var stocksView = f === "stock" || f === "all";
-    if (extra) extra.hidden = !stocksView;
-    if (!stocksView) {
-      if (cap) cap.textContent = "";
-      return base;
-    }
-    var sector = state.rrgSector || "";
-    var etfs = base.filter(function (s) { return s.group !== "stock"; });
-    var stocks = base.filter(function (s) { return s.group === "stock"; });
-    if (sector) {
-      etfs = etfs.filter(function (s) { return s.sector === sector; });
-      stocks = stocks.filter(function (s) { return s.sector === sector; });
-    }
-    stocks.sort(function (a, b) { return rrgRs(b.symbol) - rrgRs(a.symbol); });
-    var shown = stocks.slice(0, RRG_STOCK_LIMIT);
-    if (cap) {
-      cap.textContent = stocks.length > shown.length
-        ? "Mostrando " + shown.length + " de " + stocks.length + " acciones, las de mayor RS."
-        : "";
-    }
-    return etfs.concat(shown);
-  }
-
-  function stopRrgPlay() {
-    if (state.rrgTimer) {
-      window.clearInterval(state.rrgTimer);
-      state.rrgTimer = null;
-    }
-    var btn = document.getElementById("rrg-play");
-    if (btn) {
-      btn.textContent = "Play";
-      btn.setAttribute("aria-pressed", "false");
-    }
-  }
-
-  function renderRrgNotes() {
-    var ul = document.getElementById("rrg-notes");
-    if (!ul) return;
-    var timeline = state.rrg && state.rrg.notes_by_date;
-    var notes;
-    if (timeline && timeline.length) {
-      var i = Math.max(0, Math.min(timeline.length - 1, state.rrgFrame || 0));
-      notes = timeline[i] || [];
-      if (!notes.length) {
-        notes = ["Esta semana ningún ETF de sector cambió de cuadrante respecto del SPY."];
-      }
-    } else {
-      notes = (state.rrg && state.rrg.notes) || [];
-    }
-    ul.innerHTML = notes.map(function (n) {
-      return "<li>" + escapeHtml(n) + "</li>";
-    }).join("");
-  }
-
-  function renderRrg(block) {
-    state.rrg = block || null;
-    var dates = (block && block.dates) || [];
-    var max = Math.max(0, dates.length - 1);
-    var slider = document.getElementById("rrg-slider");
-    if (!state.rrgTimer) state.rrgFrame = frameFromQuery(max);
-    if (state.rrgFrame > max) state.rrgFrame = max;
-    if (slider) {
-      slider.max = String(max);
-      slider.value = String(state.rrgFrame);
-      slider.disabled = dates.length < 2;
-    }
-    var def = document.getElementById("rrg-def");
-    if (def) {
-      def.textContent = (block && block.definition) ||
-        "Rotación relativa contra el SPY, con cierres semanales. El centro es 100.";
-    }
-    renderRrgNotes();
-    drawRrg();
-  }
-
-  function frameFromQuery(max) {
-    var raw = "";
-    try {
-      raw = new URLSearchParams(location.search).get("frame") || "";
-    } catch (e) {
-      raw = "";
-    }
-    if (raw === "") return max;
-    var n = Number(raw);
-    if (Number.isNaN(n)) return max;
-    return Math.max(0, Math.min(max, Math.round(n)));
-  }
-
-  function rrgFrameLabel() {
-    var dates = (state.rrg && state.rrg.dates) || [];
-    var el = document.getElementById("rrg-frame-label");
-    if (!el) return;
-    if (!dates.length) {
-      el.textContent = "—";
-      return;
-    }
-    var i = Math.max(0, Math.min(dates.length - 1, state.rrgFrame || 0));
-    el.textContent = fmtDayMonth(dates[i]) + " · " + (i + 1) + "/" + dates.length;
-  }
-
-  function drawRrg() {
-    var host = document.getElementById("rrg-chart");
-    if (!host) return;
-    var tip = document.getElementById("rrg-tip");
-    if (tip) tip.hidden = true;
-    rrgFrameLabel();
-    renderRrgNotes();
-    var dates = (state.rrg && state.rrg.dates) || [];
-    var series = rrgSeries();
-    var labels = (state.rrg && state.rrg.quadrants) || {
-      liderando: "Liderando",
-      debilitandose: "Debilitándose",
-      rezagado: "Rezagado",
-      mejorando: "Mejorando",
-    };
-    if (!dates.length || !series.length) {
-      host.innerHTML = '<p class="dd-empty">Sin curva de rotación en esta publicación. Hacen falta varias semanas de cierres.</p>';
-      host.setAttribute("aria-label", "Sin gráfico de rotación");
-      return;
-    }
-    var frame = Math.max(0, Math.min(dates.length - 1, state.rrgFrame || 0));
-    var tail = (state.rrg && state.rrg.tail) || 12;
-    var valsX = [];
-    var valsY = [];
-    series.forEach(function (s) {
-      (s.points || []).forEach(function (p) {
-        if (!p) return;
-        valsX.push(Number(p.ratio));
-        valsY.push(Number(p.momentum));
-      });
-    });
-    if (!valsX.length) {
-      host.innerHTML = '<p class="dd-empty">Estos nombres todavía no tienen puntos en la ventana.</p>';
-      return;
-    }
-    function extent(vals) {
-      var min = 100;
-      var max = 100;
-      vals.forEach(function (v) {
-        if (v < min) min = v;
-        if (v > max) max = v;
-      });
-      var span = Math.max(4, max - min);
-      var pad = span * 0.14;
-      return [min - pad, max + pad];
-    }
-    var xDom = extent(valsX);
-    var yDom = extent(valsY);
-    var w = 640;
-    var h = 420;
-    var padL = 52;
-    var padR = 18;
-    var padT = 28;
-    var padB = 42;
-    var innerW = w - padL - padR;
-    var innerH = h - padT - padB;
-    function xAt(v) {
-      return padL + ((v - xDom[0]) / (xDom[1] - xDom[0])) * innerW;
-    }
-    function yAt(v) {
-      return padT + (1 - (v - yDom[0]) / (yDom[1] - yDom[0])) * innerH;
-    }
-    var xMid = xAt(100);
-    var yMid = yAt(100);
-    var quads =
-      '<rect x="' + padL + '" y="' + padT + '" width="' + (xMid - padL) + '" height="' + (yMid - padT) + '" fill="rgba(56,189,248,0.08)"/>' +
-      '<rect x="' + xMid + '" y="' + padT + '" width="' + (padL + innerW - xMid) + '" height="' + (yMid - padT) + '" fill="rgba(52,211,153,0.08)"/>' +
-      '<rect x="' + padL + '" y="' + yMid + '" width="' + (xMid - padL) + '" height="' + (padT + innerH - yMid) + '" fill="rgba(248,113,113,0.08)"/>' +
-      '<rect x="' + xMid + '" y="' + yMid + '" width="' + (padL + innerW - xMid) + '" height="' + (padT + innerH - yMid) + '" fill="rgba(251,191,36,0.08)"/>';
-    function qLabel(text, x, y, anchor) {
-      return '<text x="' + x + '" y="' + y + '" text-anchor="' + anchor +
-        '" fill="#8d8d8d" font-size="11" font-family="Plus Jakarta Sans, Inter, sans-serif">' +
-        escapeHtml(text) + "</text>";
-    }
-    var names =
-      qLabel(labels.mejorando || "Mejorando", padL + 8, padT + 16, "start") +
-      qLabel(labels.liderando || "Liderando", padL + innerW - 8, padT + 16, "end") +
-      qLabel(labels.rezagado || "Rezagado", padL + 8, padT + innerH - 8, "start") +
-      qLabel(labels.debilitandose || "Debilitándose", padL + innerW - 8, padT + innerH - 8, "end");
-    var axes =
-      '<line x1="' + xMid.toFixed(1) + '" y1="' + padT + '" x2="' + xMid.toFixed(1) + '" y2="' + (padT + innerH) + '" stroke="rgba(255,255,255,0.28)"/>' +
-      '<line x1="' + padL + '" y1="' + yMid.toFixed(1) + '" x2="' + (padL + innerW) + '" y2="' + yMid.toFixed(1) + '" stroke="rgba(255,255,255,0.28)"/>' +
-      '<text x="' + padL + '" y="16" fill="#a0a0a0" font-size="11" font-family="Plus Jakarta Sans, Inter, sans-serif">RS-Momentum ↑</text>' +
-      '<text x="' + (padL + innerW) + '" y="' + (h - 8) + '" text-anchor="end" fill="#a0a0a0" font-size="11" font-family="Plus Jakarta Sans, Inter, sans-serif">RS-Ratio →</text>';
-    var showNames = state.rrgFilter !== "stock" && state.rrgFilter !== "all";
-    var trails = series.map(function (s) {
-      var pts = s.points || [];
-      var chunks = [];
-      var cur = [];
-      var from = Math.max(0, frame - tail + 1);
-      for (var i = from; i <= frame && i < pts.length; i++) {
-        if (!pts[i]) {
-          if (cur.length) chunks.push(cur);
-          cur = [];
-        } else {
-          cur.push(pts[i]);
-        }
-      }
-      if (cur.length) chunks.push(cur);
-      var head = frame < pts.length ? pts[frame] : null;
-      var color = RRG_COLOR[(head && head.quadrant) || "liderando"] || "#34D399";
-      var lines = chunks.map(function (chunk) {
-        if (chunk.length < 2) return "";
-        var d = chunk.map(function (p, k) {
-          return (k ? "L" : "M") + xAt(p.ratio).toFixed(1) + "," + yAt(p.momentum).toFixed(1);
-        }).join("");
-        return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>';
-      }).join("");
-      if (!head) return lines;
-      var cx = xAt(head.ratio);
-      var cy = yAt(head.momentum);
-      var rad = s.group === "stock" ? 4.2 : 6.4;
-      var name = "";
-      if (showNames || s.group === "sector") {
-        if (state.rrgFilter !== "stock") {
-          var anchor = cx > w - 78 ? "end" : "start";
-          var lx = anchor === "end" ? cx - 8 : cx + 8;
-          name = '<text x="' + lx.toFixed(1) + '" y="' + (cy + 4).toFixed(1) + '" text-anchor="' + anchor +
-            '" fill="#f5f5f5" font-size="11" font-weight="600" font-family="Plus Jakarta Sans, Inter, sans-serif">' +
-            escapeHtml(s.symbol) + "</text>";
-        }
-      }
-      var tip = escapeHtml(s.symbol + " · " + (labels[head.quadrant] || head.quadrant));
-      return lines +
-        '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + rad + '" fill="' + color + '"/>' +
-        '<circle class="dd-rrg-hit" data-rrg-symbol="' + escapeHtml(s.symbol) +
-        '" data-rrg-name="' + escapeHtml(s.display || s.name || s.symbol) +
-        '" data-rrg-ratio="' + escapeHtml(fmtEsNum(head.ratio, 2)) +
-        '" data-rrg-mom="' + escapeHtml(fmtEsNum(head.momentum, 2)) +
-        '" data-rrg-quad="' + escapeHtml(labels[head.quadrant] || head.quadrant) +
-        '" data-rrg-date="' + escapeHtml(fmtDayMonth(head.date)) +
-        '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="16" fill="transparent"><title>' + tip + "</title></circle>" +
-        name;
-    }).join("");
-    host.innerHTML =
-      '<svg class="dd-rrg-svg" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="Rotación relativa al ' +
-      escapeHtml(fmtDayMonth(dates[frame])) + '">' +
-      quads + names + axes + trails + "</svg>";
-  }
-
-  function showRrgTip(hit, ev) {
-    var tip = document.getElementById("rrg-tip");
-    var stage = document.querySelector(".dd-rrg-stage");
-    if (!tip || !stage || !hit) return;
-    tip.innerHTML =
-      "<strong>" + escapeHtml(hit.getAttribute("data-rrg-symbol") || "") + "</strong>" +
-      "<span>" + escapeHtml(hit.getAttribute("data-rrg-name") || "") + "</span>" +
-      "<span>" + escapeHtml(hit.getAttribute("data-rrg-quad") || "") + " · " +
-      escapeHtml(hit.getAttribute("data-rrg-date") || "") + "</span>" +
-      "<span>RS-Ratio " + escapeHtml(hit.getAttribute("data-rrg-ratio") || "—") +
-      " · RS-Momentum " + escapeHtml(hit.getAttribute("data-rrg-mom") || "—") + "</span>";
-    tip.hidden = false;
-    var rect = stage.getBoundingClientRect();
-    var left = (ev.clientX - rect.left) + 12;
-    var top = (ev.clientY - rect.top) - 72;
-    if (left > rect.width - 190) left = rect.width - 200;
-    if (left < 8) left = 8;
-    if (top < 8) top = 8;
-    tip.style.left = left + "px";
-    tip.style.top = top + "px";
-  }
-
   function bindSectionNav() {
     var sim = document.getElementById("simulacion");
     if (sim) {
@@ -3613,94 +2609,11 @@
         if (sim.open && state.walkforward) drawWalkforwardChart(state.walkforward);
       });
     }
-    var clearBtn = document.getElementById("today-clear-btn");
-    if (clearBtn) {
-      clearBtn.addEventListener("click", function () {
-        state.flags.solo_verdes = true;
-        document.querySelectorAll('.dd-chip-toggle[data-flag="solo_verdes"]').forEach(function (btn) {
-          btn.classList.add("is-active");
-          btn.setAttribute("aria-pressed", "true");
-        });
-        applyFilters();
-        if ((location.hash || "") === "#ranking") {
-          var ranking = document.getElementById("ranking");
-          if (ranking && ranking.scrollIntoView) ranking.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else {
-          location.hash = "#ranking";
-        }
-      });
-    }
-    var filters = document.getElementById("rrg-filters");
-    if (filters) {
-      filters.addEventListener("click", function (ev) {
-        var btn = ev.target.closest("[data-rrg]");
-        if (!btn || !filters.contains(btn)) return;
-        state.rrgFilter = btn.getAttribute("data-rrg") || "sector";
-        filters.querySelectorAll("[data-rrg]").forEach(function (chip) {
-          chip.classList.toggle("is-active", chip === btn);
-        });
-        fillSignalSectors();
-        var tip = document.getElementById("rrg-tip");
-        if (tip) tip.hidden = true;
-        drawRrg();
-      });
-    }
-    var play = document.getElementById("rrg-play");
-    if (play) {
-      play.addEventListener("click", function () {
-        var dates = (state.rrg && state.rrg.dates) || [];
-        if (dates.length < 2) return;
-        if (state.rrgTimer) {
-          stopRrgPlay();
-          return;
-        }
-        if (state.rrgFrame >= dates.length - 1) state.rrgFrame = 0;
-        play.textContent = "Pausa";
-        play.setAttribute("aria-pressed", "true");
-        state.rrgTimer = window.setInterval(function () {
-          var max = dates.length - 1;
-          state.rrgFrame += 1;
-          if (state.rrgFrame >= max) {
-            state.rrgFrame = max;
-            stopRrgPlay();
-          }
-          var slider = document.getElementById("rrg-slider");
-          if (slider) slider.value = String(state.rrgFrame);
-          drawRrg();
-        }, 700);
-        drawRrg();
-      });
-    }
-    var slider = document.getElementById("rrg-slider");
-    if (slider) {
-      slider.addEventListener("input", function () {
-        stopRrgPlay();
-        state.rrgFrame = Number(slider.value) || 0;
-        drawRrg();
-      });
-    }
-    var chart = document.getElementById("rrg-chart");
-    if (chart) {
-      chart.addEventListener("click", function (ev) {
-        var hit = ev.target.closest("[data-rrg-symbol]");
-        var tip = document.getElementById("rrg-tip");
-        if (!hit) {
-          if (tip) tip.hidden = true;
-          return;
-        }
-        showRrgTip(hit, ev);
-      });
-      chart.addEventListener("mousemove", function (ev) {
-        var hit = ev.target.closest("[data-rrg-symbol]");
-        if (!hit) return;
-        showRrgTip(hit, ev);
-      });
-    }
-    var stage = document.querySelector(".dd-rrg-stage");
-    if (stage) {
-      stage.addEventListener("mouseleave", function () {
-        var tip = document.getElementById("rrg-tip");
-        if (tip) tip.hidden = true;
+    var mes = document.getElementById("mes-body");
+    if (mes) {
+      mes.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("[data-symbol]");
+        if (btn && mes.contains(btn)) openTicker(btn.getAttribute("data-symbol"));
       });
     }
     var search = document.getElementById("analisis-search");
@@ -3758,44 +2671,9 @@
         var dir = btn.id.indexOf("prev") !== -1 ? -1 : 1;
         state[key] = (state[key] || 0) + dir;
         if (key === "rankPage") applyFilters();
-        else if (state.signalsBlock) renderSignals(state.signalsBlock);
       });
     }
     bindPager("rank-pager", "rankPage");
-    bindPager("sig-pager", "sigPage");
-    var sigSearch = document.getElementById("sig-search");
-    if (sigSearch) {
-      sigSearch.addEventListener("input", function () {
-        state.sigSearch = sigSearch.value || "";
-        state.sigPage = 0;
-        if (state.signalsBlock) renderSignals(state.signalsBlock);
-      });
-    }
-    var sigSector = document.getElementById("sig-sector");
-    if (sigSector) {
-      sigSector.addEventListener("change", function () {
-        state.sigSector = sigSector.value || "";
-        state.sigPage = 0;
-        if (state.signalsBlock) renderSignals(state.signalsBlock);
-      });
-    }
-    var sigOnly = document.getElementById("sig-only");
-    if (sigOnly) {
-      sigOnly.addEventListener("click", function () {
-        state.sigOnly = !state.sigOnly;
-        sigOnly.classList.toggle("is-active", state.sigOnly);
-        sigOnly.setAttribute("aria-pressed", state.sigOnly ? "true" : "false");
-        state.sigPage = 0;
-        if (state.signalsBlock) renderSignals(state.signalsBlock);
-      });
-    }
-    var rrgSector = document.getElementById("rrg-sector");
-    if (rrgSector) {
-      rrgSector.addEventListener("change", function () {
-        state.rrgSector = rrgSector.value || "";
-        drawRrg();
-      });
-    }
     syncScrollPad();
     window.addEventListener("resize", syncScrollPad);
   }
@@ -3804,7 +2682,6 @@
   bindFilters();
   bindRefresh();
   bindFichaNav();
-  bindPatternTabs();
   bindTextMore();
   bindSectionNav();
   renderRoute();

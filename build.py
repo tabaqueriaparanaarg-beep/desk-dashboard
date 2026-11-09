@@ -984,6 +984,8 @@ def compute_symbol(
         "above_sma50": bool(sma50_v is not None and close > sma50_v),
         "flags": flags,
         **({"cedear": bool(meta["cedear"])} if "cedear" in meta else {}),
+        **({"cedear_code": meta["cedear_code"]} if meta.get("cedear") and meta.get("cedear_code") else {}),
+        **({"cedear_ratio": meta["cedear_ratio"]} if meta.get("cedear") and meta.get("cedear_ratio") else {}),
         "_rel_perf_raw": rel_perf,
         "_tend": tend,
         "_contr": contr,
@@ -1233,6 +1235,8 @@ def compute_top10_return(
                 "symbol": sym,
                 "desk_score": r.get(score_key),
                 "cedear": r.get("cedear"),
+                "cedear_code": r.get("cedear_code"),
+                "cedear_ratio": r.get("cedear_ratio"),
                 "return_pct": ret_r,
                 "spark": spark_closes(closes, window),
             }
@@ -1835,6 +1839,98 @@ def compute_top10_walkforward(
     out["default_variant"] = TOP10_DEFAULT_VARIANT
     out["books"] = books
     return out
+
+
+# ── Plan del mes ──────────────────────────────────────────────────────────────
+# La regla de uso es revisar el Top 10 en el último cierre de cada mes. El plan
+# guarda la cartera armada en el último fin de mes (y la del anterior), por
+# variante, para que la página muestre qué vender, qué comprar y qué mantener.
+
+
+def _easter(year: int) -> date:
+    """Domingo de Pascua (algoritmo gregoriano anónimo)."""
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def last_trading_day_of_month(year: int, month: int) -> date:
+    """Último día hábil de la NYSE en el mes.
+
+    Solo contempla los feriados que pueden caer a fin de mes: Memorial Day (último
+    lunes de mayo) y Viernes Santo (puede ser 30 o 31 de marzo).
+    """
+    nxt = date(year + (month == 12), month % 12 + 1, 1)
+    d = nxt - timedelta(days=1)
+    good_friday = _easter(year) - timedelta(days=2)
+    while True:
+        memorial = month == 5 and d.weekday() == 0 and d.day > 24
+        if d.weekday() < 5 and not memorial and d != good_friday:
+            return d
+        d -= timedelta(days=1)
+
+
+def month_end_sessions(sessions: list[str]) -> list[str]:
+    """Cierres que son el último del mes. El último de la lista cuenta si es el último hábil."""
+    out = []
+    for i, d in enumerate(sessions):
+        if i + 1 < len(sessions):
+            if sessions[i + 1][:7] != d[:7]:
+                out.append(d)
+        else:
+            day = date.fromisoformat(d)
+            if day == last_trading_day_of_month(day.year, day.month):
+                out.append(d)
+    return out
+
+
+def compute_monthly_plan(
+    meta_by: dict[str, dict],
+    all_bars: dict[str, list[dict]],
+    *,
+    live_session: str | None = None,
+) -> dict[str, Any]:
+    """Cartera de cada variante en los dos últimos fines de mes y la próxima revisión."""
+    sessions = session_dates_from_bars(all_bars.get("SPY") or [])
+    completed = [d for d in sessions if d != live_session]
+    if not completed:
+        return {}
+    ends = month_end_sessions(completed)
+    latest = live_session or completed[-1]
+    today = date.fromisoformat(latest)
+    since = ends[-1] if ends else None
+    done = since == latest  # el cierre de hoy fue el de fin de mes: la cartera ya está armada
+    review = last_trading_day_of_month(today.year, today.month)
+    if done or today > review:
+        y, m = (today.year + (today.month == 12), today.month % 12 + 1)
+        review = last_trading_day_of_month(y, m)
+
+    def book(session: str | None) -> dict[str, list[str]]:
+        if not session:
+            return {}
+        ranked = rank_universe_asof(meta_by, all_bars, session, require_exact_session=True)
+        return {v: [r["symbol"] for r in top10_pick(ranked, v)] for v in TOP10_VARIANTS}
+
+    prev = ends[-2] if len(ends) > 1 else None
+    return {
+        "rule": "Revisar en el último cierre de cada mes: vender lo que salió, comprar lo que entró, partes iguales.",
+        "data_date": latest,
+        "since": since,
+        "prev_since": prev,
+        "next_review": review.isoformat(),
+        "review_today": latest == review.isoformat(),
+        "review_done": done,
+        "holdings": book(since),
+        "prev_holdings": book(prev),
+    }
 
 
 def walkforward_public(block: dict | None) -> dict[str, Any]:
@@ -3241,6 +3337,13 @@ def main() -> None:
     if wf_note:
         notes.append(wf_note)
     print(f"  walk-forward: {time.perf_counter() - t_wf:.2f}s")
+    t_plan = time.perf_counter()
+    try:
+        monthly_plan = compute_monthly_plan(meta_by, full_bars, live_session=live_session)
+    except Exception as exc:  # el plan no puede tirar abajo la corrida
+        monthly_plan = {}
+        notes.append(f"Plan del mes: no se pudo calcular ({exc}).")
+    print(f"  plan del mes: {time.perf_counter() - t_plan:.2f}s")
     if top10_entry.get("by_symbol"):
         bits = [
             f"{sym} {info.get('label')}"
@@ -3434,6 +3537,7 @@ def main() -> None:
         "top10_entry": top10_entry,
         "top10_walkforward": top10_walkforward,
         "top10_variants": top10_variants,
+        "monthly_plan": monthly_plan,
         "top10_default_variant": TOP10_DEFAULT_VARIANT,
         "historial_semaforo": historial_public,
         "sectors": sectors,
