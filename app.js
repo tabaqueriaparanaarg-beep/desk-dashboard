@@ -1984,14 +1984,25 @@
     opts = opts || {};
     if (state.loading) return Promise.resolve();
     setLoading(true);
-    var url = "datos.json?ts=" + Date.now();
-    return fetch(url, { cache: "no-store" })
+    // Primera carga: usa el pedido que arrancó en el <head>.
+    var early = window.__datos;
+    window.__datos = null;
+    var req = early || fetch("datos.json?ts=" + Date.now(), { cache: "no-store" });
+    return req
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
+        return r.text();
       })
-      .then(function (data) {
+      .then(function (text) {
+        // Si no cambió nada (refresco automático), no se redibuja.
+        if (text === state.lastPayload) return;
+        var data = JSON.parse(text);
+        if (data && data.error && !data.ranking) throw new Error(data.error);
+        state.lastPayload = text;
         applyData(data);
+        saveCopy(text);
+      })
+      .then(function () {
         var st = document.getElementById("refresh-status");
         if (st) {
           st.hidden = true;
@@ -2005,13 +2016,40 @@
             st.hidden = false;
             st.textContent = "No se pudo actualizar";
           }
-        } else {
+        } else if (!state.lastPayload) {
           fail("No se pudo cargar datos.json (" + err.message + "). Ejecutá python3 build.py");
         }
       })
       .finally(function () {
         setLoading(false);
       });
+  }
+
+  // Pinta al instante la última copia guardada por el service worker; la red la
+  // reemplaza cuando llega.
+  var COPY_CACHE = "angus-datos";
+  var COPY_KEY = "datos-copia.json";
+
+  function saveCopy(text) {
+    if (!("caches" in window)) return;
+    caches.open(COPY_CACHE).then(function (c) {
+      return c.put(COPY_KEY, new Response(text, { headers: { "Content-Type": "application/json" } }));
+    }).catch(function () { /* sin espacio o modo privado: no pasa nada */ });
+  }
+
+  function paintFromCache() {
+    if (!("caches" in window)) return Promise.resolve();
+    return caches.open(COPY_CACHE)
+      .then(function (c) { return c.match(COPY_KEY); })
+      .then(function (hit) { return hit ? hit.text() : null; })
+      .then(function (text) {
+        if (!text || state.lastPayload) return;
+        var data = JSON.parse(text);
+        if (!data || !data.ranking) return;
+        state.lastPayload = text;
+        applyData(data);
+      })
+      .catch(function () { /* sin copia: espera a la red */ });
   }
 
   function clearAuto() {
@@ -2945,5 +2983,6 @@
   bindTextMore();
   bindSectionNav();
   renderRoute();
+  paintFromCache();
   loadData({ silent: false }).then(startAuto);
 })();

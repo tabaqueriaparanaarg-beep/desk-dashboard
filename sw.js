@@ -5,17 +5,18 @@
  */
 "use strict";
 
-var VERSION = "dd-v46";
+var VERSION = "dd-v47";
 var SHELL_CACHE = VERSION + "-shell";
 var DATA_CACHE = VERSION + "-data";
 
 var SHELL_ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=46",
-  "app.js?v=46",
+  "styles.css?v=47",
+  "app.js?v=47",
   "manifest.webmanifest",
   "assets/logo.svg?v=7",
+  "assets/fonts/archivo.woff2?v=1",
   "assets/favicon.ico?v=7",
   "assets/favicon-32.png?v=7",
   "assets/favicon-16.png?v=7",
@@ -119,18 +120,21 @@ function cacheFirst(request) {
   });
 }
 
-function networkFirstPage(request) {
-  // Navegación: intenta red (HTML fresco), cae al shell cacheado offline.
-  return fetch(request).then(function (resp) {
+function pageFromCacheThenRefresh(event) {
+  // Navegación: responde al instante con el shell guardado y lo renueva por detrás.
+  // Una versión nueva del sitio llega con un service worker nuevo (cambia VERSION).
+  var fresh = fetch(event.request).then(function (resp) {
     if (resp && resp.ok) {
       var copy = resp.clone();
-      caches.open(SHELL_CACHE).then(function (c) { c.put("index.html", copy); });
+      return caches.open(SHELL_CACHE).then(function (c) { return c.put("index.html", copy); }).then(function () { return resp; });
     }
     return resp;
-  }).catch(function () {
-    return caches.match("index.html").then(function (hit) {
-      return hit || caches.match("./");
-    });
+  });
+  event.waitUntil(fresh.catch(function () {}));
+  return caches.open(SHELL_CACHE).then(function (c) {
+    return c.match("index.html");
+  }).then(function (hit) {
+    return hit || fresh;
   });
 }
 
@@ -149,7 +153,7 @@ self.addEventListener("fetch", function (event) {
       return caches.match(req);
     }));
   } else if (req.mode === "navigate") {
-    event.respondWith(networkFirstPage(req));
+    event.respondWith(pageFromCacheThenRefresh(event));
   } else {
     event.respondWith(cacheFirst(req));
   }
