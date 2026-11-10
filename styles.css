@@ -4,13 +4,15 @@
   /* Angus: carbón cálido, cuero claro y el naranja de la marca. */
   --dd-bg: #110F0E;
   --dd-bg-elevated: #141110;
-  --dd-card: #1A1715;
-  --dd-card-hover: #221E1B;
-  --dd-border: rgba(255, 236, 220, 0.07);
+  --dd-card: #110F0E;   /* la tarjeta la marca el borde, no el relleno */
+  --dd-card-hover: #1A1715;
+  --dd-border: rgba(255, 236, 220, 0.10);
   --dd-border-strong: rgba(255, 236, 220, 0.13);
 
   --dd-brand: #FF6B35;
   --dd-brand-ink: #1C0E07;
+  --dd-bark: #382416;
+  --dd-cream: #FFEDD7;
   --dd-accent-start: #FF6B35;
   --dd-accent-mid: #FF8048;
   --dd-accent-end: #FF9A6A;
@@ -19,7 +21,7 @@
 
   --dd-fg: #F3ECE5;
   --dd-muted: #A3978E;
-  --dd-muted-dim: #73685F;
+  --dd-muted-dim: #8E8278;
 
   --dd-ok: #3DD68C;
   --dd-bad: #F87171;
@@ -150,7 +152,7 @@ body{
 
 .dd-meta .dd-label{
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--dd-muted-dim);
   text-transform: uppercase;
@@ -169,7 +171,7 @@ body{
 .dd-last-ui-refresh{
   display: block;
   margin-top: 0.2rem;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--dd-muted-dim);
 }
@@ -250,7 +252,7 @@ body{
 
 .dd-kpi-label{
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--dd-muted);
   text-transform: uppercase;
@@ -321,7 +323,7 @@ body{
 
 .dd-earn-hour{
   margin-left: 0.15rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   padding: 0.12rem 0.45rem;
   border-radius: var(--dd-radius-chip);
@@ -476,7 +478,7 @@ body{
   background: #1A1A1A;
   color: var(--dd-muted);
   font-weight: 600;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--dd-border-strong);
@@ -632,7 +634,7 @@ body{
 }
 
 .dd-entro-sessions{
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--dd-muted);
   letter-spacing: 0.01em;
@@ -843,7 +845,7 @@ body{
 
 .dd-attr-h{
   margin: 0.85rem 0 0.15rem;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1186,7 +1188,7 @@ body{
   }
 
   .dd-kpi-label{
-    font-size: 0.65rem;
+    font-size: 0.75rem;
   }
 
   .dd-kpi-value{
@@ -1225,7 +1227,7 @@ body{
 
 .dd-flag{
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   padding: 0.15rem 0.45rem;
@@ -1353,7 +1355,7 @@ body{
     overflow: hidden;
   }
   .dd-top10-table th {
-    font-size: 0.56rem;
+    font-size: 0.75rem;
     letter-spacing: 0;
   }
   .dd-top10-table .dd-col-rank {
@@ -1379,11 +1381,11 @@ body{
     width: 18%;
   }
   .dd-top10-table .dd-entro-date {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     white-space: normal;
   }
   .dd-top10-table .dd-entro-sessions {
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     white-space: normal;
   }
   .dd-top10-table .dd-spark {
@@ -1404,7 +1406,7 @@ body{
 
 @media (max-width: 370px) {
   .dd-top10-table th{
-    font-size: 0.5rem;
+    font-size: 0.75rem;
   }
 }
 
@@ -1495,7 +1497,7 @@ body.is-ficha .dd-footer{
 }
 
 .dd-ficha-rank{
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 0.18rem 0.5rem;
   border-radius: var(--dd-radius-chip);
@@ -1555,7 +1557,7 @@ body.is-ficha .dd-footer{
 
 .dd-ficha-kicker{
   margin: 0 0 0.8rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1932,7 +1934,7 @@ body.is-ficha .dd-footer{
 }
 
 .dd-sector-low{
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -1981,7 +1983,7 @@ body.is-ficha .dd-footer{
 .dd-sector-metrics dt{
   margin: 0;
   color: var(--dd-muted-dim);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -2138,7 +2140,7 @@ body.is-ficha .dd-footer{
 }
 
 .dd-health-cue{
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--dd-muted);
 }
@@ -2393,7 +2395,7 @@ body.is-ficha .dd-footer{
 @media (max-width: 420px) {
   .dd-entry-label{ font-size: 1.02rem; }
   .dd-entry-checks li{ font-size: 0.82rem; }
-  .dd-an-legend{ font-size: 0.7rem; }
+  .dd-an-legend{ font-size: 0.75rem; }
 }
 
 /* ── Historial del semáforo ── */
@@ -2471,7 +2473,7 @@ body.is-ficha .dd-footer{
 
 .dd-regime-kicker{
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2489,7 +2491,7 @@ body.is-ficha .dd-footer{
 
 .dd-regime-disclaimer{
   margin: 0.55rem 0 0;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   line-height: 1.35;
   font-weight: 500;
   color: var(--dd-muted-dim);
@@ -2532,7 +2534,7 @@ body.is-ficha .dd-footer{
 .dd-regime-row-sub{
   display: block;
   margin-top: 0.12rem;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--dd-muted-dim);
@@ -2573,7 +2575,7 @@ body.is-ficha .dd-footer{
   border-radius: 5px;
   background: #3b82f6;
   color: #fff;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   line-height: 1.2;
@@ -2584,7 +2586,7 @@ body.is-ficha .dd-footer{
 
 .dd-regime-chart-title{
   margin: 0.85rem 0 0.25rem;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2651,11 +2653,11 @@ body.is-ficha .dd-footer{
   }
 
   .dd-regime-score-of{
-    font-size: 0.68rem;
+    font-size: 0.75rem;
   }
 
   .dd-regime-kicker{
-    font-size: 0.62rem;
+    font-size: 0.75rem;
   }
 
   .dd-regime-exposure-line{
@@ -2949,7 +2951,7 @@ body.is-ficha .dd-topbar{
   .dd-session-banner{
     padding-left: 0.75rem;
     padding-right: 0.75rem;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 
   .dd-main,
@@ -2999,7 +3001,7 @@ body.is-ficha .dd-topbar{
   border-radius: 12px;
   color: var(--dd-muted);
   text-decoration: none;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 650;
   letter-spacing: 0.01em;
 }
@@ -3188,7 +3190,7 @@ body{
   background: none;
   border: 0;
   text-align: right;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.3;
   color: var(--dd-muted);
 }
@@ -3205,7 +3207,7 @@ body{
 .dd-refresh-status,
 .dd-last-ui-refresh{
   margin: 0;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--dd-muted-dim);
 }
 
@@ -3252,7 +3254,7 @@ body{
   padding: 0 1.25rem 0.6rem;
   border: 0;
   background: none;
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   color: var(--dd-muted);
 }
 
@@ -3479,7 +3481,7 @@ body{
 .dd-cedear-sub{
   display: block;
   margin-top: 0.1rem;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--dd-muted);
   white-space: nowrap;
@@ -3534,7 +3536,7 @@ body{
 /* Barra de pestañas. */
 .dd-tabbar a{
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .dd-tabbar a.is-active{
@@ -3558,7 +3560,7 @@ body{
 
 .dd-disclaimer{
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -3585,7 +3587,7 @@ body{
     font-size: 1.45rem;
   }
   .dd-meta .dd-value{
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 }
 
@@ -3659,7 +3661,7 @@ body{
   .dd-top10-table th:nth-child(6),
   .dd-top10-table td:nth-child(6){ width: 23%; }
   .dd-top10-table th{
-    font-size: 0.62rem;
+    font-size: 0.75rem;
   }
   .dd-panel{
     padding: 1rem 0.9rem;
@@ -3689,4 +3691,334 @@ body{
   letter-spacing: 0;
   text-transform: none;
   color: var(--dd-fg);
+}
+
+
+/* ══ Ajustes nov-2026: tocar cómodo, leer sin forzar, separar sin tarjetas ══ */
+
+/* Objetivos táctiles de 40 px (compacto, pero sin errarle con el dedo). */
+.dd-seg .dd-variant,
+.dd-chip,
+.dd-mes-tk{
+  min-height: 40px;
+}
+
+.dd-seg .dd-variant{
+  padding: 0.35rem 0.9rem;
+}
+
+/* Activo en marrón con crema: pesa menos que el naranja de la marca. */
+.dd-seg .dd-variant.is-active,
+.dd-chip.is-active,
+.dd-chip-toggle.is-active{
+  background: var(--dd-bark);
+  border-color: var(--dd-bark);
+  color: var(--dd-cream);
+}
+
+/* Dentro de «Este mes» el activo sigue siendo tinta sobre naranja. */
+.dd-mes .dd-seg .dd-variant.is-active{
+  background: var(--dd-brand-ink);
+  border-color: var(--dd-brand-ink);
+  color: #FFD9C7;
+}
+
+/* Títulos como bloque. */
+.dd-title,
+.dd-mes-title{
+  line-height: 0.9;
+}
+
+/* Divisores punteados finitos en vez de más cajas. */
+.dd-mes-group + .dd-mes-group{
+  padding-top: 0.7rem;
+  border-top: 1px dashed rgba(28, 14, 7, 0.32);
+}
+
+.dd-mes-rule{
+  border-top-style: dashed;
+}
+
+.dd-attr{
+  border-top-style: dashed;
+  border-top-color: var(--dd-border-strong);
+}
+
+.dd-ficha-card + .dd-ficha-card{
+  margin-top: 0.6rem;
+}
+
+@media (max-width: 480px){
+  /* La sparkline se explica sola: el encabezado queda solo para lectores de pantalla. */
+  .dd-top10-table th.dd-col-spark{
+    font-size: 0;
+  }
+}
+
+
+/* ══ Instrumento: cifras finas y ajustadas, cambios de estado secos ══ */
+
+/* Las cifras grandes ganan por tamaño y tracking, no por negrita. */
+.dd-top10-summary .dd-kpi-value,
+.dd-ficha-price,
+.dd-regime-score-num,
+.dd-gauge-value-ring,
+.dd-attr-value{
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.dd-mes-title,
+.dd-title{
+  letter-spacing: -0.02em;
+}
+
+/* Cambios de estado: un interruptor, no una animación. */
+.dd-seg .dd-variant,
+.dd-chip,
+.dd-mes-tk,
+.dd-btn-refresh,
+.dd-tabbar a,
+.dd-table tbody tr{
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* En vivo: un punto naranja antes del cartel, y nada más. */
+.dd-session-banner.is-live::before{
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--dd-brand);
+  vertical-align: 0.12em;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .dd-seg .dd-variant,
+  .dd-chip,
+  .dd-mes-tk,
+  .dd-btn-refresh,
+  .dd-tabbar a,
+  .dd-table tbody tr{
+    transition: none;
+  }
+}
+
+/* ══ Hoja inferior ══════════════════════════════════════════════════════════ */
+
+.dd-sheet{
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85dvh;
+  margin: 0 auto;
+  padding: 0 0 env(safe-area-inset-bottom);
+  border: 1px solid var(--dd-border-strong);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--dd-bg-elevated);
+  color: var(--dd-fg);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dd-sheet[open]{
+  display: flex;
+  animation: dd-sheet-in 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.dd-sheet::backdrop{
+  background: rgba(8, 6, 5, 0.66);
+}
+
+@keyframes dd-sheet-in{
+  from{ transform: translateY(100%); }
+  to{ transform: translateY(0); }
+}
+
+body.is-sheet{
+  overflow: hidden;
+}
+
+.dd-sheet-grip{
+  width: 40px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: 2px;
+  background: var(--dd-border-strong);
+}
+
+.dd-sheet-head{
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem 0.4rem 1.2rem;
+}
+
+.dd-sheet-title{
+  flex: 1;
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  font-stretch: 112%;
+  letter-spacing: -0.01em;
+}
+
+.dd-sheet-close{
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 236, 220, 0.06);
+  color: var(--dd-fg);
+  cursor: pointer;
+}
+
+.dd-sheet-close svg{
+  width: 18px;
+  height: 18px;
+}
+
+.dd-sheet-close:focus-visible,
+.dd-sheet-cta:focus-visible{
+  outline: 2px solid var(--dd-brand);
+  outline-offset: 2px;
+}
+
+.dd-sheet-body{
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.4rem 1.2rem 1.2rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.dd-sheet-body .dd-panel{
+  padding: 0;
+  border: 0;
+}
+
+.dd-sheet-foot{
+  padding: 0.75rem 1.2rem 1rem;
+  border-top: 1px dashed var(--dd-border-strong);
+}
+
+.dd-sheet-cta{
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--dd-brand);
+  color: var(--dd-brand-ink);
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* Vista rápida del ticker. */
+.dd-qv-top{
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+}
+
+.dd-qv-id{
+  flex: 1;
+  min-width: 0;
+}
+
+.dd-qv-name{
+  margin: 0;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-qv-sector{
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--dd-muted);
+}
+
+.dd-qv-px{
+  text-align: right;
+}
+
+.dd-qv-price{
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.dd-qv-chg{
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.dd-qv-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0;
+  border-top: 1px dashed var(--dd-border-strong);
+}
+
+.dd-qv-cell{
+  padding: 0.7rem 0;
+  border-bottom: 1px dashed var(--dd-border-strong);
+}
+
+.dd-qv-cell:nth-child(odd){
+  padding-right: 0.8rem;
+}
+
+.dd-qv-cell dt{
+  font-size: 0.75rem;
+  color: var(--dd-muted);
+}
+
+.dd-qv-cell dd{
+  margin: 0.15rem 0 0;
+  font-weight: 700;
+}
+
+.dd-qv-sub{
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--dd-muted);
+}
+
+.dd-qv-flags{
+  margin-top: 0.8rem;
+}
+
+@media (min-width: 600px){
+  .dd-sheet{
+    inset: auto 0 1.5rem 0;
+    border-radius: 20px;
+    border-bottom: 1px solid var(--dd-border-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .dd-sheet,
+  .dd-sheet[open]{
+    animation: none;
+    transition: none;
+  }
 }

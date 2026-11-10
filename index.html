@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=43" />
+  <link rel="stylesheet" href="styles.css?v=45" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -131,7 +131,7 @@
               <th scope="col" class="dd-col-rank">#</th>
               <th scope="col" class="dd-col-ticker">Ticker</th>
               <th scope="col" class="dd-col-entro" title="Fecha en que entró al Top 10 en la racha actual">Entró</th>
-              <th scope="col">Evolución</th>
+              <th scope="col" class="dd-col-spark">Evolución</th>
               <th scope="col">Score</th>
               <th scope="col">Retorno</th>
             </tr>
@@ -394,6 +394,18 @@
     <p class="dd-disclaimer">Angus ordena acciones por momentum. No es una recomendación de inversión y lo que funcionó antes puede no funcionar después.</p>
   </footer>
 
-  <script src="app.js?v=43" defer></script>
+  <dialog id="sheet" class="dd-sheet" aria-labelledby="sheet-title">
+    <div class="dd-sheet-grip" aria-hidden="true"></div>
+    <div class="dd-sheet-head">
+      <h2 id="sheet-title" class="dd-sheet-title"></h2>
+      <button type="button" class="dd-sheet-close" id="sheet-close" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div id="sheet-body" class="dd-sheet-body"></div>
+    <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
+  </dialog>
+
+  <script src="app.js?v=45" defer></script>
 </body>
 </html>

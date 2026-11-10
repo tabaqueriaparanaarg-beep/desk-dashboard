@@ -2504,14 +2504,162 @@
     location.hash = "#/t/" + encodeURIComponent(sym);
   }
 
-  function bindRowOpen(id) {
+  // ── Hoja inferior (modal) ─────────────────────────────────────────────────
+  // Un solo <dialog> para todo: vista rápida de un ticker, ayudas y fórmulas.
+  // Al abrir se agrega una entrada al historial, así el botón atrás la cierra.
+
+  var sheetPushed = false;
+
+  function openSheet(title, bodyHtml, footHtml) {
+    var dlg = document.getElementById("sheet");
+    if (!dlg || typeof dlg.showModal !== "function") return false;
+    setText("sheet-title", title);
+    document.getElementById("sheet-body").innerHTML = bodyHtml;
+    var foot = document.getElementById("sheet-foot");
+    foot.innerHTML = footHtml || "";
+    foot.hidden = !footHtml;
+    dlg.style.transform = "";
+    if (!dlg.open) {
+      dlg.showModal();
+      document.body.classList.add("is-sheet");
+      if (!sheetPushed) {
+        try {
+          history.pushState({ sheet: true }, "", location.href);
+          sheetPushed = true;
+        } catch (e) { /* sin historial: igual se cierra con la X */ }
+      }
+    }
+    document.getElementById("sheet-body").scrollTop = 0;
+    return true;
+  }
+
+  function hideSheet() {
+    var dlg = document.getElementById("sheet");
+    if (dlg && dlg.open) dlg.close();
+    document.body.classList.remove("is-sheet");
+  }
+
+  // Cerrar desde la página: si agregamos historial, volvemos atrás (eso cierra).
+  function closeSheet(then) {
+    if (sheetPushed) {
+      sheetPushed = false;
+      hideSheet();
+      if (then) {
+        var once = function () {
+          window.removeEventListener("popstate", once);
+          then();
+        };
+        window.addEventListener("popstate", once);
+      }
+      history.back();
+      return;
+    }
+    hideSheet();
+    if (then) then();
+  }
+
+  function bindSheet() {
+    var dlg = document.getElementById("sheet");
+    if (!dlg) return;
+    window.addEventListener("popstate", function () {
+      if (dlg.open) {
+        sheetPushed = false;
+        hideSheet();
+      }
+    });
+    document.getElementById("sheet-close").addEventListener("click", function () { closeSheet(); });
+    dlg.addEventListener("cancel", function (ev) {
+      ev.preventDefault();
+      closeSheet();
+    });
+    dlg.addEventListener("click", function (ev) {
+      if (ev.target === dlg) closeSheet(); // toque en el fondo
+      var go = ev.target.closest("[data-sheet-ficha]");
+      if (go) {
+        var sym = go.getAttribute("data-sheet-ficha");
+        closeSheet(function () { openTicker(sym); });
+      }
+    });
+    // Deslizar hacia abajo desde la manija o el título.
+    var startY = null;
+    var dy = 0;
+    function onStart(ev) {
+      if (!ev.target.closest(".dd-sheet-grip, .dd-sheet-head")) return;
+      startY = ev.touches[0].clientY;
+      dy = 0;
+    }
+    function onMove(ev) {
+      if (startY == null) return;
+      dy = Math.max(0, ev.touches[0].clientY - startY);
+      dlg.style.transform = "translateY(" + dy + "px)";
+    }
+    function onEnd() {
+      if (startY == null) return;
+      startY = null;
+      if (dy > 90) closeSheet();
+      else dlg.style.transform = "";
+    }
+    dlg.addEventListener("touchstart", onStart, { passive: true });
+    dlg.addEventListener("touchmove", onMove, { passive: true });
+    dlg.addEventListener("touchend", onEnd);
+    // Las ayudas (ⓘ) y los pliegues de Fórmulas y Notas abren en la hoja.
+    document.addEventListener("click", function (ev) {
+      var sum = ev.target.closest("details.dd-help > summary, details#formulas > summary, details#notas > summary");
+      if (!sum || dlg.contains(sum)) return;
+      var det = sum.parentElement;
+      var title = (det.querySelector(".dd-fold-title") || sum).textContent.replace("ⓘ", "").trim();
+      var copy = document.createElement("div");
+      Array.prototype.forEach.call(det.children, function (el) {
+        if (el !== sum) copy.appendChild(el.cloneNode(true));
+      });
+      // Sin ids repetidos: la copia es solo para leer.
+      Array.prototype.forEach.call(copy.querySelectorAll("[id]"), function (el) { el.removeAttribute("id"); });
+      if (openSheet(title, copy.innerHTML)) ev.preventDefault();
+    });
+  }
+
+  function quickView(sym) {
+    var row = mergedRow(sym);
+    if (!row) return openTicker(sym);
+    var total = state.ranking.length;
+    var cells = [];
+    function cell(label, value, cls) {
+      cells.push('<div class="dd-qv-cell"><dt>' + escapeHtml(label) + '</dt><dd class="' + (cls || "") + '">' + value + "</dd></div>");
+    }
+    cell("Desk Score", escapeHtml(row.desk_score == null ? "—" : fmtEsSmart(row.desk_score, 1)) +
+      (row.rank != null ? ' <span class="dd-qv-sub">#' + row.rank + (total ? " de " + total : "") + "</span>" : ""));
+    cell("Semáforo", row.entry && row.entry.verdict
+      ? luzHtml(row) + " " + escapeHtml(row.entry.label || row.entry.verdict)
+      : "—");
+    var inTop = document.querySelector('#top10-body tr[data-symbol="' + String(row.symbol).replace(/"/g, "") + '"]');
+    cell("En el Top 10", row.entro && row.entro.label ? escapeHtml(row.entro.label) : inTop ? "Sí, hoy" : "No está");
+    cell("CEDEAR", row.cedear
+      ? escapeHtml((row.cedear_code || row.symbol) + (row.cedear_ratio ? " · " + row.cedear_ratio : "")) +
+        (row.cedear_ratio ? '<span class="dd-qv-sub">' + escapeHtml(ratioHint(row.cedear_ratio)) + "</span>" : "")
+      : "Sin CEDEAR");
+    var flags = row.flags || [];
+    var body =
+      '<div class="dd-qv-top">' + logoHtml(row.symbol, logoFor(row), 36) +
+      '<div class="dd-qv-id"><p class="dd-qv-name">' + escapeHtml(row.name || row.symbol) + "</p>" +
+      (row.sector ? '<p class="dd-qv-sector">' + escapeHtml(row.sector) + "</p>" : "") + "</div>" +
+      '<div class="dd-qv-px"><p class="dd-qv-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
+      '<p class="dd-qv-chg ' + distClass(row.change_pct) + '">' +
+      escapeHtml(row.change_pct == null ? "" : fmtEsSignedPct(row.change_pct, 2)) + "</p></div></div>" +
+      '<dl class="dd-qv-grid">' + cells.join("") + "</dl>" +
+      (flags.length ? '<div class="dd-qv-flags">' + formatFlags(flags) + "</div>" : "");
+    var foot = '<button type="button" class="dd-sheet-cta" data-sheet-ficha="' + escapeHtml(row.symbol) +
+      '">Ver ficha completa</button>';
+    if (!openSheet(row.symbol, body, foot)) openTicker(sym);
+  }
+
+  function bindRowOpen(id, quick) {
     var body = document.getElementById(id);
     if (!body) return;
     body.addEventListener("click", function (ev) {
       var tr = ev.target.closest("tr[data-symbol]");
       if (!tr || !body.contains(tr)) return;
       var sym = tr.getAttribute("data-symbol");
-      if (sym) openTicker(sym);
+      if (sym) (quick ? quickView : openTicker)(sym);
     });
     body.addEventListener("keydown", function (ev) {
       if (ev.key !== "Enter" && ev.key !== " ") return;
@@ -2519,14 +2667,15 @@
       if (!tr || ev.target !== tr) return;
       ev.preventDefault();
       var sym = tr.getAttribute("data-symbol");
-      if (sym) openTicker(sym);
+      if (sym) (quick ? quickView : openTicker)(sym);
     });
   }
 
   function bindFichaNav() {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     bindRowOpen("ranking-body");
-    bindRowOpen("top10-body");
+    bindRowOpen("top10-body", true);
+    bindSheet();
     var ficha = document.getElementById("ficha");
     if (ficha) {
       ficha.addEventListener("click", function (ev) {
@@ -2613,7 +2762,7 @@
     if (mes) {
       mes.addEventListener("click", function (ev) {
         var btn = ev.target.closest("[data-symbol]");
-        if (btn && mes.contains(btn)) openTicker(btn.getAttribute("data-symbol"));
+        if (btn && mes.contains(btn)) quickView(btn.getAttribute("data-symbol"));
       });
     }
     var search = document.getElementById("analisis-search");
