@@ -1,5 +1,14 @@
 /* Angus */
 
+@font-face{
+  font-family: "Archivo";
+  src: url("assets/fonts/archivo.woff2?v=1") format("woff2");
+  font-weight: 400 900;
+  font-stretch: 100% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root{
   /* Angus: carbón cálido, cuero claro y el naranja de la marca. */
   --dd-bg: #110F0E;

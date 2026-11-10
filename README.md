@@ -150,6 +150,7 @@ Detalle completo también en `datos.json` → clave `formulas`.
 - Celular primero: header de una línea, controles segmentados, Top 10 sin scroll horizontal a 390 px (la columna «Entró» se ve en la ficha y en pantallas anchas).
 - **Hoja inferior:** un solo `<dialog id="sheet">`. Al tocar un ticker en «Este mes» o en el Top 10 abre la vista rápida (precio, score, semáforo, CEDEAR y ratio, racha en el Top 10) con un botón a la ficha completa; las ayudas ⓘ, Fórmulas y Notas también abren ahí. Se cierra con la X, tocando afuera, deslizando hacia abajo, con Escape o con el botón atrás (agrega una entrada al historial).
 - **Bienvenida:** tres pasos en la hoja inferior, la primera vez (se recuerda en `localStorage`, clave `angus-bienvenida-v1`). Se puede reabrir desde «Cómo se usa», en el pie.
+- **Carga rápida:** la tipografía Archivo va en el repo (`assets/fonts/archivo.woff2`, subconjunto latino, pesos 400–900 y anchos 100–125 %; licencia OFL al lado), sin pedidos a Google Fonts. `datos.json` se pide desde el `<head>`, en paralelo con el CSS y el JS. La app guarda una copia de los últimos datos (caché `angus-datos`) y la pinta al instante en la visita siguiente; la red la reemplaza cuando llega. El service worker sirve el HTML desde caché y lo renueva por detrás.
 - **Disclaimer:** no es recomendación de compra. El Desk Score, el Top 10 y el semáforo son un filtro de lectura y de riesgo, no una ventaja de compra.
 
 ### Semáforo de riesgo
