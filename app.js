@@ -383,18 +383,117 @@
       to = ((top10Block && top10Block.rows) || []).map(function (r) { return r.symbol; });
       lead = plan.review_today
         ? "Con el cierre de hoy se arma la cartera nueva. Así queda con los precios de ahora:"
-        : "Tu cartera desde el " + fmtDayMonth(plan.since) + ". Si revisaras hoy:";
+        : "Si revisaras hoy:";
     }
+    var perf = !plan.review_done && plan.performance && plan.performance[key];
+    var perfHtml = perf
+      ? '<p class="dd-mes-perf"><span class="dd-mes-perf-since">Cartera desde el ' + escapeHtml(fmtDayMonth(plan.since)) + "</span>" +
+        '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.portfolio_pct, 1)) + "</strong> cartera</span>" +
+        '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.spy_pct, 1)) + "</strong> SPY</span></p>"
+      : "";
     var sell = from.filter(function (s) { return to.indexOf(s) === -1; });
     var buy = to.filter(function (s) { return from.indexOf(s) === -1; });
     var keep = from.filter(function (s) { return to.indexOf(s) !== -1; });
     var act = plan.review_done || plan.review_today;
+    var cal = document.getElementById("mes-cal");
+    if (cal) cal.hidden = !(plan.upcoming_reviews && plan.upcoming_reviews.length);
     body.innerHTML =
+      perfHtml +
       '<p class="dd-mes-lead">' + escapeHtml(lead) + "</p>" +
       (sell.length || buy.length
         ? planGroup(act ? "Vender" : "Saldría", sell, "sell") + planGroup(act ? "Comprar" : "Entraría", buy, "buy")
         : '<p class="dd-mes-same">Sin cambios: la cartera sigue igual.</p>') +
       planGroup("Mantener", keep, "keep");
+  }
+
+  // ── Recordatorio: archivo .ics con las próximas revisiones ────────────────
+
+  function icsDay(iso, plus) {
+    var d = isoDate(iso);
+    if (plus) d.setDate(d.getDate() + plus);
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+  }
+
+  function reviewsIcs(dates) {
+    var url = location.origin + location.pathname;
+    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Angus//Revision mensual//ES", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+    dates.forEach(function (iso) {
+      lines.push(
+        "BEGIN:VEVENT",
+        "UID:angus-revision-" + iso + "@angus",
+        "DTSTAMP:" + icsDay(iso) + "T000000Z",
+        "DTSTART;VALUE=DATE:" + icsDay(iso),
+        "DTEND;VALUE=DATE:" + icsDay(iso, 1),
+        "SUMMARY:Angus: revisar el Top 10",
+        "DESCRIPTION:Último cierre del mes. Vender lo que salió del Top 10 y comprar lo que entró\\, en partes iguales. " + url,
+        "URL:" + url,
+        "TRANSP:TRANSPARENT",
+        "BEGIN:VALARM",
+        "ACTION:DISPLAY",
+        "DESCRIPTION:Hoy toca revisar el Top 10 de Angus",
+        "TRIGGER:PT15H",
+        "END:VALARM",
+        "END:VEVENT"
+      );
+    });
+    lines.push("END:VCALENDAR");
+    return lines.join("\r\n");
+  }
+
+  function downloadReviews() {
+    var dates = (state.plan && state.plan.upcoming_reviews) || [];
+    if (!dates.length) return;
+    var blob = new Blob([reviewsIcs(dates)], { type: "text/calendar;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "angus-revisiones.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+  }
+
+  // ── Bienvenida: tres pasos, una sola vez ──────────────────────────────────
+
+  var WELCOME_KEY = "angus-bienvenida-v1";
+  var WELCOME_STEPS = [
+    {
+      title: "Un ranking, no un consejo",
+      text: "Angus ordena {n} acciones de EE. UU. por cuánto subieron en el último año. Las 10 primeras que tienen CEDEAR forman el Top 10."
+    },
+    {
+      title: "Una vez por mes",
+      text: "El último día hábil de cada mes mirás «Este mes»: vendés lo que salió del Top 10 y comprás lo que entró, en partes iguales. El resto del mes no hace falta tocar nada."
+    },
+    {
+      title: "Con la parte chica",
+      text: "El momentum funcionó en el pasado, pero tiene meses malos y puede dejar de funcionar. Usalo con una parte chica de tu cartera. Esto no es una recomendación de inversión."
+    }
+  ];
+
+  function welcomeSeen() {
+    try { return window.localStorage.getItem(WELCOME_KEY) === "1"; } catch (e) { return false; }
+  }
+
+  function markWelcomeSeen() {
+    try { window.localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { /* sin almacenamiento: se vuelve a mostrar */ }
+  }
+
+  function showWelcome(i) {
+    var step = WELCOME_STEPS[i];
+    var last = i === WELCOME_STEPS.length - 1;
+    var body =
+      '<p class="dd-welcome-step">Paso ' + (i + 1) + " de " + WELCOME_STEPS.length + "</p>" +
+      '<p class="dd-welcome-text">' + escapeHtml(step.text.replace("{n}", state.ranking.length || "cientos de")) + "</p>";
+    var foot = '<button type="button" class="dd-sheet-cta" data-welcome-next="' + (last ? "fin" : i + 1) + '">' +
+      (last ? "Empezar" : "Siguiente") + "</button>";
+    if (openSheet(step.title, body, foot)) markWelcomeSeen();
+  }
+
+  function maybeWelcome() {
+    if (welcomeSeen() || parseTickerHash()) return;
+    showWelcome(0);
   }
 
   function ratioHint(ratio) {
@@ -1878,6 +1977,7 @@
     state.baseTitle = "Angus — " + ((data.kpis && data.kpis.activos) || "?") + " activos";
     document.title = state.baseTitle;
     renderRoute();
+    maybeWelcome();
   }
 
   function loadData(opts) {
@@ -2574,6 +2674,13 @@
     });
     dlg.addEventListener("click", function (ev) {
       if (ev.target === dlg) closeSheet(); // toque en el fondo
+      var next = ev.target.closest("[data-welcome-next]");
+      if (next) {
+        var to = next.getAttribute("data-welcome-next");
+        if (to === "fin") closeSheet();
+        else showWelcome(Number(to));
+        return;
+      }
       var go = ev.target.closest("[data-sheet-ficha]");
       if (go) {
         var sym = go.getAttribute("data-sheet-ficha");
@@ -2676,6 +2783,10 @@
     bindRowOpen("ranking-body");
     bindRowOpen("top10-body", true);
     bindSheet();
+    var calBtn = document.getElementById("mes-cal");
+    if (calBtn) calBtn.addEventListener("click", downloadReviews);
+    var how = document.getElementById("como-se-usa");
+    if (how) how.addEventListener("click", function () { showWelcome(0); });
     var ficha = document.getElementById("ficha");
     if (ficha) {
       ficha.addEventListener("click", function (ev) {

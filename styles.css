@@ -4022,3 +4022,99 @@ body.is-sheet{
     transition: none;
   }
 }
+
+/* ══ Este mes: rendimiento, recordatorio y bienvenida ═══════════════════════ */
+
+.dd-mes-perf{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 1rem;
+  margin: 0 0 0.8rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed rgba(28, 14, 7, 0.32);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dd-mes-perf-since{
+  flex-basis: 100%;
+}
+
+.dd-mes-perf-n strong{
+  margin-right: 0.2rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.dd-mes-cal{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  min-height: 40px;
+  margin-top: 0.15rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dd-brand-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.dd-mes-cal[hidden]{
+  display: none;
+}
+
+.dd-mes-cal svg{
+  width: 16px;
+  height: 16px;
+}
+
+.dd-mes-cal:focus-visible{
+  outline: 2px solid var(--dd-brand-ink);
+  outline-offset: 2px;
+}
+
+.dd-mes-head{
+  margin-bottom: 0.6rem;
+}
+
+.dd-welcome-step{
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--dd-brand);
+}
+
+.dd-welcome-text{
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.dd-link-btn{
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dd-fg);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+@media (min-width: 900px){
+  .dd-mes-head{
+    flex-wrap: wrap;
+  }
+  .dd-mes-cal{
+    flex-basis: 100%;
+  }
+}

@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=45" />
+  <link rel="stylesheet" href="styles.css?v=46" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -67,6 +67,10 @@
         <div class="dd-mes-head">
           <h2 class="dd-mes-title" id="mes-title">Este mes</h2>
           <p class="dd-mes-when" id="mes-when"></p>
+          <button type="button" class="dd-mes-cal" id="mes-cal" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM12 12v5M9.5 14.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Agendar las revisiones
+          </button>
         </div>
         <div class="dd-variant-bar dd-mes-variant" aria-label="Qué cartera mostrar">
           <div class="dd-seg" role="group" aria-label="Acciones">
@@ -391,7 +395,7 @@
 
   <footer class="dd-footer" data-section="footer">
     <img class="dd-footer-mark" src="assets/logo.svg?v=7" alt="" width="28" height="25" />
-    <p class="dd-disclaimer">Angus ordena acciones por momentum. No es una recomendación de inversión y lo que funcionó antes puede no funcionar después.</p>
+    <p class="dd-disclaimer">Angus ordena acciones por momentum. No es una recomendación de inversión y lo que funcionó antes puede no funcionar después. <button type="button" class="dd-link-btn" id="como-se-usa">Cómo se usa</button></p>
   </footer>
 
   <dialog id="sheet" class="dd-sheet" aria-labelledby="sheet-title">
@@ -406,6 +410,6 @@
     <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
   </dialog>
 
-  <script src="app.js?v=45" defer></script>
+  <script src="app.js?v=46" defer></script>
 </body>
 </html>

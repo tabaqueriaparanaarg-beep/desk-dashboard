@@ -1919,7 +1919,39 @@ def compute_monthly_plan(
         ranked = rank_universe_asof(meta_by, all_bars, session, require_exact_session=True)
         return {v: [r["symbol"] for r in top10_pick(ranked, v)] for v in TOP10_VARIANTS}
 
+    def ret_since(symbol: str, session: str) -> float | None:
+        """Retorno del cierre de `session` al último cierre disponible."""
+        bars = all_bars.get(symbol) or []
+        base = next((x["c"] for x in bars if str(x["t"])[:10] == session), None)
+        if not bars or not base or str(bars[-1]["t"])[:10] <= session:
+            return None
+        return bars[-1]["c"] / base - 1.0
+
+    def performance(holdings: dict[str, list[str]]) -> dict[str, Any]:
+        """Cómo le va a cada cartera desde que se armó, en partes iguales, contra el SPY."""
+        if not since or done:
+            return {}
+        spy = ret_since("SPY", since)
+        out: dict[str, Any] = {}
+        for variant, symbols in holdings.items():
+            rets = [r for r in (ret_since(s, since) for s in symbols) if r is not None]
+            if rets and spy is not None:
+                out[variant] = {
+                    "portfolio_pct": round(sum(rets) / len(rets) * 100, 2),
+                    "spy_pct": round(spy * 100, 2),
+                    "n": len(rets),
+                }
+        return out
+
+    # Próximas revisiones (12 meses) para el recordatorio del calendario.
+    upcoming = []
+    y, m = review.year, review.month
+    for _ in range(12):
+        upcoming.append(last_trading_day_of_month(y, m).isoformat())
+        y, m = (y + (m == 12), m % 12 + 1)
+
     prev = ends[-2] if len(ends) > 1 else None
+    held = book(since)
     return {
         "rule": "Revisar en el último cierre de cada mes: vender lo que salió, comprar lo que entró, partes iguales.",
         "data_date": latest,
@@ -1928,8 +1960,10 @@ def compute_monthly_plan(
         "next_review": review.isoformat(),
         "review_today": latest == review.isoformat(),
         "review_done": done,
-        "holdings": book(since),
+        "holdings": held,
         "prev_holdings": book(prev),
+        "performance": performance(held),
+        "upcoming_reviews": upcoming,
     }
 
 
