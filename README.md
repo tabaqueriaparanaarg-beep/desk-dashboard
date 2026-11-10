@@ -146,6 +146,7 @@ Detalle completo también en `datos.json` → clave `formulas`.
 - Español, estructura semántica + clases `dd-*` y `data-*` para que puedas restylear.
 - Marca Angus: carbón cálido (#110F0E), texto cuero (#F3ECE5) y naranja (#FF6B35) como bloque en «Este mes». Tipografía Archivo (ancho expandido para la marca y los títulos).
 - Celular primero: header de una línea, controles segmentados, Top 10 sin scroll horizontal a 390 px (la columna «Entró» se ve en la ficha y en pantallas anchas).
+- **Hoja inferior:** un solo `<dialog id="sheet">`. Al tocar un ticker en «Este mes» o en el Top 10 abre la vista rápida (precio, score, semáforo, CEDEAR y ratio, racha en el Top 10) con un botón a la ficha completa; las ayudas ⓘ, Fórmulas y Notas también abren ahí. Se cierra con la X, tocando afuera, deslizando hacia abajo, con Escape o con el botón atrás (agrega una entrada al historial).
 - **Disclaimer:** no es recomendación de compra. El Desk Score, el Top 10 y el semáforo son un filtro de lectura y de riesgo, no una ventaja de compra.
 
 ### Semáforo de riesgo
