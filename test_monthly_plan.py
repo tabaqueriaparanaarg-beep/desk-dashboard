@@ -72,6 +72,35 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(plan["since"], ends[-1])
         self.assertGreater(plan["next_review"][:7], ends[-1][:7])
 
+    def test_performance_is_equal_weight_since_the_month_end(self):
+        plan = b.compute_monthly_plan(self.meta, self.bars)
+        since = plan["since"]
+        perf = plan["performance"]["todas"]
+
+        def ret(sym):
+            bars = self.bars[sym]
+            base = next(x["c"] for x in bars if x["t"][:10] == since)
+            return bars[-1]["c"] / base - 1
+
+        held = plan["holdings"]["todas"]
+        want = sum(ret(s) for s in held) / len(held) * 100
+        self.assertAlmostEqual(perf["portfolio_pct"], want, places=2)
+        self.assertAlmostEqual(perf["spy_pct"], ret("SPY") * 100, places=2)
+
+    def test_no_performance_on_the_day_the_book_is_built(self):
+        sessions = [d.isoformat() for d in self.dates]
+        cut = sessions.index(b.month_end_sessions(sessions)[-1]) + 1
+        plan = b.compute_monthly_plan(self.meta, {s: x[:cut] for s, x in self.bars.items()})
+        self.assertEqual(plan["performance"], {})
+
+    def test_upcoming_reviews_are_twelve_month_ends(self):
+        plan = b.compute_monthly_plan(self.meta, self.bars)
+        up = plan["upcoming_reviews"]
+        self.assertEqual(len(up), 12)
+        self.assertEqual(up[0], plan["next_review"])
+        self.assertEqual(len({d[:7] for d in up}), 12)
+        self.assertEqual(up, sorted(up))
+
     def test_live_session_is_not_a_month_end(self):
         sessions = [d.isoformat() for d in self.dates]
         last = sessions[-1]

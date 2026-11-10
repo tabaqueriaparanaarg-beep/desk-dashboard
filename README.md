@@ -136,6 +136,8 @@ La regla de uso es revisar el Top 10 en el último cierre de cada mes. `compute_
 - `since` y `holdings`: el último fin de mes cerrado y el Top 10 de cada variante armado con los datos hasta ese cierre (sin look-ahead). `prev_since` y `prev_holdings`: el fin de mes anterior.
 - `next_review`: el último día hábil del mes (contempla Memorial Day y Viernes Santo). Si el cierre de hoy ya fue el de fin de mes, pasa al mes siguiente.
 - `review_today` (hoy es el día de revisar) y `review_done` (la cartera nueva ya se armó con el cierre de hoy).
+- `performance`: por variante, retorno en partes iguales de la cartera desde `since` hasta el último cierre (`portfolio_pct`) y el del SPY (`spy_pct`). Vacío el día en que se arma la cartera.
+- `upcoming_reviews`: las próximas 12 fechas de revisión. El botón «Agendar las revisiones» arma con ellas un archivo `.ics` (evento de día completo con aviso a las 15:00).
 
 En la página, el recuadro «Este mes» compara la cartera con el Top 10 de hoy: qué saldría, qué entraría y qué se mantiene. El día de la revisión dice vender y comprar. Una sesión en vivo nunca cuenta como fin de mes.
 
@@ -147,6 +149,7 @@ Detalle completo también en `datos.json` → clave `formulas`.
 - Marca Angus: carbón cálido (#110F0E), texto cuero (#F3ECE5) y naranja (#FF6B35) como bloque en «Este mes». Tipografía Archivo (ancho expandido para la marca y los títulos).
 - Celular primero: header de una línea, controles segmentados, Top 10 sin scroll horizontal a 390 px (la columna «Entró» se ve en la ficha y en pantallas anchas).
 - **Hoja inferior:** un solo `<dialog id="sheet">`. Al tocar un ticker en «Este mes» o en el Top 10 abre la vista rápida (precio, score, semáforo, CEDEAR y ratio, racha en el Top 10) con un botón a la ficha completa; las ayudas ⓘ, Fórmulas y Notas también abren ahí. Se cierra con la X, tocando afuera, deslizando hacia abajo, con Escape o con el botón atrás (agrega una entrada al historial).
+- **Bienvenida:** tres pasos en la hoja inferior, la primera vez (se recuerda en `localStorage`, clave `angus-bienvenida-v1`). Se puede reabrir desde «Cómo se usa», en el pie.
 - **Disclaimer:** no es recomendación de compra. El Desk Score, el Top 10 y el semáforo son un filtro de lectura y de riesgo, no una ventaja de compra.
 
 ### Semáforo de riesgo
