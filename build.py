@@ -3800,7 +3800,7 @@ def main() -> None:
             "sesion": (
                 "intradia con el mercado abierto (cartel en vivo, precios con unos 15 minutos de demora; "
                 "no se escribe el historial ni se agregan puntos a la simulación). "
-                "cierre cuando la rueda ya terminó, incluido el cron de las 18:30 ART."
+                "cierre cuando la rueda ya terminó, incluido el cron de las 18:47 ART."
             ),
             "historial_semaforo": (
                 "Una foto por fecha de rueda (veredicto, Desk Score, puesto, cierre y versión de la definición). "

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Corrida de Angus: intradía con el mercado abierto, o cierre.
 
-El cron de las 18:30 ART (21:30 UTC, lun–vie) siempre es cierre.
-Los otros cron cubren 9:30–16:00 ET cada 30 minutos, en horario de verano
-(EDT, UTC-4 → 13:30–20:00 UTC) y de invierno (EST, UTC-5 → 14:30–21:00 UTC).
-Argentina queda en UTC-3 todo el año.
+El cron de las 18:47 ART (21:47 UTC, lun–vie) siempre es cierre.
+Los otros cron disparan a los :17 y :47 de cada hora mientras puede estar
+abierta la rueda, en horario de verano (EDT, UTC-4 → 13:30–20:00 UTC) y de
+invierno (EST, UTC-5 → 14:30–21:00 UTC). Argentina queda en UTC-3 todo el año.
+
+Los minutos :17 y :47 son a propósito: GitHub demora o descarta muchos cron en
+los :00 y :30, que es cuando más carga tiene (nov-2026 llegaban ~4 de ~17 por
+día, con horas de atraso). Para que el cierre llegue a horario conviene además
+un disparador externo (ver «Actualización confiable» en el README).
 
 Si esa ventana cae con el mercado cerrado (feriado, o el extremo que no
 aplica en esta estación), Alpaca `/v2/clock` lo dice y la corrida se saltea.
@@ -20,16 +25,17 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-# Lun–vie 21:30 UTC = 18:30 ART. Después de las 16:00 ET en verano y en invierno.
-CLOSE_CRON = "30 21 * * 1-5"
+# Lun–vie 21:47 UTC = 18:47 ART. Después de las 16:00 ET en verano y en invierno.
+CLOSE_CRON = "47 21 * * 1-5"
 
-# Cada 30 min en la unión UTC de la rueda de Nueva York:
-# 13:30 (apertura en verano) … 21:00 (cierre en invierno).
+# Cada 30 min, a los :17 y :47, en la unión UTC de la rueda de Nueva York:
+# 13:47 (primera media hora en verano) … 20:47 (última media hora en invierno).
 INTRADAY_CRONS = (
-    "30 13 * * 1-5",
-    "0,30 14-20 * * 1-5",
-    "0 21 * * 1-5",
+    "47 13 * * 1-5",
+    "17,47 14-20 * * 1-5",
 )
+# Los mismos disparos en minutos UTC desde medianoche (para los chequeos).
+INTRADAY_FIRES_UTC = tuple([13 * 60 + 47] + [h * 60 + m for h in range(14, 21) for m in (17, 47)])
 
 LIVE_BANNER = "En vivo · provisorio hasta el cierre · precios con ~15 min de demora"
 
@@ -160,7 +166,7 @@ def detect_mode(
 ) -> str:
     """`intradia`, `cierre` o `skip`.
 
-    El cron de las 18:30 ART no se saltea. El de cada 30 min se saltea si
+    El cron de las 18:47 ART no se saltea. El de cada 30 min se saltea si
     el reloj no dice que la rueda está abierta (feriado, estación que no
     aplica, o reloj caído).
     """
@@ -199,12 +205,9 @@ def session_banner(mode: str, session_date: str | None = None) -> str:
 
 
 def cron_covers_utc(hour: int, minute: int) -> bool:
-    """True si algún cron intradía dispara a esa hora UTC (lun–vie)."""
-    if minute == 30 and hour == 13:
-        return True
-    if hour == 21 and minute == 0:
-        return True
-    return 14 <= hour <= 20 and minute in (0, 30)
+    """True si algún cron intradía dispara dentro de la media hora que empieza a esa hora UTC."""
+    start = hour * 60 + minute
+    return any(start <= fire < start + 30 for fire in INTRADAY_FIRES_UTC)
 
 
 def nyse_slot_utc(et_minutes: int, utc_offset_hours: int) -> tuple[int, int]:

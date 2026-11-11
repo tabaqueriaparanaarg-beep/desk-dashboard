@@ -39,7 +39,7 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
 3. **Settings → Pages → Build and deployment → Source: _GitHub Actions_**.
 4. El workflow `.github/workflows/update-and-deploy.yml` corre:
    - en cada push a `main` (con el mercado abierto no guarda el historial),
-   - de lunes a viernes a las **21:30 UTC (18:30 Buenos Aires)**, después del cierre de EE.UU.,
+   - de lunes a viernes a las **21:47 UTC (18:47 Buenos Aires)**, después del cierre de EE.UU.,
    - cada 30 minutos en la ventana 9:30–16:00 ET (verano e invierno); si Alpaca dice que está cerrado, esa corrida se saltea,
    - manualmente: **Actions → "Update data & deploy to GitHub Pages" → Run workflow**.
    
@@ -47,6 +47,23 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
 5. Instalar como app: abrir la URL en Chrome/Edge (Instalar app) o en iPhone Safari → Compartir → *Agregar a inicio*. El service worker (`sw.js`) cachea el shell y los logos (cache-first) y pide `datos.json` siempre a la red primero (fallback offline a la última copia).
 
 > Al cambiar `app.js` / `styles.css`, subir el `?v=` en `index.html` y en `SHELL_ASSETS` + `VERSION` de `sw.js`.
+
+### Actualización confiable (disparador externo)
+
+Los `schedule` de GitHub son «best effort»: en nov-2026 llegaban ~4 de las ~17 corridas por día, con horas de atraso (el cierre de las 18:30 aparecía entre las 21:00 y las 00:30). Los cron ahora van a los :17 y :47, que es lo que recomienda GitHub, pero eso no garantiza nada. Para que la página se actualice a horario, un servicio externo (por ejemplo [cron-job.org](https://cron-job.org), gratis) dispara el workflow por la API:
+
+1. **Token:** GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token. Repository access: **Only select repositories → desk-dashboard**. Permissions → Repository → **Actions: Read and write**. Nada más. Anotá cuándo vence.
+2. **Pedido** (el mismo para todos los trabajos):
+   - URL: `https://api.github.com/repos/tabaqueriaparanaarg-beep/desk-dashboard/actions/workflows/update-and-deploy.yml/dispatches`
+   - Método: `POST`
+   - Headers: `Accept: application/vnd.github+json`, `Authorization: Bearer <el token>`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`
+   - Body: `{"ref":"main"}`
+   - GitHub responde **204** cuando lo acepta.
+3. **Horarios**, con la zona horaria **America/New_York** (así no hay que tocar nada con el cambio de horario):
+   - **Cierre:** lunes a viernes a las **16:20**.
+   - **Intradía:** lunes a viernes, minutos **10 y 40**, horas **10 a 15** (10:10 a 15:40 ET).
+
+Con `workflow_dispatch` el workflow mira el reloj de Alpaca: con la rueda abierta hace intradía y cerrada hace cierre. En un feriado de EE.UU. el trabajo igual corre y rehace el último cierre, sin cambiar nada. Si el cron de GitHub y el externo coinciden, `concurrency` los pone en fila.
 
 ## Qué hace `build.py`
 
@@ -314,7 +331,7 @@ Kind (Todos / US / CEDEAR proxy / ETF), sector (Todos más un chip por sector de
 - `index.html` / `app.js` / `styles.css` — front
 - `requirements.txt` — sin deps externas
 - `manifest.webmanifest` / `sw.js` / `assets/icon-*.png` — PWA
-- `.github/workflows/update-and-deploy.yml` — cierre de las 18:30 ART, intradía cada 30 min con el mercado abierto, y deploy a Pages
+- `.github/workflows/update-and-deploy.yml` — cierre de las 18:47 ART, intradía cada 30 min (a los :17 y :47) con el mercado abierto, y deploy a Pages
 
 ## Seguridad
 

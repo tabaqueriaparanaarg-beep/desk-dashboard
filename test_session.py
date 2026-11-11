@@ -38,8 +38,8 @@ class ModeTests(unittest.TestCase):
             self.assertEqual(ms.detect_mode("schedule", cron, False), "skip")
 
     def test_intraday_cron_skips_when_the_clock_cannot_be_read(self) -> None:
-        self.assertEqual(ms.detect_mode("schedule", "30 13 * * 1-5", None), "skip")
-        self.assertEqual(ms.detect_mode("schedule", "0 21 * * 1-5", None), "skip")
+        for cron in ms.INTRADAY_CRONS:
+            self.assertEqual(ms.detect_mode("schedule", cron, None), "skip")
 
     def test_push_follows_the_clock(self) -> None:
         self.assertEqual(ms.detect_mode("push", None, True), "intradia")
@@ -62,9 +62,10 @@ class ModeTests(unittest.TestCase):
 
 class CalendarTests(unittest.TestCase):
     def test_half_hour_crons_cover_summer_and_winter(self) -> None:
-        # EDT = UTC-4 (offset 4). EST = UTC-5 (offset 5). De 9:30 a 16:00 ET.
+        # EDT = UTC-4 (offset 4). EST = UTC-5 (offset 5). Cada media hora de 9:30 a 16:00 ET
+        # tiene un disparo intradía adentro; la de las 16:00 es el cierre.
         for offset, label in ((4, "verano"), (5, "invierno")):
-            for minutes in ms.nyse_half_hours():
+            for minutes in [m for m in ms.nyse_half_hours() if m < ms.NY_CLOSE_MINUTES]:
                 hour, minute = ms.nyse_slot_utc(minutes, offset)
                 self.assertTrue(
                     ms.cron_covers_utc(hour, minute),
@@ -72,6 +73,17 @@ class CalendarTests(unittest.TestCase):
                 )
         self.assertFalse(ms.cron_covers_utc(21, 30))
         self.assertFalse(ms.cron_covers_utc(13, 0))
+
+    def test_crons_avoid_the_busy_minutes(self) -> None:
+        # GitHub demora o descarta los cron de los :00 y :30.
+        for cron in (ms.CLOSE_CRON,) + ms.INTRADAY_CRONS:
+            for minute in cron.split()[0].split(","):
+                self.assertNotIn(int(minute), (0, 30), cron)
+
+    def test_close_cron_is_after_the_close_in_both_seasons(self) -> None:
+        minute, hour = (int(x) for x in ms.CLOSE_CRON.split()[:2])
+        for offset in (4, 5):
+            self.assertGreater(hour * 60 + minute - offset * 60, ms.NY_CLOSE_MINUTES)
 
     def test_banners(self) -> None:
         self.assertEqual(ms.session_banner("intradia", "2026-10-01"), ms.LIVE_BANNER)
