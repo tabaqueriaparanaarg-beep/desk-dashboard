@@ -5,18 +5,18 @@
  */
 "use strict";
 
-var VERSION = "dd-v49";
+var VERSION = "dd-v50";
 var SHELL_CACHE = VERSION + "-shell";
 var DATA_CACHE = VERSION + "-data";
 
 var SHELL_ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=49",
-  "app.js?v=49",
+  "styles.css?v=50",
+  "app.js?v=50",
   "manifest.webmanifest",
-  "assets/logo.svg?v=7",
-  "assets/fonts/archivo.woff2?v=1",
+  "assets/angus-lockup-on-dark.svg?v=1",
+  "assets/angus-mark.svg?v=1",
   "assets/favicon.ico?v=7",
   "assets/favicon-32.png?v=7",
   "assets/favicon-16.png?v=7",
