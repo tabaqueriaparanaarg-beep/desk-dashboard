@@ -52,7 +52,7 @@ EXPLAINER = (
     "del Desk Score y una empresa se queda mientras siga entre las 20 primeras, con como mucho "
     "3 del mismo sector. Todas pesan lo mismo. Lo que ya pasó no se recalcula: "
     "es un registro, no una simulación. No suma dividendos (el SPY tampoco). "
-    "Sirve para seguir empresas con fuerza, no es una recomendación de compra."
+    "Sirve para seguir empresas con fuerza. Esto no es una recomendación de inversión."
 )
 
 

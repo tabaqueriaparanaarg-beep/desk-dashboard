@@ -9,26 +9,28 @@
   <link rel="icon" href="assets/favicon-16.png?v=7" type="image/png" sizes="16x16" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=7" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#110F0E" />
+  <meta name="theme-color" content="#252420" />
   <meta name="color-scheme" content="dark" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Angus" />
   <meta name="application-name" content="Angus" />
-  <link rel="preload" href="assets/fonts/archivo.woff2?v=1" as="font" type="font/woff2" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Montserrat:wght@800;900&display=swap" />
   <script>
     // Los datos se piden ya, en paralelo con el CSS y el JS.
     try { window.__datos = fetch("datos.json?ts=" + Date.now(), { cache: "no-store" }); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=49" />
+  <link rel="stylesheet" href="styles.css?v=50" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
     <header class="dd-header" data-section="header">
       <a class="dd-brand" href="#resumen" aria-label="Angus, inicio">
-        <img class="dd-logo" src="assets/logo.svg?v=7" alt="" width="40" height="36" />
-        <h1 class="dd-title">Angus</h1>
+        <img class="dd-lockup" src="assets/angus-lockup-on-dark.svg?v=1" alt="" width="110" height="32" />
+        <h1 class="dd-sr-only">Angus</h1>
       </a>
       <div class="dd-header-actions">
         <p class="dd-meta" data-field="generated_at">
@@ -45,15 +47,15 @@
 
   <nav class="dd-tabbar" aria-label="Secciones">
       <a href="#resumen" data-page="resumen">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        <svg class="dd-tab-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16"/><path d="M7 16v-4M12 16V8M17 16V5"/></svg>
         <span>Resumen</span>
       </a>
       <a href="#score" data-page="score">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.2M12 19.3V21.5M2.5 12h2.2M19.3 12H21.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg class="dd-tab-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
         <span>Score</span>
       </a>
       <a href="#analisis" data-page="analisis">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.8 15.8 20.5 20.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <svg class="dd-tab-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
         <span>Análisis</span>
       </a>
   </nav>
@@ -67,7 +69,7 @@
 
       <section class="dd-mes" id="este-mes" data-section="monthly-plan" aria-labelledby="mes-title" hidden>
         <div class="dd-mes-head">
-          <h2 class="dd-mes-title" id="mes-title">Este mes</h2>
+          <h2 class="dd-mes-title" id="mes-title"><svg class="dd-ico dd-ico-on-brand" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Este mes</h2>
           <p class="dd-mes-when" id="mes-when"></p>
           <button type="button" class="dd-mes-cal" id="mes-cal" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM12 12v5M9.5 14.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -85,12 +87,12 @@
           </div>
         </div>
         <div id="mes-body" class="dd-mes-body"></div>
-        <p class="dd-mes-rule">El último cierre de cada mes entra lo que llegó al Top 10 y se queda lo que siga entre los 20 primeros, con como mucho 3 del mismo sector. Todas en partes iguales. Va en la parte chica de la cartera; el resto, en el SPY.</p>
+        <p class="dd-mes-rule">El último cierre de cada mes entra lo que llegó al Top 10 y se queda lo que siga entre los 20 primeros, con como mucho 3 del mismo sector. Todas en partes iguales. Va en la parte chica de la cartera; el resto, en el SPY. Esto no es una recomendación de inversión.</p>
       </section>
 
       <section class="dd-indice dd-panel" id="indice-angus" data-section="indice-angus" aria-labelledby="indice-title" hidden>
         <div class="dd-indice-head">
-          <h2 class="dd-indice-title" id="indice-title">Índice Angus</h2>
+          <h2 class="dd-indice-title" id="indice-title"><svg class="dd-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H3"/><circle cx="16.5" cy="13.5" r="1.3" fill="currentColor"/></svg>Índice Angus</h2>
           <p class="dd-indice-since" id="indice-since"></p>
         </div>
         <div class="dd-indice-hero">
@@ -124,20 +126,20 @@
         <h3 class="dd-indice-h">Cambios</h3>
         <ul class="dd-indice-changes" id="indice-changes"></ul>
         <details class="dd-help">
-          <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo funciona</summary>
+          <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo funciona</summary>
           <p id="indice-explainer"></p>
           <p id="indice-rules"></p>
         </details>
       </section>
 
       <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
-        <h2 class="dd-section-title">Mercado</h2>
+        <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17a9 9 0 0 1 18 0"/><path d="M12 17l4.5-5.5"/><circle cx="12" cy="17" r="1.5" fill="currentColor"/></svg>Mercado</h2>
         <div id="market-regime-body"></div>
       </section>
 
       <section class="dd-resumen dd-panel" id="resumen-box" data-section="resumen" aria-label="Resumen diario" hidden>
         <div class="dd-resumen-head">
-          <h2 class="dd-section-title">Resumen del día</h2>
+          <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>Resumen del día</h2>
           <time id="resumen-when" class="dd-resumen-when">—</time>
         </div>
         <p id="resumen-text" class="dd-resumen-text is-clamped"></p>
@@ -145,7 +147,7 @@
       </section>
 
       <section class="dd-earnings dd-panel" id="earnings" data-section="earnings" aria-label="Calendario de resultados">
-        <h2 class="dd-section-title">Resultados de la semana</h2>
+        <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Resultados de la semana</h2>
         <div id="earnings-strip" class="dd-earnings-strip" data-role="earnings-strip">
           <p class="dd-empty">Cargando…</p>
         </div>
@@ -154,7 +156,7 @@
 
     <section class="dd-top10 dd-panel dd-pane" id="top10" data-page="score" data-section="top10-return" aria-label="Retorno Top 10 del Desk Score">
       <div class="dd-top10-head">
-        <h2 class="dd-section-title">Top 10</h2>
+        <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>Top 10</h2>
         <p class="dd-top10-subtitle" id="top10-subtitle">Retorno últimas 10 ruedas</p>
       </div>
       <div class="dd-variant-bar" aria-label="Qué Top 10 mostrar">
@@ -198,7 +200,7 @@
         <p class="dd-attr-foot" id="attr-foot">Efecto sector + efecto selección = exceso de esta ventana.</p>
         <p class="dd-attr-foot dd-attr-partial" id="attr-partial" hidden></p>
         <details class="dd-help">
-          <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué mide</summary>
+          <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Qué mide</summary>
           <p id="attr-note"></p>
         </details>
         <details class="dd-attr-more">
@@ -209,9 +211,9 @@
     </section>
 
     <section class="dd-ranking dd-panel dd-pane" id="ranking" data-page="score" data-section="ranking" aria-label="Ranking Desk Score">
-      <h2 class="dd-section-title">Ranking</h2>
+      <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16"/><path d="M7 16v-4M12 16V8M17 16V5"/></svg>Ranking</h2>
       <details class="dd-help">
-        <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Qué es el score</summary>
+        <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Qué es el score</summary>
         <p>Cuánto subió cada acción en los últimos 12 meses (sin el último), comparada con el resto. Bajo la EMA200 vale la mitad. ● = tiene CEDEAR.</p>
       </details>
       <div class="dd-filters" id="ranking-filters" role="toolbar" aria-label="Filtros de ranking">
@@ -275,7 +277,7 @@
             <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward mensual · base 100</p>
           </div>
           <details class="dd-help">
-            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
+            <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo se calcula</summary>
             <p class="dd-wf-caption" id="wf-caption">
               Simulación mensual: en el último cierre de cada mes se recalcula el Desk Score solo
               con los datos hasta ese cierre y se arma la cartera de 10: entra lo del Top 10, se queda
@@ -352,7 +354,7 @@
     </details>
 
     <section class="dd-analisis dd-panel dd-pane" id="analisis" data-page="analisis" aria-label="Análisis de un ticker">
-      <h2 class="dd-section-title">Análisis</h2>
+      <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Análisis</h2>
       <div class="dd-filter-search">
         <label class="dd-sr-only" for="analisis-search">Buscar ticker</label>
         <input type="search" id="analisis-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
@@ -377,7 +379,7 @@
         <section class="dd-sectors dd-panel" data-section="sectors" aria-label="Vista por sectores">
           <h2 class="dd-sr-only">Vista por sectores</h2>
           <details class="dd-help">
-            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se lee</summary>
+            <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo se lee</summary>
             <p class="dd-sector-caption" id="sector-caption">
               Acá se ve en qué sectores está la fuerza del universo.
               Cada tarjeta promedia el Desk Score, el RS y el cambio del día,
@@ -426,7 +428,7 @@
         <section class="dd-notes dd-panel" data-section="notes" aria-label="Notas">
           <h2 class="dd-sr-only">Notas</h2>
           <details class="dd-help">
-            <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se actualiza</summary>
+            <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo se actualiza</summary>
             <p class="dd-tip" id="data-refresh-tip">
               El botón Actualizar y el refresco automático cada 5 min solo recargan <code>datos.json</code>.
               Los precios nuevos se arman con <code>python3 build.py</code> (o el cron).
@@ -439,8 +441,8 @@
   </main>
 
   <footer class="dd-footer" data-section="footer">
-    <img class="dd-footer-mark" src="assets/logo.svg?v=7" alt="" width="28" height="25" />
-    <p class="dd-disclaimer">Angus ordena acciones por momentum. No es una recomendación de inversión y lo que funcionó antes puede no funcionar después. <button type="button" class="dd-link-btn" id="como-se-usa">Cómo se usa</button></p>
+    <img class="dd-footer-mark" src="assets/angus-mark.svg?v=1" alt="" width="32" height="25" />
+    <p class="dd-disclaimer">Angus ordena acciones por momentum, con datos de Alpaca al cierre de Nueva York. Lo que funcionó antes puede no funcionar después. <strong>Esto no es una recomendación de inversión.</strong> <button type="button" class="dd-link-btn" id="como-se-usa">Cómo se usa</button></p>
   </footer>
 
   <dialog id="sheet" class="dd-sheet" aria-labelledby="sheet-title">
@@ -455,6 +457,6 @@
     <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
   </dialog>
 
-  <script src="app.js?v=49" defer></script>
+  <script src="app.js?v=50" defer></script>
 </body>
 </html>

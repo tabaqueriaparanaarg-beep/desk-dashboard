@@ -65,14 +65,15 @@
 
 
 
+  // Números en formato argentino (manual de marca): coma decimal, punto de miles y «−».
   function fmtPct(n) {
     if (n == null || Number.isNaN(n)) return "—";
-    return (Math.round(n * 10) / 10) + "%";
+    return fmtEsSmart(Math.round(n * 10) / 10, 1) + "%";
   }
 
   function fmtNum(n, digits) {
     if (n == null || Number.isNaN(n)) return "—";
-    return Number(n).toFixed(digits == null ? 1 : digits);
+    return fmtEsNum(Number(n), digits == null ? 1 : digits);
   }
 
   function distClass(n) {
@@ -209,8 +210,7 @@
   function fmtSignedPct(n) {
     if (n == null || Number.isNaN(n)) return "—";
     var v = Math.round(n * 10) / 10;
-    var s = (v > 0 ? "+" : "") + v + "%";
-    return s;
+    return (v > 0 ? "+" : "") + fmtEsNum(v, 1) + "%";
   }
 
   function sparklineSvg(values) {
@@ -405,9 +405,9 @@
       perfHtml +
       '<p class="dd-mes-lead">' + escapeHtml(lead) + "</p>" +
       (sell.length || buy.length
-        ? planGroup(act ? "Vender" : "Saldría", sell, "sell") + planGroup(act ? "Comprar" : "Entraría", buy, "buy")
+        ? planGroup(act ? "Sale" : "Saldría", sell, "sell") + planGroup(act ? "Entra" : "Entraría", buy, "buy")
         : '<p class="dd-mes-same">Sin cambios: la cartera sigue igual.</p>') +
-      planGroup("Mantener", keep, "keep");
+      planGroup("Se mantiene", keep, "keep");
   }
 
   // ── Recordatorio: archivo .ics con las próximas revisiones ────────────────
@@ -430,7 +430,7 @@
         "DTSTART;VALUE=DATE:" + icsDay(iso),
         "DTEND;VALUE=DATE:" + icsDay(iso, 1),
         "SUMMARY:Angus: revisar el Top 10",
-        "DESCRIPTION:Último cierre del mes. Vender lo que salió del Top 10 y comprar lo que entró\\, en partes iguales. " + url,
+        "DESCRIPTION:Último cierre del mes: se revisa la cartera del Índice Angus. En «Este mes» ves qué sale y qué entra. Esto no es una recomendación de inversión. " + url,
         "URL:" + url,
         "TRANSP:TRANSPARENT",
         "BEGIN:VALARM",
@@ -468,7 +468,7 @@
     },
     {
       title: "Una vez por mes",
-      text: "El último día hábil de cada mes mirás «Este mes»: vendés lo que salió del Top 10 y comprás lo que entró, en partes iguales. El resto del mes no hace falta tocar nada."
+      text: "El último día hábil de cada mes mirás «Este mes»: ahí ves qué sale y qué entra en la cartera, en partes iguales. El resto del mes la cartera no cambia."
     },
     {
       title: "Con la parte chica",
@@ -697,10 +697,10 @@
   function fmtSignedPct2(n) {
     if (n == null || Number.isNaN(Number(n))) return "—";
     var v = Math.round(Number(n) * 100) / 100;
-    var body = Math.abs(v).toFixed(2);
+    var body = fmtEsNum(Math.abs(v), 2);
     if (v > 0) return "+" + body + "%";
-    if (v < 0) return "-" + body + "%";
-    return "0.00%";
+    if (v < 0) return "−" + body + "%";
+    return "0,00%";
   }
 
   function fmtIso(iso) {
@@ -768,7 +768,7 @@
     var ticks = [maxV, (maxV + minV) / 2, minV];
     var grid = ticks.map(function (v) {
       var y = yAt(v).toFixed(1);
-      var label = Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
+      var label = Math.abs(v) >= 100 ? String(Math.round(v)) : fmtEsNum(Math.round(v * 10) / 10, 1);
       return (
         '<line x1="' + padL + '" y1="' + y + '" x2="' + (width - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.08)" stroke-width="1"></line>' +
         '<text x="' + (padL - 8) + '" y="' + y + '" text-anchor="end" dominant-baseline="middle">' + escapeHtml(label) + "</text>"
@@ -792,15 +792,15 @@
       '<text x="' + xAt(0).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="start">' + escapeHtml(fmtIso(first.date)) + "</text>" +
       '<text x="' + xAt(curve.length - 1).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="end">' + escapeHtml(fmtIso(last.date)) + "</text>";
     var dot =
-      '<circle cx="' + xAt(curve.length - 1).toFixed(1) + '" cy="' + yAt(Number(last.portfolio)).toFixed(1) + '" r="3.2" fill="#FF6B35"></circle>' +
-      '<circle cx="' + xAt(curve.length - 1).toFixed(1) + '" cy="' + yAt(Number(last.spy)).toFixed(1) + '" r="3" fill="#7EB6FF"></circle>';
+      '<circle cx="' + xAt(curve.length - 1).toFixed(1) + '" cy="' + yAt(Number(last.portfolio)).toFixed(1) + '" r="3.2" fill="#FC6911"></circle>' +
+      '<circle cx="' + xAt(curve.length - 1).toFixed(1) + '" cy="' + yAt(Number(last.spy)).toFixed(1) + '" r="3" fill="#F5F2EA"></circle>';
     host.innerHTML =
       '<svg viewBox="0 0 ' + width + " " + height + '" width="' + width + '" height="' + height + '" role="presentation">' +
       grid + baseLine +
-      '<polygon points="' + areaPts + '" fill="rgba(255,107,53,0.14)" stroke="none"></polygon>' +
-      (hasUni ? '<polyline fill="none" stroke="#A7ADB8" stroke-width="1.6" stroke-dasharray="5 3" stroke-linecap="round" stroke-linejoin="round" points="' + poly("universe") + '"></polyline>' : "") +
-      '<polyline fill="none" stroke="#7EB6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + poly("spy") + '"></polyline>' +
-      '<polyline fill="none" stroke="#FF6B35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="' + poly("portfolio") + '"></polyline>' +
+      '<polygon points="' + areaPts + '" fill="rgba(252,105,17,0.14)" stroke="none"></polygon>' +
+      (hasUni ? '<polyline fill="none" stroke="#B0AA9E" stroke-width="1.6" stroke-dasharray="5 3" stroke-linecap="round" stroke-linejoin="round" points="' + poly("universe") + '"></polyline>' : "") +
+      '<polyline fill="none" stroke="#F5F2EA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + poly("spy") + '"></polyline>' +
+      '<polyline fill="none" stroke="#FC6911" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="' + poly("portfolio") + '"></polyline>' +
       dot + xLabels +
       "</svg>";
     var portLbl = fmtSignedPct2(block.total_return_pct);
@@ -1765,10 +1765,10 @@
   }
 
   var REGIME_COLORS = {
-    red: "#F87171",
-    orange: "#FF8C42",
+    red: "#FF6B8E",
+    orange: "#FC6911",
     yellow: "#FBBF24",
-    green: "#34D399",
+    green: "#3DDBA3",
   };
 
   function fmtPts(n) {
@@ -1864,7 +1864,7 @@
       if (val < lo - 0.01) continue;
       var yy = yAt(val);
       grid += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" stroke="rgba(255,255,255,0.07)"/>';
-      yLabels += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" fill="#8d8d8d" font-size="12" font-family="Archivo, sans-serif">' + Math.round(val) + "%</text>";
+      yLabels += '<text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" fill="#B0AA9E" font-size="12" font-family="JetBrains Mono, monospace">' + Math.round(val) + "%</text>";
     }
     var xLabels = "";
     var want = Math.min(7, pts.length);
@@ -1879,17 +1879,17 @@
       var anchor = "middle";
       if (idx === 0) anchor = "start";
       if (idx === pts.length - 1) anchor = "end";
-      xLabels += '<text x="' + xAt(idx).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '" fill="#8d8d8d" font-size="12" font-family="Archivo, sans-serif">' + escapeHtml(lab) + "</text>";
+      xLabels += '<text x="' + xAt(idx).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '" fill="#B0AA9E" font-size="12" font-family="JetBrains Mono, monospace">' + escapeHtml(lab) + "</text>";
     }
     return (
       '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Porcentaje de activos sobre la EMA200 en las últimas ruedas">' +
       "<defs><linearGradient id=\"ddRegimeFill\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">" +
-      '<stop offset="0%" stop-color="#34D399" stop-opacity="0.38"/>' +
-      '<stop offset="100%" stop-color="#34D399" stop-opacity="0.02"/>' +
+      '<stop offset="0%" stop-color="#3DDBA3" stop-opacity="0.38"/>' +
+      '<stop offset="100%" stop-color="#3DDBA3" stop-opacity="0.02"/>' +
       "</linearGradient></defs>" +
       grid +
       '<path d="' + area + '" fill="url(#ddRegimeFill)"/>' +
-      '<path d="' + line + '" fill="none" stroke="#34D399" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<path d="' + line + '" fill="none" stroke="#3DDBA3" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>' +
       yLabels + xLabels +
       "</svg>"
     );
@@ -1950,7 +1950,7 @@
       '<div class="dd-regime-exposure">' +
       '<p class="dd-regime-exposure-line">' + escapeHtml(line) + "</p>" +
       '<details class="dd-help">' +
-      '<summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Ver el medidor</summary>' +
+      '<summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Ver el medidor</summary>' +
       '<p class="dd-regime-disclaimer">' + escapeHtml(disclaimer) + "</p>" +
       rows +
       '<div class="dd-regime-hl">' +
@@ -2616,7 +2616,7 @@
       analystBlock(row) +
       insiderFichaBlock(row) +
       healthBlock(row) +
-      '<p class="dd-ficha-disclaimer"><strong>Disclaimer:</strong> no es recomendación de compra ni de inversión.</p>';
+      '<p class="dd-ficha-disclaimer">Esto no es una recomendación de inversión.</p>';
     document.title = row.symbol + " · Angus";
   }
 
@@ -2993,10 +2993,10 @@
   }
 
   var RRG_COLOR = {
-    liderando: "#34D399",
+    liderando: "#3DDBA3",
     mejorando: "#38BDF8",
     debilitandose: "#FBBF24",
-    rezagado: "#F87171",
+    rezagado: "#FF6B8E",
   };
   var SIG_DAILY = [
     ["rebote_ema200", "Rebote"],
