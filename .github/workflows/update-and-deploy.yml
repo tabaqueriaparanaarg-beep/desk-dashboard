@@ -9,18 +9,19 @@ on:
       - indice_angus.json
   workflow_dispatch:
   schedule:
-    # Cierre: lunes a viernes 21:30 UTC = 18:30 ART (UTC-3 fijo).
+    # GitHub demora o descarta muchos cron de los :00 y :30 (hora de más carga),
+    # así que todo va a los :17 y :47. Para que el cierre llegue a horario hay
+    # además un disparador externo con workflow_dispatch (README, «Actualización
+    # confiable»): con el mercado abierto hace intradía y cerrado hace cierre.
+    # Cierre: lunes a viernes 21:47 UTC = 18:47 ART (UTC-3 fijo).
     # Queda después de las 16:00 ET en verano (20:00 UTC) y en invierno (21:00 UTC).
-    # GitHub puede demorar unos minutos los cron programados.
-    - cron: "30 21 * * 1-5"
+    - cron: "47 21 * * 1-5"
     # Intradía cada 30 min mientras puede estar abierta la NYSE (9:30–16:00 ET).
     # Verano EDT (UTC-4): 13:30–20:00 UTC = 10:30–17:00 ART.
     # Invierno EST (UTC-5): 14:30–21:00 UTC = 11:30–18:00 ART.
-    # La unión es 13:30–21:00 UTC (10:30–18:00 ART). Si /v2/clock dice cerrado
-    # (feriado, finde ya filtrado, o el extremo de la otra estación), se saltea.
-    - cron: "30 13 * * 1-5"
-    - cron: "0,30 14-20 * * 1-5"
-    - cron: "0 21 * * 1-5"
+    # Si /v2/clock dice cerrado (feriado o el extremo de la otra estación), se saltea.
+    - cron: "47 13 * * 1-5"
+    - cron: "17,47 14-20 * * 1-5"
 
 permissions:
   contents: write
