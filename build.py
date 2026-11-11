@@ -44,7 +44,12 @@ def _env_first(*names: str, default: str = "") -> str:
 ALPACA_DATA = _env_first(
     "ALPACA_DATA_URL", "ALPACA_DATA_BASE_URL", default="https://data.alpaca.markets"
 ).rstrip("/")
-ALPACA_FEED = _env_first("ALPACA_FEED", default="iex")  # iex (gratis) | sip (pago)
+# sip = cinta consolidada (todas las bolsas): cierre oficial y volumen real. El plan
+# gratis la da con 15 minutos de demora, así que el fin de cada pedido se recorta
+# (alpaca_end). iex = una sola bolsa (~2-3 % del volumen); queda como respaldo.
+ALPACA_FEED = _env_first("ALPACA_FEED", default="sip")  # sip | iex
+# El plan gratis responde 403 si el pedido SIP llega a los últimos 15 minutos.
+SIP_DELAY = timedelta(minutes=16)
 APCA_KEY = _env_first("ALPACA_API_KEY", "APCA_API_KEY_ID")
 APCA_SECRET = _env_first("ALPACA_SECRET_KEY", "APCA_API_SECRET_KEY")
 
@@ -58,7 +63,8 @@ WALKFORWARD_LOOKBACK_CALENDAR_DAYS = 800
 WALKFORWARD_WEEKS = 52
 # Rebalanceo mensual (nov-2026): en el backtest rinde parecido al semanal, cae menos
 # y opera menos de la mitad. La curva sigue con un punto por semana.
-WALKFORWARD_REBALANCE = "ultimo_cierre_del_mes"
+# Cambia si cambia la regla de la cartera: una simulación publicada con otra no se reutiliza.
+WALKFORWARD_REBALANCE = "ultimo_cierre_del_mes_banda20_tope3"
 WALKFORWARD_WARMUP_SESSIONS = 253
 WALKFORWARD_RECENT = 6
 WALKFORWARD_TOP_N = 10
@@ -374,16 +380,59 @@ def alpaca_headers() -> dict[str, str]:
     }
 
 
+def alpaca_end(end: str, feed: str | None = None, now: datetime | None = None) -> str:
+    """Fin del pedido de barras. Con SIP, como mucho `ahora − SIP_DELAY`.
+
+    `end` es ISO: `YYYY-MM-DD` o `YYYY-MM-DDTHH:MM:SSZ`. Con IEX vuelve igual.
+    Una fecha sola Alpaca la toma hasta el final de ese día en Nueva York, así que
+    se cuenta hasta las 05:00 UTC del día siguiente (el límite más tardío, EST).
+    La barra diaria de hoy sigue entrando: su marca es el comienzo del día.
+    """
+    if (feed or ALPACA_FEED) != "sip":
+        return end
+    cutoff = (now or datetime.now(timezone.utc)) - SIP_DELAY
+    raw = end.replace("Z", "+00:00")
+    if "T" in raw:
+        asked = datetime.fromisoformat(raw)
+    else:
+        asked = datetime.fromisoformat(raw + "T05:00:00+00:00") + timedelta(days=1)
+    if asked.tzinfo is None:
+        asked = asked.replace(tzinfo=timezone.utc)
+    if asked <= cutoff:
+        return end
+    return cutoff.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _is_sip_permission_error(err: Exception) -> bool:
+    return isinstance(err, urllib.error.HTTPError) and err.code == 403
+
+
 def fetch_bars_batch(symbols: list[str], start: str, end: str) -> dict[str, list[dict]]:
-    """Fetch daily bars for a batch of symbols. Returns symbol -> list of bars."""
+    """Fetch daily bars for a batch of symbols. Returns symbol -> list of bars.
+
+    Si la cuenta no tiene permiso para SIP (403), pasa a IEX para el resto de la
+    corrida (todas las series con el mismo feed) y avisa.
+    """
+    global ALPACA_FEED
+    try:
+        return _fetch_bars_batch(symbols, start, end, ALPACA_FEED)
+    except urllib.error.HTTPError as e:
+        if ALPACA_FEED != "sip" or not _is_sip_permission_error(e):
+            raise
+        print("AVISO: Alpaca no permite SIP con estas keys (403). Se usa IEX en esta corrida.")
+        ALPACA_FEED = "iex"
+        return _fetch_bars_batch(symbols, start, end, ALPACA_FEED)
+
+
+def _fetch_bars_batch(symbols: list[str], start: str, end: str, feed: str) -> dict[str, list[dict]]:
     params = urllib.parse.urlencode(
         {
             "symbols": ",".join(symbols),
             "timeframe": "1Day",
             "start": start,
-            "end": end,
+            "end": alpaca_end(end, feed),
             "adjustment": "split",
-            "feed": ALPACA_FEED,
+            "feed": feed,
             "limit": 10000,
             "sort": "asc",
         }
@@ -1076,6 +1125,63 @@ def top10_pick(rows: list[dict] | None, variant: str = TOP10_DEFAULT_VARIANT, n:
     return pool[:n]
 
 
+# Regla de la cartera mensual (nov-2026, backtest_banda.py). El Top 10 del ranking no
+# cambia; esto decide qué se compra y qué se mantiene cada fin de mes:
+# - banda: un nombre entra si está en el Top 10 y sale solo si cae debajo del puesto 20.
+# - tope: como mucho 3 nombres del mismo sector.
+# En CEDEAR 2016-2026 la peor caída pasó de −40 % a −28 % y cada nombre dura ~5 meses
+# en vez de ~3,5. En las 61 originales (menos sesgo) la banda además rindió más.
+PORTFOLIO_SIZE = 10
+BAND_EXIT_RANK = 20
+SECTOR_CAP = 3
+PORTFOLIO_RULE = (
+    "Entra si está en el Top 10 y sale solo si cae debajo del puesto 20. "
+    "Como mucho 3 del mismo sector. Partes iguales."
+)
+
+
+def portfolio_pick(
+    rows: list[dict] | None,
+    previous: list[str] | None,
+    variant: str = TOP10_DEFAULT_VARIANT,
+    *,
+    size: int = PORTFOLIO_SIZE,
+    band: int = BAND_EXIT_RANK,
+    cap: int | None = SECTOR_CAP,
+) -> list[str]:
+    """Cartera de un fin de mes con la banda y el tope por sector.
+
+    `rows`: el ranking de ese cierre. `previous`: la cartera que venía (None al empezar).
+    El puesto se cuenta dentro de la variante (con CEDEAR, solo esas; conservadora, por
+    su score). Se quedan los que siguen dentro de la banda, de mejor a peor; los huecos
+    se llenan por orden. Un nombre sin sector no cuenta para el tope.
+    """
+    ordered = top10_pick(rows, variant, n=len(rows or []))
+    rank = {r["symbol"]: i for i, r in enumerate(ordered, 1)}
+    sector = {r["symbol"]: r.get("sector") for r in ordered}
+    out: list[str] = []
+    per_sector: dict[str, int] = {}
+
+    def add(sym: str) -> None:
+        if sym in out or len(out) >= size:
+            return
+        sec = sector.get(sym)
+        if cap is not None and sec:
+            if per_sector.get(sec, 0) >= cap:
+                return
+            per_sector[sec] = per_sector.get(sec, 0) + 1
+        out.append(sym)
+
+    keep = sorted((s for s in (previous or []) if rank.get(s, 10**9) <= band), key=lambda s: rank[s])
+    for sym in keep:
+        add(sym)
+    for r in ordered:
+        if len(out) >= size:
+            break
+        add(r["symbol"])
+    return out
+
+
 WINDOW_SESSIONS = 10
 # Sesiones hacia atrás para fechar la racha actual en el Top 10 (sin estado persistido).
 ENTRY_LOOKBACK_SESSIONS = 30
@@ -1519,8 +1625,9 @@ def walkforward_note(weeks: int, start: str | None, end: str | None, warmup: int
         )
     return (
         "Simulación mensual: en el último cierre de cada mes se recalcula el Desk Score "
-        "solo con los datos hasta ese cierre, se arma un Top 10 con el mismo peso para cada "
-        "nombre y se mantiene hasta el último cierre del mes siguiente. Se compra y se vende a "
+        "solo con los datos hasta ese cierre y se arma la cartera de 10 con la regla de la página: "
+        "entra lo del Top 10, se queda lo que siga entre los 20 primeros y como mucho 3 por sector, "
+        "todos con el mismo peso. Se mantiene hasta el último cierre del mes siguiente. Se compra y se vende a "
         "ese mismo cierre. La curva muestra un punto por semana. «Universo» es comprar todas las "
         "acciones del universo con el mismo peso, con el mismo calendario. No es el panel de "
         "arriba: aquel toma el Top 10 de hoy y mira hacia atrás. Sin comisiones. Es una "
@@ -1795,10 +1902,12 @@ def compute_top10_walkforward(
     rebal = monthly_rebalance_marks(marks)
     picks: dict[str, dict[str, list[str]]] = {v: {} for v in TOP10_VARIANTS}
     universe: dict[str, list[str]] = {}
+    prev: dict[str, list[str] | None] = {v: None for v in TOP10_VARIANTS}
     for d in rebal:
         ranked = rank_universe_asof(meta_by, all_bars, d, require_exact_session=True)
         for v in TOP10_VARIANTS:
-            picks[v][d] = [r["symbol"] for r in top10_pick(ranked, v, top_n)]
+            picks[v][d] = portfolio_pick(ranked, prev[v], v, size=top_n)
+            prev[v] = picks[v][d] or prev[v]
         universe[d] = [
             r["symbol"] for r in ranked
             if r.get("symbol") and str(r.get("kind") or "").lower() != "etf"
@@ -1897,8 +2006,16 @@ def compute_monthly_plan(
     all_bars: dict[str, list[dict]],
     *,
     live_session: str | None = None,
+    today_rows: list[dict] | None = None,
+    fixed: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Cartera de cada variante en los dos últimos fines de mes y la próxima revisión."""
+    """Cartera de cada variante en los dos últimos fines de mes y la próxima revisión.
+
+    Con la banda, la cartera depende de la anterior: se encadena desde el primer fin de
+    mes con un año de datos. `fixed` pisa una variante con la cartera real del Índice
+    Angus ({variant: {"since", "holdings", "prev_holdings"}}) para que digan lo mismo.
+    `today_rows` (el ranking de hoy) arma `today`: la cartera si se revisara ahora.
+    """
     sessions = session_dates_from_bars(all_bars.get("SPY") or [])
     completed = [d for d in sessions if d != live_session]
     if not completed:
@@ -1913,11 +2030,25 @@ def compute_monthly_plan(
         y, m = (today.year + (today.month == 12), today.month % 12 + 1)
         review = last_trading_day_of_month(y, m)
 
+    chain: dict[str, dict[str, list[str]]] = {}
+    if since:
+        first_ok = completed[WALKFORWARD_WARMUP_SESSIONS - 1] if len(completed) >= WALKFORWARD_WARMUP_SESSIONS else since
+        prev_book: dict[str, list[str] | None] = {v: None for v in TOP10_VARIANTS}
+        for end in [e for e in ends if e >= first_ok] or [since]:
+            ranked = rank_universe_asof(meta_by, all_bars, end, require_exact_session=True)
+            chain[end] = {}
+            for v in TOP10_VARIANTS:
+                picked = portfolio_pick(ranked, prev_book[v], v)
+                chain[end][v] = picked
+                prev_book[v] = picked or prev_book[v]
+
     def book(session: str | None) -> dict[str, list[str]]:
         if not session:
             return {}
+        if session in chain:
+            return dict(chain[session])
         ranked = rank_universe_asof(meta_by, all_bars, session, require_exact_session=True)
-        return {v: [r["symbol"] for r in top10_pick(ranked, v)] for v in TOP10_VARIANTS}
+        return {v: portfolio_pick(ranked, None, v) for v in TOP10_VARIANTS}
 
     def ret_since(symbol: str, session: str) -> float | None:
         """Retorno del cierre de `session` al último cierre disponible."""
@@ -1952,8 +2083,20 @@ def compute_monthly_plan(
 
     prev = ends[-2] if len(ends) > 1 else None
     held = book(since)
+    prev_held = book(prev)
+    for variant, real in (fixed or {}).items():
+        if variant in held and real.get("since") == since and real.get("holdings"):
+            held[variant] = list(real["holdings"])
+            if real.get("prev_holdings"):
+                prev_held[variant] = list(real["prev_holdings"])
+    # Si se revisara ahora: la regla sobre el ranking de hoy, partiendo de la cartera vigente.
+    # El día que se armó la cartera, `today` es esa misma cartera.
+    today_book: dict[str, list[str]] = {}
+    if today_rows and not done:
+        today_book = {v: portfolio_pick(today_rows, held.get(v), v) for v in held}
     return {
         "rule": "Revisar en el último cierre de cada mes: vender lo que salió, comprar lo que entró, partes iguales.",
+        "portfolio_rule": PORTFOLIO_RULE,
         "data_date": latest,
         "since": since,
         "prev_since": prev,
@@ -1961,7 +2104,8 @@ def compute_monthly_plan(
         "review_today": latest == review.isoformat(),
         "review_done": done,
         "holdings": held,
-        "prev_holdings": book(prev),
+        "prev_holdings": prev_held,
+        "today": today_book,
         "performance": performance(held),
         "upcoming_reviews": upcoming,
     }
@@ -3371,9 +3515,35 @@ def main() -> None:
     if wf_note:
         notes.append(wf_note)
     print(f"  walk-forward: {time.perf_counter() - t_wf:.2f}s")
+    t_idx = time.perf_counter()
+    indice_public = None
+    try:
+        import indice
+
+        indice_public, idx_note = indice.publish(
+            meta_by=meta_by,
+            all_bars=full_bars,
+            write=(mode == "cierre"),
+            live_session=live_session,
+        )
+        if idx_note:
+            notes.append(idx_note)
+    except Exception as exc:  # el índice no puede tirar abajo la corrida
+        notes.append(f"Índice Angus: fallo soft ({type(exc).__name__}).")
+    print(f"  índice angus: {time.perf_counter() - t_idx:.2f}s")
+    # El plan con CEDEAR toma la cartera real del índice, para que los dos digan lo mismo.
+    fixed_plan: dict[str, dict[str, Any]] = {}
+    if indice_public and indice_public.get("holdings"):
+        fixed_plan[indice.INDEX_VARIANT] = {
+            "since": indice_public.get("period_start"),
+            "holdings": indice_public.get("members") or [],
+            "prev_holdings": indice_public.get("prev_members"),
+        }
     t_plan = time.perf_counter()
     try:
-        monthly_plan = compute_monthly_plan(meta_by, full_bars, live_session=live_session)
+        monthly_plan = compute_monthly_plan(
+            meta_by, full_bars, live_session=live_session, today_rows=rows, fixed=fixed_plan
+        )
     except Exception as exc:  # el plan no puede tirar abajo la corrida
         monthly_plan = {}
         notes.append(f"Plan del mes: no se pudo calcular ({exc}).")
@@ -3549,6 +3719,7 @@ def main() -> None:
         "generated_at": generated_at,
         "timezone": "America/Buenos_Aires",
         "score_version": SCORE_VERSION,
+        "bars_feed": ALPACA_FEED,
         "brand": "Angus",
         "sesion": mode,
         "sesion_aviso": market_session.session_banner(mode, session_date),
@@ -3572,6 +3743,7 @@ def main() -> None:
         "top10_walkforward": top10_walkforward,
         "top10_variants": top10_variants,
         "monthly_plan": monthly_plan,
+        "indice_angus": indice_public,
         "top10_default_variant": TOP10_DEFAULT_VARIANT,
         "historial_semaforo": historial_public,
         "sectors": sectors,

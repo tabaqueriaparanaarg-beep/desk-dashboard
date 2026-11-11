@@ -14,6 +14,7 @@ __pycache__/
 _site/
 resumen.txt
 .historial_fetch_failed
+.indice_fetch_failed
 *.json.tmp
 
 # SO / editores
@@ -23,3 +24,4 @@ resumen.txt
 .cache_backtest_bars.json
 backtest_resultado.json
 backtest_pilares.json
+backtest_banda.json

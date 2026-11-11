@@ -6,6 +6,7 @@ on:
     # El commit del historial no vuelve a disparar el workflow.
     paths-ignore:
       - historial_semaforo.json
+      - indice_angus.json
   workflow_dispatch:
   schedule:
     # Cierre: lunes a viernes 21:30 UTC = 18:30 ART (UTC-3 fijo).
@@ -101,6 +102,10 @@ jobs:
             echo "No se pudo leer el historial anterior. Se cancela el deploy para no borrarlo de Pages."
             exit 1
           fi
+          if [ -f .indice_fetch_failed ]; then
+            echo "No se pudo leer el Índice Angus anterior. Se cancela el deploy para no borrarlo de Pages."
+            exit 1
+          fi
 
       - name: Assemble _site (solo archivos del sitio)
         if: success() && steps.market.outputs.mode != 'skip'
@@ -110,6 +115,7 @@ jobs:
           cp index.html app.js styles.css sw.js manifest.webmanifest datos.json _site/
           if [ -f fichas.json ]; then cp fichas.json _site/; fi
           if [ -f historial_semaforo.json ]; then cp historial_semaforo.json _site/; fi
+          if [ -f indice_angus.json ]; then cp indice_angus.json _site/; fi
           if [ -f resumen.txt ]; then cp resumen.txt _site/resumen.txt; else printf '%s\n' 'Sin resumen en esta publicación.' > _site/resumen.txt; fi
           cp -r assets _site/assets
           touch _site/.nojekyll
@@ -130,21 +136,25 @@ jobs:
         if: success() && steps.market.outputs.mode != 'skip'
         uses: actions/deploy-pages@v4
 
-      - name: Guardar historial en el repositorio
+      - name: Guardar historial e índice en el repositorio
         # La corrida en vivo no commitea. Si el archivo no cambió, el paso sale solo.
         if: success() && steps.market.outputs.mode == 'cierre'
         continue-on-error: true
         run: |
-          if [ ! -f historial_semaforo.json ]; then
-            echo "Sin archivo de historial para commitear."
+          files=""
+          for f in historial_semaforo.json indice_angus.json; do
+            if [ -f "$f" ]; then files="$files $f"; fi
+          done
+          if [ -z "$files" ]; then
+            echo "Sin historial ni índice para commitear."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add historial_semaforo.json
+          git add $files
           if git diff --cached --quiet; then
-            echo "El historial no cambió."
+            echo "El historial y el índice no cambiaron."
             exit 0
           fi
-          git commit -m "Actualiza el historial del semáforo [skip ci]"
+          git commit -m "Actualiza el historial del semáforo y el Índice Angus [skip ci]"
           git push origin HEAD:main

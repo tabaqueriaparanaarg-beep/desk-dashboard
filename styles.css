@@ -4127,3 +4127,251 @@ body.is-sheet{
     flex-basis: 100%;
   }
 }
+
+/* ── Índice Angus ── */
+.dd-indice[hidden]{
+  display: none;
+}
+
+.dd-indice-head{
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 1rem;
+}
+
+.dd-indice-title{
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+  font-weight: 900;
+  font-stretch: 125%;
+  letter-spacing: -0.01em;
+  color: var(--dd-brand);
+}
+
+.dd-indice-since{
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--dd-muted);
+}
+
+.dd-indice-hero{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.dd-indice-side{
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--dd-border);
+  border-radius: 14px;
+}
+
+.dd-indice-side[data-line="index"]{
+  border-color: rgba(255, 107, 53, 0.45);
+  background: var(--dd-accent-soft);
+}
+
+.dd-indice-label{
+  margin: 0 0 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--dd-muted);
+}
+
+.dd-indice-side[data-line="index"] .dd-indice-label{
+  color: var(--dd-brand);
+}
+
+.dd-indice-level{
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.05;
+  font-weight: 900;
+  font-stretch: 115%;
+  color: var(--dd-fg);
+}
+
+.dd-indice-chg{
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.dd-indice-verdict{
+  margin: 0 0 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--dd-fg);
+}
+
+.dd-indice-verdict[data-trend="up"]::before,
+.dd-indice-verdict[data-trend="down"]::before{
+  display: inline-block;
+  margin-right: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.dd-indice-verdict[data-trend="up"]::before{
+  content: "▲";
+  color: var(--dd-ok);
+}
+
+.dd-indice-verdict[data-trend="down"]::before{
+  content: "▼";
+  color: var(--dd-bad);
+}
+
+.dd-indice-chart-wrap{
+  margin-bottom: 0.9rem;
+}
+
+.dd-indice-stats{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0 0 1.1rem;
+}
+
+.dd-indice-stats > div{
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--dd-border);
+  border-radius: 12px;
+}
+
+.dd-indice-stats dt{
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--dd-muted);
+}
+
+.dd-indice-stats dd{
+  margin: 0.1rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.dd-indice-dim{
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--dd-muted);
+}
+
+.dd-indice-h{
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-stretch: 112%;
+}
+
+.dd-indice-sub{
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  color: var(--dd-muted);
+}
+
+.dd-indice-hold,
+.dd-indice-changes{
+  list-style: none;
+  margin: 0 0 1.1rem;
+  padding: 0;
+}
+
+.dd-indice-hold li + li{
+  border-top: 1px solid var(--dd-border);
+}
+
+.dd-indice-row{
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.45rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--dd-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dd-indice-row:hover{
+  background: var(--dd-card-hover);
+}
+
+.dd-indice-row:focus-visible{
+  outline: 2px solid var(--dd-brand);
+  outline-offset: 2px;
+}
+
+.dd-indice-row img,
+.dd-indice-row .dd-logo-fallback{
+  flex-shrink: 0;
+}
+
+.dd-indice-id{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.dd-indice-name{
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--dd-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dd-indice-ret{
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.dd-indice-changes li{
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.45rem 0;
+  font-size: 0.84rem;
+}
+
+.dd-indice-changes li + li{
+  border-top: 1px solid var(--dd-border);
+}
+
+.dd-indice-changes time{
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--dd-muted);
+}
+
+.dd-indice-in{
+  font-weight: 700;
+  color: var(--dd-ok);
+}
+
+.dd-indice-out{
+  font-weight: 700;
+  color: var(--dd-bad);
+}
+
+.dd-indice-none{
+  color: var(--dd-muted);
+}
+
+@media (max-width: 420px){
+  .dd-indice-level{
+    font-size: 1.65rem;
+  }
+  .dd-indice-stats dd{
+    font-size: 0.88rem;
+  }
+}

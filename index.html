@@ -21,7 +21,7 @@
     // Los datos se piden ya, en paralelo con el CSS y el JS.
     try { window.__datos = fetch("datos.json?ts=" + Date.now(), { cache: "no-store" }); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=47" />
+  <link rel="stylesheet" href="styles.css?v=49" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -85,7 +85,49 @@
           </div>
         </div>
         <div id="mes-body" class="dd-mes-body"></div>
-        <p class="dd-mes-rule">El último cierre de cada mes vendés lo que salió del Top 10 y comprás lo que entró, en partes iguales. Va en la parte chica de la cartera; el resto, en el SPY.</p>
+        <p class="dd-mes-rule">El último cierre de cada mes entra lo que llegó al Top 10 y se queda lo que siga entre los 20 primeros, con como mucho 3 del mismo sector. Todas en partes iguales. Va en la parte chica de la cartera; el resto, en el SPY.</p>
+      </section>
+
+      <section class="dd-indice dd-panel" id="indice-angus" data-section="indice-angus" aria-labelledby="indice-title" hidden>
+        <div class="dd-indice-head">
+          <h2 class="dd-indice-title" id="indice-title">Índice Angus</h2>
+          <p class="dd-indice-since" id="indice-since"></p>
+        </div>
+        <div class="dd-indice-hero">
+          <div class="dd-indice-side" data-line="index">
+            <p class="dd-indice-label">Índice</p>
+            <p class="dd-indice-level" id="indice-level">—</p>
+            <p class="dd-indice-chg" id="indice-chg">—</p>
+          </div>
+          <div class="dd-indice-side" data-line="spy">
+            <p class="dd-indice-label">SPY</p>
+            <p class="dd-indice-level" id="indice-spy">—</p>
+            <p class="dd-indice-chg" id="indice-spy-chg">—</p>
+          </div>
+        </div>
+        <p class="dd-indice-verdict" id="indice-verdict"></p>
+        <div class="dd-wf-chart-wrap dd-indice-chart-wrap">
+          <p class="dd-wf-legend">
+            <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-port" aria-hidden="true"></span>Índice Angus</span>
+            <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-spy" aria-hidden="true"></span>SPY</span>
+          </p>
+          <div id="indice-chart" class="dd-wf-chart" role="img" aria-label="Índice Angus contra SPY, base 100"></div>
+        </div>
+        <dl class="dd-indice-stats">
+          <div><dt>Este mes</dt><dd id="indice-month">—</dd></div>
+          <div><dt>Peor caída</dt><dd id="indice-dd">—</dd></div>
+          <div><dt>Meses</dt><dd id="indice-months">—</dd></div>
+        </dl>
+        <h3 class="dd-indice-h">Qué tiene adentro</h3>
+        <p class="dd-indice-sub" id="indice-hold-sub"></p>
+        <ul class="dd-indice-hold" id="indice-hold"></ul>
+        <h3 class="dd-indice-h">Cambios</h3>
+        <ul class="dd-indice-changes" id="indice-changes"></ul>
+        <details class="dd-help">
+          <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo funciona</summary>
+          <p id="indice-explainer"></p>
+          <p id="indice-rules"></p>
+        </details>
       </section>
 
       <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
@@ -236,8 +278,9 @@
             <summary><span class="dd-help-i" aria-hidden="true">ⓘ</span> Cómo se calcula</summary>
             <p class="dd-wf-caption" id="wf-caption">
               Simulación mensual: en el último cierre de cada mes se recalcula el Desk Score solo
-              con los datos hasta ese cierre, se arma el Top 10 elegido arriba con el mismo peso
-              para cada nombre y se mantiene hasta el último cierre del mes siguiente. «Universo» es
+              con los datos hasta ese cierre y se arma la cartera de 10: entra lo del Top 10, se queda
+              lo que siga entre los 20 primeros y como mucho 3 por sector, con el mismo peso. Se
+              mantiene hasta el último cierre del mes siguiente. «Universo» es
               comprar todas las acciones con el mismo peso. Sin comisiones. Es una simulación de un
               filtro, no una recomendación. Los resultados pasados no garantizan resultados futuros.
             </p>
@@ -412,6 +455,6 @@
     <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
   </dialog>
 
-  <script src="app.js?v=47" defer></script>
+  <script src="app.js?v=49" defer></script>
 </body>
 </html>
