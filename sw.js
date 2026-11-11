@@ -5,7 +5,7 @@
  */
 "use strict";
 
-var VERSION = "dd-v50";
+var VERSION = "dd-v51";
 var SHELL_CACHE = VERSION + "-shell";
 var DATA_CACHE = VERSION + "-data";
 
@@ -17,13 +17,13 @@ var SHELL_ASSETS = [
   "manifest.webmanifest",
   "assets/angus-lockup-on-dark.svg?v=1",
   "assets/angus-mark.svg?v=1",
-  "assets/favicon.ico?v=7",
-  "assets/favicon-32.png?v=7",
-  "assets/favicon-16.png?v=7",
-  "assets/apple-touch-icon.png?v=7",
-  "assets/icon-192.png",
-  "assets/icon-512.png",
-  "assets/icon-maskable-512.png",
+  "assets/favicon.ico?v=8",
+  "assets/favicon-32.png?v=8",
+  "assets/favicon-16.png?v=8",
+  "assets/apple-touch-icon.png?v=8",
+  "assets/icon-192.png?v=8",
+  "assets/icon-512.png?v=8",
+  "assets/icon-maskable-512.png?v=8",
 ];
 
 self.addEventListener("install", function (event) {
