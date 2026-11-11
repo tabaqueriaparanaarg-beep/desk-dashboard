@@ -125,8 +125,10 @@ def fetch_all(symbols: list[str], start: str, end: str) -> dict[str, list[dict]]
     out: dict[str, list[dict]] = {s: [] for s in symbols}
     batches = [symbols[i : i + BATCH_SIZE] for i in range(0, len(symbols), BATCH_SIZE)]
     for n, batch in enumerate(batches, 1):
+        # Con SIP, el plan gratis no deja pedir los últimos 15 minutos.
+        end_q = B.alpaca_end(end, ALPACA_FEED) if hasattr(B, "alpaca_end") else end
         params = urllib.parse.urlencode({
-            "symbols": ",".join(batch), "timeframe": "1Day", "start": start, "end": end,
+            "symbols": ",".join(batch), "timeframe": "1Day", "start": start, "end": end_q,
             "adjustment": "all", "feed": ALPACA_FEED, "limit": 10000, "sort": "asc",
         })
         url = f"{ALPACA_DATA}/v2/stocks/bars?{params}"

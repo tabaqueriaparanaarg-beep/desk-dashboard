@@ -21,7 +21,8 @@ cd /workspace/desk-dashboard && python3 -m http.server 8765
 Requisitos de entorno:
 
 - Alpaca: `ALPACA_API_KEY` + `ALPACA_SECRET_KEY` (también acepta los nombres del SDK `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY`). Si faltan, `build.py` corta con un error claro (sin mostrar valores).
-- Opcionales Alpaca: `ALPACA_DATA_URL` (default `https://data.alpaca.markets`) y `ALPACA_FEED` (default `iex`; `sip` requiere plan pago).
+- Opcionales Alpaca: `ALPACA_DATA_URL` (default `https://data.alpaca.markets`) y `ALPACA_FEED` (default `sip`). SIP es la cinta consolidada de todas las bolsas: cierre oficial y volumen real. El plan gratis la da con 15 minutos de demora, así que `build.py` recorta el fin de cada pedido a «ahora − 16 min» (`alpaca_end`). Si las keys no tienen permiso para SIP (403), la corrida sigue con `iex` (una sola bolsa, ~2–3 % del volumen) y lo avisa. `datos.json` → `bars_feed` dice cuál se usó. Historia diaria SIP disponible desde enero de 2016.
+- Local: las keys pueden ir en `.alpaca_env` (ignorado por git) y cargarse con `set -a; . ./.alpaca_env; set +a` antes de correr.
 - Finnhub: `FINNHUB_API_KEY` en el entorno; fallback local `.finnhub_env` (proyecto o `/home/box/.finnhub_env`) o `box-secrets.json` (no commitear secretos). Sin key, earnings se omiten y los logos salen de la cache.
 
 Dependencias: **stdlib** (`urllib`, `json`, etc.). `requirements.txt` vacío a propósito.
@@ -50,7 +51,7 @@ URL final: <https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/> (todas l
 ## Qué hace `build.py`
 
 1. Lee `universe.json` (~70 tickers US / proxies CEDEAR / ETFs).
-2. Baja barras diarias (~250 sesiones) desde Alpaca Data API (feed IEX, batches, reintentos 429).
+2. Baja barras diarias (~250 sesiones) desde Alpaca Data API (feed SIP con respaldo IEX, batches, reintentos 429).
 3. Calcula indicadores y **Desk Score 0–100**.
 4. KPIs de universo + earnings de la semana (Finnhub, falla soft).
 5. Calcula **Retorno Top 10** (últimas 10 ruedas vs SPY), la columna **Entró** (racha en el Top 10, últimas 30 sesiones), la **simulación walk-forward** del Top 10 contra SPY, la **vista por sectores** y escribe todo en `datos.json`.
@@ -106,6 +107,36 @@ La página arranca en el **Top 10 con CEDEAR** (`TOP10_DEFAULT_VARIANT = "cedear
 | Con CEDEAR | 33,1 % | −31,5 % | 21,7 % | −23,8 % |
 | Con CEDEAR, conservadora | 22,6 % | −22,0 % | 19,8 % | −15,1 % |
 | SPY | 11,9 % | −23,9 % | 11,9 % | −23,9 % |
+
+### Regla de la cartera: banda 20 + tope 3 (nov-2026)
+
+El ranking y la tabla Top 10 no cambian. Lo que cambia es cómo se arma la cartera de cada fin de mes (`portfolio_pick` en `build.py`), que usan el Índice Angus, «Este mes» y la simulación:
+
+- **Banda:** una acción entra si está en el Top 10 de su variante y sale solo si cae debajo del puesto 20. Los lugares libres se llenan por orden de score.
+- **Tope:** como mucho 3 del mismo sector. Los que se quedan por la banda ocupan su lugar primero. Una acción sin sector no cuenta para el tope.
+- `monthly_plan.today` es la regla aplicada al ranking de hoy desde la cartera vigente: es lo que muestra «Si revisaras hoy». La variante con CEDEAR toma la cartera real del índice, así que los dos dicen lo mismo.
+
+Medido con `python3 backtest_banda.py` (SIP, 2016 a nov-2026, 118 revisiones, 50 bps por lado; universo de hoy, con sesgo de supervivencia, así que vale la comparación entre reglas):
+
+| CEDEAR (178) | Anual | Peor caída | Salen por mes | Meses que dura |
+|---|---|---|---|---|
+| Top 10 sin regla | 41,1 % | −39,8 % | 2,8 | 3,5 |
+| **Banda 20 + tope 3** | 34,9 % | −28,1 % | 1,9 | 5,2 |
+| SPY | 14,8 % | −23,9 % | — | — |
+
+En las 61 originales (menos sesgo), la banda 20 sola pasó de 22,6 % a 27,7 % anual. El tope cuesta rendimiento cuando un solo sector lidera (2017–2021) a cambio de caídas bastante menores.
+
+### Índice Angus (nov-2026)
+
+El Top 10 con CEDEAR tratado como un índice propio, registrado **hacia adelante** (`indice.py`). A diferencia de la simulación, no se recalcula con el universo de hoy, así que no tiene sesgo de supervivencia ni de selección.
+
+- **Inicio:** el último fin de mes cerrado cuando corrió por primera vez (30/10/2026), base 100, con el Top 10 armado solo con datos hasta ese cierre. El SPY arranca en 100 el mismo día.
+- **Cada último día hábil del mes** se cierra el período, que queda congelado en `indice_angus.json` (nivel de cierre y puntos diarios), y se abre otro con el Top 10 de ese cierre en partes iguales. Si faltaron corridas, se ponen al día los fines de mes intermedios.
+- **El mes en curso** se recalcula en cada corrida con las series ajustadas por splits de ese día, así que un split no aparece como caída. Un nombre que se queda sin datos conserva su último retorno.
+- **Índice de precio:** no suma dividendos (la línea del SPY tampoco).
+- **Regla de cada período:** `periods[].rules`. Si la regla cambia (banda de permanencia, tope por sector), los meses viejos conservan la suya y la nueva rige desde el próximo fin de mes. `pick_holdings` es el punto donde se cambia.
+- **Persistencia:** igual que el historial del semáforo. Se lee primero la copia publicada y después la local. Solo las corridas de cierre escriben, y el workflow commitea el archivo. Si no hay ninguna copia usable y la descarga falló, no se escribe nada y `.indice_fetch_failed` frena el deploy para no borrar el índice de Pages.
+- **En la página:** sección «Índice Angus» en Resumen, debajo de «Este mes». Muestra el nivel contra el SPY, la curva, el mes en curso, la peor caída, qué empresas tiene con cuánto lleva cada una (tocar abre la vista rápida) y los cambios de cada fin de mes. `datos.json` → `indice_angus`.
 
 ### Lista de CEDEARs (nov-2026)
 

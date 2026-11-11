@@ -317,7 +317,9 @@
     var note = document.getElementById("variant-note");
     if (note) {
       note.textContent = (state.variantCedear ? VARIANT_NOTES.cedear : VARIANT_NOTES.todas) +
-        (state.variantCons ? VARIANT_NOTES.cons : "");
+        (state.variantCons ? VARIANT_NOTES.cons : "") +
+        " Es el ranking de hoy: la cartera del mes (en Resumen) no cambia hasta fin de mes y" +
+        " mantiene las que siguen entre las 20 primeras.";
     }
     renderMonthlyPlan(v ? v.top10_return : (isDefault ? state.top10Default : null));
   }
@@ -380,7 +382,9 @@
       lead = "Cartera nueva desde el cierre de hoy.";
     } else {
       from = held;
-      to = ((top10Block && top10Block.rows) || []).map(function (r) { return r.symbol; });
+      // Con la banda, «hoy» no es el Top 10: es la regla aplicada a la cartera vigente.
+      to = (plan.today && plan.today[key]) ||
+        ((top10Block && top10Block.rows) || []).map(function (r) { return r.symbol; });
       lead = plan.review_today
         ? "Con el cierre de hoy se arma la cartera nueva. Así queda con los precios de ahora:"
         : "Si revisaras hoy:";
@@ -711,8 +715,8 @@
     el.className = "dd-kpi-value " + distClass(n);
   }
 
-  function drawWalkforwardChart(block) {
-    var host = document.getElementById("wf-chart");
+  function drawWalkforwardChart(block, hostId) {
+    var host = document.getElementById(hostId || "wf-chart");
     if (!host) return;
     var curve = (block && block.curve) || [];
     if (curve.length < 2) {
@@ -724,7 +728,7 @@
     if (width < 40) {
       host._wfRetry = (host._wfRetry || 0) + 1;
       if (host._wfRetry < 6) {
-        window.requestAnimationFrame(function () { drawWalkforwardChart(block); });
+        window.requestAnimationFrame(function () { drawWalkforwardChart(block, hostId); });
       }
       return;
     }
@@ -808,6 +812,112 @@
     );
   }
 
+  // ── Índice Angus: el Top 10 con CEDEAR registrado hacia adelante ──────────
+
+  function indiceVerdict(blk) {
+    if (blk.excess_pct == null) return "";
+    var gap = Math.abs(Number(blk.excess_pct));
+    if (gap < 0.05) return "Va igual que el SPY desde que arrancó.";
+    var pts = fmtEsNum(gap, 1) + (Math.round(gap * 10) === 10 ? " punto" : " puntos");
+    return blk.excess_pct > 0
+      ? "Va " + pts + " arriba del SPY desde que arrancó."
+      : "Va " + pts + " abajo del SPY desde que arrancó.";
+  }
+
+  function indiceSigned(id, n) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmtEsSignedPct(n, 1);
+    el.className = el.className.replace(/\s*dd-num-(pos|neg)/g, "") + (n == null ? "" : " " + distClass(n));
+  }
+
+  function renderIndice(blk) {
+    var box = document.getElementById("indice-angus");
+    if (!box) return;
+    state.indice = blk || null;
+    if (!blk || !blk.curve || !blk.curve.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    setText("indice-since", "Desde el " + fmtIso(blk.inception) + " · base 100 · al " + fmtIso(blk.asof));
+    setText("indice-level", fmtEsNum(blk.level, 1));
+    setText("indice-spy", blk.spy_level == null ? "—" : fmtEsNum(blk.spy_level, 1));
+    indiceSigned("indice-chg", blk.return_pct);
+    indiceSigned("indice-spy-chg", blk.spy_return_pct);
+    var verdict = document.getElementById("indice-verdict");
+    if (verdict) {
+      verdict.textContent = indiceVerdict(blk);
+      verdict.setAttribute("data-trend", blk.excess_pct > 0 ? "up" : blk.excess_pct < 0 ? "down" : "flat");
+    }
+    var month = document.getElementById("indice-month");
+    if (month) {
+      month.innerHTML =
+        '<span class="' + distClass(blk.period_return_pct) + '">' + escapeHtml(fmtEsSignedPct(blk.period_return_pct, 1)) + "</span>" +
+        '<span class="dd-indice-dim">SPY ' + escapeHtml(fmtEsSignedPct(blk.period_spy_return_pct, 1)) + "</span>";
+    }
+    var dd = document.getElementById("indice-dd");
+    if (dd) {
+      dd.innerHTML =
+        escapeHtml(fmtEsSignedPct(blk.max_drawdown_pct, 1)) +
+        '<span class="dd-indice-dim">SPY ' + escapeHtml(fmtEsSignedPct(blk.spy_max_drawdown_pct, 1)) + "</span>";
+    }
+    var months = document.getElementById("indice-months");
+    if (months) {
+      months.innerHTML = escapeHtml(String((blk.months || 0) + 1)) + '<span class="dd-indice-dim">contando este</span>';
+    }
+    setText(
+      "indice-hold-sub",
+      "Cuánto lleva cada una desde el " + fmtDayMonth(blk.period_start) + ", cuando se armó este mes. Tocá una para verla."
+    );
+    var hold = document.getElementById("indice-hold");
+    if (hold) {
+      hold.innerHTML = (blk.holdings || []).map(function (h) {
+        var row = rowBySymbol(h.symbol) || { symbol: h.symbol };
+        return '<li><button type="button" class="dd-indice-row" data-symbol="' + escapeHtml(h.symbol) + '">' +
+          logoHtml(h.symbol, logoFor(row), 28) +
+          '<span class="dd-indice-id"><strong>' + escapeHtml(h.symbol) + "</strong>" +
+          '<span class="dd-indice-name">' + escapeHtml(h.name || row.name || "") + "</span></span>" +
+          '<span class="dd-indice-ret ' + distClass(h.return_pct) + '">' + escapeHtml(fmtEsSignedPct(h.return_pct, 1)) + "</span>" +
+          "</button></li>";
+      }).join("");
+    }
+    var changes = document.getElementById("indice-changes");
+    if (changes) {
+      var list = blk.changes || [];
+      if (!list.length) {
+        changes.innerHTML = '<li class="dd-indice-none">Todavía no hubo cambios. El primero puede llegar con el cierre de fin de mes.</li>';
+      } else {
+        changes.innerHTML = list.map(function (c) {
+          var ins = (c.in || []).join(", ");
+          var outs = (c.out || []).join(", ");
+          var body = !ins && !outs
+            ? "Sin cambios."
+            : (ins ? '<span class="dd-indice-in">Entraron ' + escapeHtml(ins) + "</span>" : "") +
+              (ins && outs ? " · " : "") +
+              (outs ? '<span class="dd-indice-out">Salieron ' + escapeHtml(outs) + "</span>" : "");
+          return '<li><time datetime="' + escapeHtml(c.date) + '">' + escapeHtml(fmtIso(c.date)) + "</time><span>" + body + "</span></li>";
+        }).join("");
+      }
+    }
+    setText("indice-explainer", blk.explainer || "");
+    setText("indice-rules", blk.rules ? "Regla actual: " + blk.rules : "");
+    drawIndiceChart();
+  }
+
+  function drawIndiceChart() {
+    var blk = state.indice;
+    if (!blk || !blk.curve || !blk.curve.length) return;
+    drawWalkforwardChart(
+      {
+        curve: blk.curve.map(function (p) { return { date: p.date, portfolio: p.index, spy: p.spy }; }),
+        total_return_pct: blk.return_pct,
+        spy_total_return_pct: blk.spy_return_pct,
+      },
+      "indice-chart"
+    );
+  }
+
   function renderWalkforward(block) {
     state.walkforward = block || null;
     var sub = document.getElementById("wf-subtitle");
@@ -857,7 +967,7 @@
       setText("wf-turn-sub", "");
     } else {
       setText("wf-turn", fmtNum(block.avg_names_changed, 2));
-      setText("wf-turn-sub", block.rebalance === "ultimo_cierre_del_mes" ? "nombres que salen / mes" : "nombres que salen / semana");
+      setText("wf-turn-sub", String(block.rebalance || "").indexOf("ultimo_cierre_del_mes") === 0 ? "nombres que salen / mes" : "nombres que salen / semana");
     }
     drawWalkforwardChart(block);
 
@@ -1955,6 +2065,7 @@
     renderMarketRegime(data);
     renderResumen(data);
     state.plan = data.monthly_plan || null;
+    renderIndice(data.indice_angus);
     var stampEl = document.getElementById("generated-at");
     if (stampEl) {
       stampEl.textContent = fmtStamp(data.generated_at) || "—";
@@ -2559,6 +2670,9 @@
       if (on) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
+    if (page === "resumen" && state.indice) {
+      window.requestAnimationFrame(drawIndiceChart);
+    }
     if (page === "score" && state.walkforward) {
       var sim = document.getElementById("simulacion");
       if (sim && sim.open) {
@@ -2852,10 +2966,10 @@
 
   var wfResizeTimer = null;
   window.addEventListener("resize", function () {
-    if (!state.walkforward || !state.walkforward.weeks) return;
     window.clearTimeout(wfResizeTimer);
     wfResizeTimer = window.setTimeout(function () {
-      drawWalkforwardChart(state.walkforward);
+      if (state.walkforward && state.walkforward.weeks) drawWalkforwardChart(state.walkforward);
+      drawIndiceChart();
     }, 120);
   });
 
@@ -2912,6 +3026,13 @@
       mes.addEventListener("click", function (ev) {
         var btn = ev.target.closest("[data-symbol]");
         if (btn && mes.contains(btn)) quickView(btn.getAttribute("data-symbol"));
+      });
+    }
+    var idxHold = document.getElementById("indice-hold");
+    if (idxHold) {
+      idxHold.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("[data-symbol]");
+        if (btn && idxHold.contains(btn)) quickView(btn.getAttribute("data-symbol"));
       });
     }
     var search = document.getElementById("analisis-search");

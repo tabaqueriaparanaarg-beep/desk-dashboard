@@ -5,15 +5,15 @@
  */
 "use strict";
 
-var VERSION = "dd-v47";
+var VERSION = "dd-v49";
 var SHELL_CACHE = VERSION + "-shell";
 var DATA_CACHE = VERSION + "-data";
 
 var SHELL_ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=47",
-  "app.js?v=47",
+  "styles.css?v=49",
+  "app.js?v=49",
   "manifest.webmanifest",
   "assets/logo.svg?v=7",
   "assets/fonts/archivo.woff2?v=1",
