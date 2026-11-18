@@ -5513,3 +5513,134 @@ th .dd-term{
     min-height: 2.3em;
   }
 }
+
+/* ══ Navegación y filtros (nov-2026) ════════════════════════════════════════ */
+
+/* Ranking: cada fila de filtros con su título corto. */
+.dd-filters{
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+.dd-filter-label{
+  margin: 0.35rem 0 0;
+  color: #DAD5CA;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dd-filter-label:first-child{
+  margin-top: 0;
+}
+.dd-filter-search{
+  margin-top: 0.5rem;
+}
+.dd-filter-status{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+.dd-filter-status .dd-filter-count{
+  margin: 0;
+  width: auto;
+}
+.dd-filter-active{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.dd-filter-active[hidden]{
+  display: none;
+}
+.dd-active-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--dd-brand);
+  border-radius: 999px;
+  background: var(--dd-accent-soft);
+  color: var(--dd-fg);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dd-active-chip span{
+  color: var(--dd-brand);
+}
+
+/* Sin resultados. */
+.dd-rank-empty td{
+  padding: 1.6rem 1rem;
+  text-align: center;
+}
+.dd-rank-empty p{
+  margin: 0 0 0.8rem;
+  color: #DAD5CA;
+}
+.dd-btn-clear{
+  min-height: 40px;
+  padding: 0.4rem 1.1rem;
+  border: 0;
+  border-radius: var(--dd-radius-btn, 12px);
+  background: var(--dd-brand);
+  color: var(--dd-brand-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Paginador repetido debajo de la tabla. */
+.dd-pager-bottom{
+  margin-top: 0.9rem;
+}
+
+/* Celular: botones de filtro de al menos 40 px de alto. */
+@media (max-width: 560px){
+  .dd-filter-group .dd-chip{
+    min-height: 40px;
+    padding: 0.4rem 0.8rem;
+  }
+  .dd-active-chip{
+    min-height: 40px;
+  }
+}
+
+/* Escritorio: la barra de pestañas queda fija arriba, debajo del encabezado. */
+@media (min-width: 900px){
+  .dd-tabbar{
+    position: sticky;
+    top: var(--dd-topbar-edge, 4rem);
+    z-index: 39;
+    max-width: none;
+    padding-left: max(0.75rem, calc((100% - var(--dd-max)) / 2 + 0.75rem));
+    padding-right: max(0.75rem, calc((100% - var(--dd-max)) / 2 + 0.75rem));
+    background: var(--dd-bg);
+  }
+}
+
+/* «Actualizando…», «Actualizado 15:40», «Ya estaba al día». */
+.dd-refresh-status:not([hidden]){
+  color: #DAD5CA;
+}
+.dd-filters .dd-filter-search{
+  flex: 0 0 auto;
+  max-width: 320px;
+}
+.dd-rank-empty td{
+  white-space: normal;
+  font-family: var(--dd-font);
+  letter-spacing: 0;
+}
+
+/* Con la barra de pestañas fija, los saltos a una sección dejan lugar para las dos. */
+@media (min-width: 900px){
+  .dd-fold,
+  .dd-panel{
+    scroll-margin-top: calc(var(--dd-topbar-h, 8.6rem) + 3.6rem);
+  }
+}
