@@ -831,6 +831,58 @@
     el.className = el.className.replace(/\s*dd-num-(pos|neg)/g, "") + (n == null ? "" : " " + distClass(n));
   }
 
+  // ── Hacia dónde va la plata: cada sector contra el S&P 500 (termómetro) ──
+
+  function fmtRelPts(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    var v = Math.round(Number(n) * 10) / 10;
+    return (v > 0 ? "+" : "") + fmtEsNum(v, 1) + " pts";
+  }
+
+  function renderRotacion(blk) {
+    var box = document.getElementById("rotacion");
+    if (!box) return;
+    var sectors = (blk && blk.sectors) || [];
+    if (!sectors.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    setText(
+      "rot-sub",
+      "Últimas 4 semanas, del " + fmtDayMonth(blk.window_start) + " al " + fmtDayMonth(blk.asof) +
+      " · S&P 500 " + fmtEsSignedPct(blk.spy_ret_4w, 1)
+    );
+    setText("rot-headline", blk.headline || "");
+    var maxAbs = sectors.reduce(function (m, s) { return Math.max(m, Math.abs(Number(s.rel_4w) || 0)); }, 1);
+    var list = document.getElementById("rot-list");
+    if (list) {
+      list.innerHTML = sectors.map(function (s) {
+        var v = Number(s.rel_4w) || 0;
+        var w = Math.max(2, Math.round(Math.abs(v) / maxAbs * 100));
+        var dir = v >= 0 ? "pos" : "neg";
+        return '<li class="dd-rot-row">' +
+          '<span class="dd-rot-name">' + escapeHtml(s.name) +
+          '<span class="dd-rot-long">3 meses ' + escapeHtml(fmtRelPts(s.rel_13w)) + "</span></span>" +
+          '<span class="dd-rot-track" aria-hidden="true"><span class="dd-rot-bar dd-rot-bar-' + dir + '" style="width:' + (w / 2) + '%"></span></span>' +
+          '<span class="dd-rot-val ' + distClass(v) + '">' + escapeHtml(fmtRelPts(v)) + "</span>" +
+          "</li>";
+      }).join("");
+    }
+    var readings = document.getElementById("rot-readings");
+    if (readings) {
+      readings.innerHTML = (blk.readings || []).map(function (r) {
+        return '<li class="dd-rot-reading' + (r.highlight ? " is-on" : "") + '">' +
+          '<span class="dd-rot-rlabel">' + escapeHtml(r.label) + "</span>" +
+          '<span class="dd-rot-rval">' + escapeHtml(fmtRelPts(r.value)) + "</span>" +
+          '<span class="dd-rot-rtext">' + escapeHtml(r.text) + "</span>" +
+          "</li>";
+      }).join("");
+    }
+    setText("rot-caption", blk.caption || "");
+    setText("rot-readings-caption", blk.readings_caption || "");
+  }
+
   function renderIndice(blk) {
     var box = document.getElementById("indice-angus");
     if (!box) return;
@@ -2066,6 +2118,7 @@
     renderResumen(data);
     state.plan = data.monthly_plan || null;
     renderIndice(data.indice_angus);
+    renderRotacion(data.rotacion);
     var stampEl = document.getElementById("generated-at");
     if (stampEl) {
       stampEl.textContent = fmtStamp(data.generated_at) || "—";

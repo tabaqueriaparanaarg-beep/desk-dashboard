@@ -25,3 +25,5 @@ resumen.txt
 backtest_resultado.json
 backtest_pilares.json
 backtest_banda.json
+.cache_rotacion.json
+backtest_rotacion.json
