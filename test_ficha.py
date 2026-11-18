@@ -293,5 +293,41 @@ class WeeklyRsTests(unittest.TestCase):
         self.assertLess(len(raw), 40_000)
 
 
+
+class CompanyCacheTests(unittest.TestCase):
+    """La caché de Finnhub lento vive en fichas.json: no se pierde entre corridas."""
+
+    def test_previous_rows_take_the_detail_from_fichas(self):
+        payload = {"ranking": [{"symbol": "AMD", "analysts": {"buy_pct": 80, "fetched_on": "2026-11-10"}}]}
+        fichas = {
+            "AMD": {
+                "insiders": {"net_shares": -100, "fetched_on": "2026-11-15"},
+                "fundamentals": {"metrics": {"roe": 5.0}, "fetched_on": "2026-11-12"},
+                "analysts": {"buy_pct": 81, "latest": {"total": 40}, "fetched_on": "2026-11-14"},
+            },
+            "ZZZ": {"insiders": {"fetched_on": "2026-11-15"}},
+        }
+        prev = b._prev_by_symbol(payload, fichas)
+        self.assertEqual(prev["AMD"]["insiders"]["fetched_on"], "2026-11-15")
+        self.assertEqual(prev["AMD"]["fundamentals"]["metrics"], {"roe": 5.0})
+        self.assertEqual(prev["AMD"]["analysts"]["fetched_on"], "2026-11-14")
+        self.assertIn("ZZZ", prev)
+        # La fila publicada no se toca.
+        self.assertNotIn("insiders", payload["ranking"][0])
+
+    def test_cached_detail_is_not_asked_again(self):
+        today = date(2026, 11, 18)
+        fresh = today.isoformat()
+        fichas = {"AMD": {
+            "insiders": {"fetched_on": fresh},
+            "analysts": {"fetched_on": fresh},
+            "fundamentals": {"metrics": {}, "fetched_on": fresh},
+        }}
+        plan, _budget = b._plan_slow_fetches(["AMD"], b._prev_by_symbol({"ranking": []}, fichas), today)
+        self.assertEqual(plan, [])
+        # Sin fichas, se pediría todo de nuevo (el error que había).
+        plan, _budget = b._plan_slow_fetches(["AMD"], b._prev_by_symbol({"ranking": []}), today)
+        self.assertEqual(len(plan), 3)
+
 if __name__ == "__main__":
     unittest.main()

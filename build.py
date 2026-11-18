@@ -2921,6 +2921,7 @@ FUNDAMENTALS_MAX_AGE_DAYS = 10
 SLOW_BUDGET_WARM = 36
 SLOW_BUDGET_COLD = 80
 PUBLISHED_DATOS_URL = "https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/datos.json"
+PUBLISHED_FICHAS_URL = "https://tabaqueriaparanaarg-beep.github.io/desk-dashboard/fichas.json"
 RESUMEN_PATH = ROOT / "resumen.txt"
 
 
@@ -2967,14 +2968,56 @@ def fetch_previous_payload() -> tuple[dict | None, str]:
     return None, "ninguno"
 
 
-def _prev_by_symbol(payload: dict | None) -> dict[str, dict]:
+def fetch_previous_fichas() -> dict[str, dict]:
+    """fichas.json publicado: la caché de insiders, analistas y fundamentos.
+
+    Desde que el detalle salió de datos.json, la caché vive acá. Un intento a Pages y, si
+    no responde, el fichas.json del repo. Nunca lanza.
+    """
+    req = urllib.request.Request(
+        PUBLISHED_FICHAS_URL,
+        headers={"User-Agent": "desk-dashboard/1.0"},
+        method="GET",
+    )
+    try:
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if isinstance(data, dict):
+            return data
+    except Exception as e:
+        print(f"  fichas anteriores no disponibles ({type(e).__name__})")
+    try:
+        data = json.loads(FICHAS_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def _prev_by_symbol(payload: dict | None, fichas: dict[str, dict] | None = None) -> dict[str, dict]:
+    """Fila anterior de cada símbolo, con el detalle de fichas.json encima.
+
+    datos.json solo guarda una versión corta de analistas y nada de insiders ni fundamentos;
+    sin fichas.json la caché se perdía en cada corrida y se volvía a pedir todo.
+    """
     out: dict[str, dict] = {}
     for row in (payload or {}).get("ranking") or []:
         if not isinstance(row, dict):
             continue
         sym = str(row.get("symbol") or "").upper()
         if sym:
-            out[sym] = row
+            out[sym] = dict(row)
+    for sym, detail in (fichas or {}).items():
+        if not isinstance(detail, dict):
+            continue
+        key = str(sym).upper()
+        merged = out.setdefault(key, {"symbol": key})
+        for field in ("insiders", "analysts", "fundamentals"):
+            block = detail.get(field)
+            if isinstance(block, dict) and block.get("fetched_on"):
+                merged[field] = block
     return out
 
 
@@ -3333,6 +3376,7 @@ def main() -> None:
     notes: list[str] = []
     failures: list[str] = []
     previous_payload, previous_source = fetch_previous_payload()
+    previous_fichas = fetch_previous_fichas()
     print(f"  base del resumen: {previous_source}")
 
     universe, universe_meta = load_universe()
@@ -3645,13 +3689,13 @@ def main() -> None:
     try:
         if company_data_policy(mode) == "cache":
             company_notes, analyst_feed = reuse_company_data(
-                rows, _prev_by_symbol(previous_payload)
+                rows, _prev_by_symbol(previous_payload, previous_fichas)
             )
         else:
             company_notes, analyst_feed = enrich_company_data(
                 rows,
                 finnhub_key,
-                _prev_by_symbol(previous_payload),
+                _prev_by_symbol(previous_payload, previous_fichas),
                 end_dt,
             )
         notes.extend(company_notes)
