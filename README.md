@@ -155,6 +155,28 @@ El Top 10 con CEDEAR tratado como un índice propio, registrado **hacia adelante
 - **Persistencia:** igual que el historial del semáforo. Se lee primero la copia publicada y después la local. Solo las corridas de cierre escriben, y el workflow commitea el archivo. Si no hay ninguna copia usable y la descarga falló, no se escribe nada y `.indice_fetch_failed` frena el deploy para no borrar el índice de Pages.
 - **En la página:** sección «Índice Angus» en Resumen, debajo de «Este mes». Muestra el nivel contra el SPY, la curva, el mes en curso, la peor caída, qué empresas tiene con cuánto lleva cada una (tocar abre la vista rápida) y los cambios de cada fin de mes. `datos.json` → `indice_angus`.
 
+### Hacia dónde va la plata (nov-2026)
+
+Termómetro de rotación en Resumen, debajo de «Mercado» (`rotacion.py`, `datos.json` → `rotacion`). Muestra la rotación mientras pasa; **no la anticipa**.
+
+- **Sectores:** cuánto le ganó o perdió cada uno de los 11 ETF «Select Sector» (XLK, XLV, XLF, XLE, XLY, XLP, XLI, XLB, XLU, XLRE, XLC) al SPY en las últimas 20 ruedas, con el dato de 3 meses al lado y una frase de dónde salió y a dónde fue la plata.
+- **Cuatro lecturas** (últimas 20 ruedas): salud (XLV) y consumo básico (XLP) contra tecnología (XLK); amplitud, RSP (todas las empresas al mismo peso) contra SPY; crédito, HYG (bonos high yield) contra IEF (Tesoro 7–10 años), como proxy del spread high yield.
+- Los ETF que no están en el universo (RSP, HYG, IEF, XLB, XLU, XLRE, XLC) se bajan aparte y **no entran al ranking**.
+
+Medido con `python3 backtest_rotacion.py` (SIP, 2016 a nov-2026, 564 semanas; son ETF, sin sesgo de supervivencia):
+
+| Lectura prendida | SPY a 13 semanas | Caída de 5 %+ en 13 semanas (apagada) |
+|---|---|---|
+| Salud > tecnología con el SPY subiendo | +2,7 % | 31 % (27 %) |
+| Consumo > tecnología con el SPY subiendo | +3,2 % | 33 % (27 %) |
+| RSP < SPY con el SPY subiendo | +2,9 % | 25 % (29 %) |
+| HYG < IEF | +5,6 % | 39 % (26 %) |
+| Todas las semanas | +3,8 % | 28 % |
+
+- Salud, consumo y amplitud casi no anticipan. El crédito tenso sube la chance de movimientos fuertes, pero no la dirección.
+- **Perseguir al sector que más subió en 4 semanas no funcionó:** después le perdió al SPY en promedio (−0,5 % a 4 semanas, −1,0 % a 13) y le ganó solo el 40 % de las veces.
+- En octubre de 2026 la rotación fue reactiva: hasta el pico del 6/10 tecnología les seguía ganando a salud y consumo; la rotación empezó después.
+
 ### Lista de CEDEARs (nov-2026)
 
 La marca `cedear` de `universe.json` sale del listado público «CEDEARs Negociables en BYMA» (PDF en la página de CEDEARs de BYMA; el nombre del archivo cambia con cada versión). `actualizar_cedears.py` busca el link, baja el PDF, toma los códigos que cotizan en NYSE, Nasdaq o CBOE, traduce los que difieren (BRKB → BRK.B, BA.C → BAC, DISN → DIS…) y actualiza la marca. Con menos de 200 códigos aborta sin tocar nada. Usa `pypdf`, que instala solo su workflow: `build.py` sigue sin dependencias.

@@ -4644,3 +4644,150 @@ body{
 .dd-mes-perf-since{
   font-family: var(--dd-font);
 }
+
+/* ── Hacia dónde va la plata ── */
+.dd-rot[hidden]{
+  display: none;
+}
+
+.dd-rot-sub{
+  margin: -0.4rem 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--dd-muted);
+}
+
+.dd-rot-headline{
+  margin: 0 0 0.9rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--dd-fg);
+}
+
+.dd-rot-list,
+.dd-rot-readings{
+  list-style: none;
+  margin: 0 0 1.1rem;
+  padding: 0;
+}
+
+.dd-rot-row{
+  display: grid;
+  grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr) 5.6rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+}
+
+.dd-rot-row + .dd-rot-row{
+  border-top: 1px solid var(--dd-border);
+}
+
+.dd-rot-name{
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.dd-rot-long{
+  font-family: var(--dd-font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--dd-muted);
+}
+
+/* Barra centrada: a la derecha le ganó al S&P 500, a la izquierda le perdió. */
+.dd-rot-track{
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--dd-bg);
+}
+
+.dd-rot-track::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--dd-border-strong);
+}
+
+.dd-rot-bar{
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+}
+
+.dd-rot-bar-pos{
+  left: 50%;
+  background: var(--dd-ok);
+}
+
+.dd-rot-bar-neg{
+  right: 50%;
+  background: var(--dd-bad);
+}
+
+.dd-rot-val{
+  font-family: var(--dd-font-mono);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dd-rot-readings{
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dd-rot-reading{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.6rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--dd-radius-btn);
+  background: var(--dd-bg);
+}
+
+.dd-rot-reading.is-on{
+  background: var(--dd-bark);
+}
+
+.dd-rot-rlabel{
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dd-rot-rval{
+  font-family: var(--dd-font-mono);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.dd-rot-rtext{
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  color: var(--dd-muted);
+}
+
+.dd-rot-reading.is-on .dd-rot-rtext{
+  color: var(--dd-fg);
+}
+
+@media (max-width: 420px){
+  .dd-rot-row{
+    grid-template-columns: minmax(0, 7.6rem) minmax(0, 1fr) 4.9rem;
+    gap: 0.45rem;
+  }
+  .dd-rot-name{
+    font-size: 0.8rem;
+  }
+}

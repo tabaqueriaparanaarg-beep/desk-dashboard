@@ -3531,6 +3531,22 @@ def main() -> None:
     except Exception as exc:  # el índice no puede tirar abajo la corrida
         notes.append(f"Índice Angus: fallo soft ({type(exc).__name__}).")
     print(f"  índice angus: {time.perf_counter() - t_idx:.2f}s")
+    # Hacia dónde va la plata: sectores y lecturas de rotación. Los ETF que no están en el
+    # universo se bajan aparte y no entran al ranking (rotacion.EXTRA_SYMBOLS).
+    rotacion_public: dict[str, Any] = {}
+    try:
+        import rotacion
+
+        rot_bars = {s: full_bars[s] for s in ["SPY"] + [e for e, _ in rotacion.SECTOR_ETFS] if s in full_bars}
+        missing = [s for s in rotacion.EXTRA_SYMBOLS if s not in full_bars]
+        if missing:
+            got_rot = fetch_bars_batch(missing, start_s, end_s)
+            rot_bars.update({s: b for s, b in got_rot.items() if b})
+        rotacion_public = rotacion.compute_rotation(rot_bars)
+        if rotacion_public.get("headline"):
+            notes.append("Rotación: " + rotacion_public["headline"])
+    except Exception as exc:  # el termómetro no puede tirar abajo la corrida
+        notes.append(f"Rotación: fallo soft ({type(exc).__name__}).")
     # El plan con CEDEAR toma la cartera real del índice, para que los dos digan lo mismo.
     fixed_plan: dict[str, dict[str, Any]] = {}
     if indice_public and indice_public.get("holdings"):
@@ -3744,6 +3760,7 @@ def main() -> None:
         "top10_variants": top10_variants,
         "monthly_plan": monthly_plan,
         "indice_angus": indice_public,
+        "rotacion": rotacion_public,
         "top10_default_variant": TOP10_DEFAULT_VARIANT,
         "historial_semaforo": historial_public,
         "sectors": sectors,

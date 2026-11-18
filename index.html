@@ -23,7 +23,7 @@
     // Los datos se piden ya, en paralelo con el CSS y el JS.
     try { window.__datos = fetch("datos.json?ts=" + Date.now(), { cache: "no-store" }); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=50" />
+  <link rel="stylesheet" href="styles.css?v=52" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -135,6 +135,20 @@
       <section class="dd-regime dd-panel" id="market-regime" data-section="market-regime" aria-label="Régimen de mercado" hidden>
         <h2 class="dd-section-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17a9 9 0 0 1 18 0"/><path d="M12 17l4.5-5.5"/><circle cx="12" cy="17" r="1.5" fill="currentColor"/></svg>Mercado</h2>
         <div id="market-regime-body"></div>
+      </section>
+
+      <section class="dd-rot dd-panel" id="rotacion" data-section="rotacion" aria-labelledby="rot-title" hidden>
+        <h2 class="dd-section-title" id="rot-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9.6c-.5-1-1.6-1.6-3-1.6-1.7 0-3 .8-3 2s1.3 1.6 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.6-.6-3-1.6"/><path d="M12 6v2M12 16v2"/></svg>Hacia dónde va la plata</h2>
+        <p class="dd-rot-sub" id="rot-sub"></p>
+        <p class="dd-rot-headline" id="rot-headline"></p>
+        <ul class="dd-rot-list" id="rot-list" aria-label="Cada sector contra el S&amp;P 500, últimas 4 semanas"></ul>
+        <h3 class="dd-indice-h">Las cuatro lecturas</h3>
+        <ul class="dd-rot-readings" id="rot-readings"></ul>
+        <details class="dd-help">
+          <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo se lee</summary>
+          <p id="rot-caption"></p>
+          <p id="rot-readings-caption"></p>
+        </details>
       </section>
 
       <section class="dd-resumen dd-panel" id="resumen-box" data-section="resumen" aria-label="Resumen diario" hidden>
@@ -457,6 +471,6 @@
     <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
   </dialog>
 
-  <script src="app.js?v=50" defer></script>
+  <script src="app.js?v=52" defer></script>
 </body>
 </html>
