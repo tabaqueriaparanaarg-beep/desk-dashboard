@@ -212,12 +212,12 @@ class BandTests(unittest.TestCase):
         expect = {
             0: ("red", "Turbulento · volatilidad muy alta, caídas más profundas"),
             24: ("red", "Turbulento · volatilidad muy alta, caídas más profundas"),
-            25: ("orange", "Movido · volatilidad alta (≈23 % anual)"),
-            49: ("orange", "Movido · volatilidad alta (≈23 % anual)"),
-            50: ("yellow", "Normal · volatilidad media (≈16 % anual)"),
-            74: ("yellow", "Normal · volatilidad media (≈16 % anual)"),
-            75: ("green", "Tranquilo · volatilidad baja (≈12 % anual)"),
-            100: ("green", "Tranquilo · volatilidad baja (≈12 % anual)"),
+            25: ("orange", "Movido · volatilidad alta (≈23% anual)"),
+            49: ("orange", "Movido · volatilidad alta (≈23% anual)"),
+            50: ("yellow", "Normal · volatilidad media (≈16% anual)"),
+            74: ("yellow", "Normal · volatilidad media (≈16% anual)"),
+            75: ("green", "Tranquilo · volatilidad baja (≈12% anual)"),
+            100: ("green", "Tranquilo · volatilidad baja (≈12% anual)"),
         }
         for score, (color, line) in expect.items():
             band = mr.exposure_band(score)

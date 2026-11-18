@@ -416,7 +416,7 @@ class ResumenTests(unittest.TestCase):
         self.assertGreaterEqual(len(out["sentences"]), 6)
         self.assertLessEqual(len(out["sentences"]), 10)
         self.assertIn("mixto", text)
-        self.assertIn("+0,42%", text)
+        self.assertIn("+0,4%", text)
         self.assertIn("NVDA", text)
         self.assertIn("CRM", text)
         self.assertIn("Tecnología", text)

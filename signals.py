@@ -1235,7 +1235,7 @@ def snapshot_from_payload(payload: dict | None) -> dict[str, Any]:
 def _fmt_pct_signed(value: float | None) -> str | None:
     if value is None:
         return None
-    body = _fmt_es(abs(value), 2)
+    body = _fmt_es(abs(value), 1)
     if value > 0:
         return "+" + body + "%"
     if value < 0:

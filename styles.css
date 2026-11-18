@@ -22,8 +22,8 @@
   --dd-accent-soft: rgba(252, 105, 17, 0.16);
 
   --dd-fg: #F5F2EA;
-  --dd-muted: #B0AA9E;
-  --dd-muted-dim: #9A9488;
+  --dd-muted: #C4BEB2;
+  --dd-muted-dim: #B0AA9E;
 
   --dd-ok: #3DDBA3;
   --dd-bad: #FF6B8E;
@@ -5005,4 +5005,131 @@ body{
   background: var(--dd-bark);
   font-size: 0.84rem;
   line-height: 1.45;
+}
+
+/* ══ Claridad (nov-2026) ════════════════════════════════════════════════════
+   Qué es Angus bajo el logo, períodos visibles al lado de cada cifra, la
+   simulación marcada como simulada, letra chica más legible y tablas que
+   avisan cuando siguen hacia el costado. */
+
+.dd-tagline{
+  margin: 0 0 0.9rem;
+  color: var(--dd-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.dd-period-chip{
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--dd-border-strong);
+  border-radius: 999px;
+  color: var(--dd-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dd-sim-badge{
+  margin: 0 0 0.85rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--dd-brand);
+  border-radius: var(--dd-radius-btn, 12px);
+  background: var(--dd-accent-soft);
+  color: var(--dd-fg);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+#simulacion .dd-fold-hint{
+  color: var(--dd-brand);
+  font-weight: 600;
+}
+
+/* Letra chica: piso de 13px para textos de apoyo. */
+.dd-meta,
+.dd-meta .dd-value,
+.dd-fold-hint,
+.dd-indice-since,
+.dd-indice-sub,
+.dd-indice-label,
+.dd-indice-name,
+.dd-indice-dim,
+.dd-variant-note,
+.dd-kpi-label,
+.dd-kpi-sub,
+.dd-attr-meta,
+.dd-attr-foot,
+.dd-alarma-pair,
+.dd-alarma-when,
+.dd-alarma-win,
+.dd-rot-long,
+.dd-regime-row-sub,
+.dd-regime-score-of,
+.dd-sector-count,
+.dd-wf-key,
+.dd-footer,
+.dd-footer p{
+  font-size: max(0.8125rem, 1em);
+}
+.dd-indice-since,
+.dd-indice-sub,
+.dd-variant-note,
+.dd-fold-hint,
+.dd-footer p{
+  font-size: 0.84rem;
+}
+
+/* Texto sobre la tarjeta naranja: más grande y con más peso. */
+.dd-mes-rule,
+.dd-mes-when,
+.dd-mes-perf-since{
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.dd-mes-lead{
+  font-weight: 700;
+}
+
+/* Tablas y filtros que siguen hacia el costado: el borde derecho se desvanece. */
+.dd-table-wrap.has-more,
+.dd-filter-group.has-more{
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+}
+
+/* Ranking en el celular: sin Momentum (en v3 coincide con el Score salvo bajo la EMA200), Entró ni Dist EMA200. */
+@media (max-width: 560px){
+  #ranking-table th:nth-child(4),
+  #ranking-table td:nth-child(4),
+  #ranking-table th:nth-child(6),
+  #ranking-table td:nth-child(6),
+  #ranking-table th:nth-child(7),
+  #ranking-table td:nth-child(7){
+    display: none;
+  }
+  #ranking-table{
+    min-width: 0;
+    width: 100%;
+  }
+  #ranking-table th,
+  #ranking-table td{
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+  #ranking-table .dd-col-ticker{
+    min-width: 0;
+  }
+  #ranking-table .dd-flags{
+    flex-wrap: wrap;
+  }
+  .dd-wf-table{
+    min-width: 0;
+  }
+  .dd-wf-table th,
+  .dd-wf-table td{
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
 }

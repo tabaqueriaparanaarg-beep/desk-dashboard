@@ -14,12 +14,12 @@ Tres alarmas con ETF de factores, que es lo que miran los sistemas de riesgo:
 Avisan turbulencia, no la dirección. Medido con datos SIP de Alpaca, 2016 a
 nov-2026 (backtest_rotacion.py y la medición de factores de nov-2026):
 - momentum (105 episodios): en las 20 ruedas siguientes el momentum no siguió
-  cayendo en promedio, pero su volatilidad fue 25 % contra 17 % y la chance de
-  otra caída de 3 puntos contra USMV, 20 % contra 12 %. El 8/10/2026 se prendió
+  cayendo en promedio, pero su volatilidad fue 25% contra 17% y la chance de
+  otra caída de 3 puntos contra USMV, 20% contra 12%. El 8/10/2026 se prendió
   dos días después del pico, con el S&P 500 todavía arriba.
-- crecimiento (62 episodios): volatilidad 23 % contra 17 %; otra caída de 3
-  puntos, 23 % contra 15 %.
-- crédito: caída del S&P 500 de 5 % o más en 13 semanas, 39 % contra 26 %,
+- crecimiento (62 episodios): volatilidad 23% contra 17%; otra caída de 3
+  puntos, 23% contra 15%.
+- crédito: caída del S&P 500 de 5% o más en 13 semanas, 39% contra 26%,
   pero con más suba en promedio.
 """
 from __future__ import annotations
@@ -41,8 +41,8 @@ ALARMS: list[dict[str, Any]] = [
                    "riesgo de los fondos están reduciendo momentum.",
         "off_text": "Las acciones que más venían subiendo no están perdiendo contra las tranquilas.",
         "history": "Desde 2016 se prendió 105 veces. Después, el momentum no siguió cayendo en promedio, "
-                   "pero se movió mucho más: volatilidad de 25 % contra 17 %, y 20 % de chance de otra caída "
-                   "fuerte contra 12 %. El 8/10/2026 se prendió dos días después del pico, con el S&P 500 "
+                   "pero se movió mucho más: volatilidad de 25% contra 17%, y 20% de chance de otra caída "
+                   "fuerte contra 12%. El 8/10/2026 se prendió dos días después del pico, con el S&P 500 "
                    "todavía arriba.",
         "index_note": "El Índice Angus es una cartera de momentum: con esta alarma prendida suelen venir "
                       "semanas movidas para el índice, en los dos sentidos.",
@@ -57,8 +57,8 @@ ALARMS: list[dict[str, Any]] = [
         "on_text": "La plata sale de las empresas caras que crecen rápido hacia las baratas.",
         "off_text": "No hay una salida fuerte de crecimiento hacia valor.",
         "history": "Desde 2016 se prendió 62 veces. Después, crecimiento no siguió perdiendo en promedio, "
-                   "pero hubo más movimiento: volatilidad de 23 % contra 17 %, y 23 % de chance de otra caída "
-                   "fuerte contra 15 %.",
+                   "pero hubo más movimiento: volatilidad de 23% contra 17%, y 23% de chance de otra caída "
+                   "fuerte contra 15%.",
         "index_note": "",
     },
     {
@@ -70,8 +70,8 @@ ALARMS: list[dict[str, Any]] = [
         "threshold": -1.0,
         "on_text": "Los bonos de empresas riesgosas pierden contra los del Tesoro: los acreedores se cubren.",
         "off_text": "Los bonos de empresas riesgosas no pierden contra los del Tesoro: el crédito está tranquilo.",
-        "history": "Desde 2016, con esta alarma prendida fue más común una caída del S&P 500 de 5 % o más en "
-                   "los 3 meses siguientes (39 % de las veces contra 26 %), pero el S&P 500 subió más en "
+        "history": "Desde 2016, con esta alarma prendida fue más común una caída del S&P 500 de 5% o más en "
+                   "los 3 meses siguientes (39% de las veces contra 26%), pero el S&P 500 subió más en "
                    "promedio: anticipa movimientos fuertes, no la dirección.",
         "index_note": "",
     },
