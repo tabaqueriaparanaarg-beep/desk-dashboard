@@ -23,7 +23,7 @@
     // Los datos se piden ya, en paralelo con el CSS y el JS.
     try { window.__datos = fetch("datos.json?ts=" + Date.now(), { cache: "no-store" }); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=53" />
+  <link rel="stylesheet" href="styles.css?v=54" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -108,6 +108,7 @@
           </div>
         </div>
         <p class="dd-indice-verdict" id="indice-verdict"></p>
+        <p class="dd-indice-alert" id="indice-alert" hidden></p>
         <div class="dd-wf-chart-wrap dd-indice-chart-wrap">
           <p class="dd-wf-legend">
             <span class="dd-wf-key"><span class="dd-wf-swatch dd-wf-swatch-port" aria-hidden="true"></span>Índice Angus</span>
@@ -129,6 +130,16 @@
           <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo funciona</summary>
           <p id="indice-explainer"></p>
           <p id="indice-rules"></p>
+        </details>
+      </section>
+
+      <section class="dd-alarmas dd-panel" id="alarmas" data-section="alarmas" aria-labelledby="alarmas-title" hidden>
+        <h2 class="dd-section-title" id="alarmas-title"><svg class="dd-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg>Alarmas</h2>
+        <p class="dd-alarmas-summary" id="alarmas-summary"></p>
+        <ul class="dd-alarmas-list" id="alarmas-list"></ul>
+        <details class="dd-help">
+          <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Qué miran</summary>
+          <p id="alarmas-caption"></p>
         </details>
       </section>
 
@@ -472,6 +483,6 @@
     <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
   </dialog>
 
-  <script src="app.js?v=53" defer></script>
+  <script src="app.js?v=54" defer></script>
 </body>
 </html>

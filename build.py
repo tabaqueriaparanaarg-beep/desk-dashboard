@@ -3534,19 +3534,32 @@ def main() -> None:
     # Hacia dónde va la plata: sectores y lecturas de rotación. Los ETF que no están en el
     # universo se bajan aparte y no entran al ranking (rotacion.EXTRA_SYMBOLS).
     rotacion_public: dict[str, Any] = {}
+    alarmas_public: dict[str, Any] = {}
+    extra_bars: dict[str, list[dict]] = {}
     try:
+        import alarmas
         import rotacion
 
-        rot_bars = {s: full_bars[s] for s in ["SPY"] + [e for e, _ in rotacion.SECTOR_ETFS] if s in full_bars}
-        missing = [s for s in rotacion.EXTRA_SYMBOLS if s not in full_bars]
-        if missing:
-            got_rot = fetch_bars_batch(missing, start_s, end_s)
-            rot_bars.update({s: b for s, b in got_rot.items() if b})
-        rotacion_public = rotacion.compute_rotation(rot_bars)
+        wanted = ["SPY"] + [e for e, _ in rotacion.SECTOR_ETFS] + rotacion.EXTRA_SYMBOLS + alarmas.EXTRA_SYMBOLS
+        extra_bars = {s: full_bars[s] for s in wanted if s in full_bars}
+        missing = sorted({s for s in wanted if s not in full_bars})
+        for i in range(0, len(missing), BATCH_SIZE):
+            got_extra = fetch_bars_batch(missing[i : i + BATCH_SIZE], start_s, end_s)
+            extra_bars.update({s: b for s, b in got_extra.items() if b})
+    except Exception as exc:
+        notes.append(f"ETF de rotación y alarmas: fallo soft al bajarlos ({type(exc).__name__}).")
+    try:
+        rotacion_public = rotacion.compute_rotation(extra_bars)
         if rotacion_public.get("headline"):
             notes.append("Rotación: " + rotacion_public["headline"])
     except Exception as exc:  # el termómetro no puede tirar abajo la corrida
         notes.append(f"Rotación: fallo soft ({type(exc).__name__}).")
+    try:
+        alarmas_public = alarmas.compute_alarms(extra_bars)
+        if alarmas_public.get("summary"):
+            notes.append("Alarmas: " + alarmas_public["summary"])
+    except Exception as exc:
+        notes.append(f"Alarmas: fallo soft ({type(exc).__name__}).")
     # El plan con CEDEAR toma la cartera real del índice, para que los dos digan lo mismo.
     fixed_plan: dict[str, dict[str, Any]] = {}
     if indice_public and indice_public.get("holdings"):
@@ -3761,6 +3774,7 @@ def main() -> None:
         "monthly_plan": monthly_plan,
         "indice_angus": indice_public,
         "rotacion": rotacion_public,
+        "alarmas": alarmas_public,
         "top10_default_variant": TOP10_DEFAULT_VARIANT,
         "historial_semaforo": historial_public,
         "sectors": sectors,

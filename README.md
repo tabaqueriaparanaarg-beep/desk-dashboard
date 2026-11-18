@@ -155,6 +155,21 @@ El Top 10 con CEDEAR tratado como un índice propio, registrado **hacia adelante
 - **Persistencia:** igual que el historial del semáforo. Se lee primero la copia publicada y después la local. Solo las corridas de cierre escriben, y el workflow commitea el archivo. Si no hay ninguna copia usable y la descarga falló, no se escribe nada y `.indice_fetch_failed` frena el deploy para no borrar el índice de Pages.
 - **En la página:** sección «Índice Angus» en Resumen, debajo de «Este mes». Muestra el nivel contra el SPY, la curva, el mes en curso, la peor caída, qué empresas tiene con cuánto lleva cada una (tocar abre la vista rápida) y los cambios de cada fin de mes. `datos.json` → `indice_angus`.
 
+### Alarmas (nov-2026)
+
+Sección en Resumen, debajo del Índice Angus (`alarmas.py`, `datos.json` → `alarmas`). Miran los mismos ETF de factores que los sistemas de riesgo de los fondos, que reducen posiciones en automático cuando un factor pierde varios días seguidos:
+
+| Alarma | Se prende cuando | Qué pasó después (SIP, 2016 a nov-2026) |
+|---|---|---|
+| El momentum se desarma | MTUM pierde más de 2 pts contra USMV en 5 ruedas | 105 episodios. El momentum no siguió cayendo en promedio, pero su volatilidad fue 25 % contra 17 % y la chance de otra caída fuerte, 20 % contra 12 %. Se prendió el 8/10/2026, dos días después del pico, con el S&P 500 todavía arriba |
+| De crecimiento a valor | IWF pierde más de 3 pts contra IWD en 10 ruedas | 62 episodios. Volatilidad 23 % contra 17 %; otra caída fuerte, 23 % contra 15 % |
+| Crédito tenso | HYG pierde más de 1 pt contra IEF en 20 ruedas | Caída del S&P 500 de 5 % o más en 13 semanas, 39 % contra 26 %, pero con más suba en promedio |
+
+- **Avisan turbulencia, no la dirección.** Ninguna predice si el mercado sube o baja.
+- Cada alarma muestra el valor de hoy, el umbral, la curva de las últimas 60 ruedas, desde cuándo está prendida (o la última vez que lo estuvo) y qué pasó otras veces.
+- Con la alarma de momentum prendida, el Índice Angus muestra una nota: el índice es una cartera de momentum y suelen venir semanas movidas, en los dos sentidos.
+- MTUM, USMV, IWF, IWD, HYG e IEF se bajan aparte (junto con los de rotación) y no entran al ranking.
+
 ### Hacia dónde va la plata (nov-2026)
 
 Termómetro de rotación en Resumen, debajo de «Mercado» (`rotacion.py`, `datos.json` → `rotacion`). Muestra la rotación mientras pasa; **no la anticipa**.
