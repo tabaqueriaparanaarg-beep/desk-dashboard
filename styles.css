@@ -5175,3 +5175,233 @@ body{
     font-size: 0.8rem;
   }
 }
+
+/* ══ Resumen ordenado (nov-2026) ════════════════════════════════════════════
+   La cartera arriba y el resto plegado; términos con definición al tocarlos;
+   valores al tocar los gráficos; ayuda en un «?» junto al título. */
+
+/* Secciones plegadas dentro de Resumen. */
+.dd-hoy > .dd-fold .dd-fold-body > .dd-panel + .dd-panel{
+  margin-top: 0.9rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--dd-border);
+}
+.dd-hoy > .dd-fold .dd-fold-title{
+  font-size: 1.05rem;
+}
+
+/* Términos del glosario. */
+.dd-term{
+  text-decoration: underline dotted;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: help;
+  border-radius: 3px;
+}
+.dd-term:hover,
+.dd-term.is-open{
+  text-decoration-color: var(--dd-brand);
+}
+.dd-term:focus-visible{
+  outline: 2px solid var(--dd-brand);
+  outline-offset: 2px;
+}
+.dd-flag .dd-term,
+th .dd-term{
+  text-decoration-color: currentColor;
+}
+.dd-term-pop{
+  position: fixed;
+  z-index: 60;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--dd-border-strong);
+  border-radius: var(--dd-radius-btn, 12px);
+  background: var(--dd-card-hover);
+  color: var(--dd-fg);
+  font-family: var(--dd-font);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.dd-term-pop strong{
+  color: var(--dd-brand);
+  font-weight: 700;
+}
+
+.dd-glosario-list{
+  display: grid;
+  gap: 0.7rem;
+  margin: 0.4rem 0 0;
+}
+.dd-glosario-list dt{
+  font-weight: 700;
+}
+.dd-glosario-list dd{
+  margin: 0.1rem 0 0;
+  color: #DAD5CA;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/* Ayuda: el «?» va en el título; la explicación se abre debajo del encabezado. */
+.dd-help.is-iconized > summary{
+  display: none;
+}
+.dd-help.is-iconized:not([open]){
+  display: none;
+}
+.dd-help.is-iconized[open]{
+  margin: 0.2rem 0 0.8rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--dd-radius-btn, 12px);
+  background: var(--dd-bg);
+}
+.dd-help-btn{
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-left: 0.15rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dd-icon);
+  cursor: pointer;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+.dd-help-btn svg{
+  width: 18px;
+  height: 18px;
+}
+.dd-help-btn[aria-expanded="true"]{
+  background: var(--dd-accent-soft);
+}
+.dd-help-btn:focus-visible{
+  outline: 2px solid var(--dd-brand);
+}
+
+/* Valores al tocar o pasar el mouse por un gráfico. */
+.dd-has-tips{
+  position: relative;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.dd-spark-box{
+  display: block;
+  min-width: 0;
+}
+.dd-tip-pop,
+.dd-tip-rule{
+  display: none;
+  position: absolute;
+  pointer-events: none;
+}
+.dd-has-tips.is-tipping > .dd-tip-pop,
+.dd-has-tips.is-tipping > .dd-tip-rule{
+  display: block;
+}
+.dd-tip-rule{
+  width: 0;
+  border-left: 1px dashed var(--dd-fg);
+  opacity: 0.6;
+}
+.dd-tip-pop{
+  z-index: 5;
+  bottom: calc(100% + 6px);
+  min-width: 9.5rem;
+  max-width: 16rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--dd-border-strong);
+  border-radius: var(--dd-radius-chip, 6px);
+  background: var(--dd-card-hover);
+  color: var(--dd-fg);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  white-space: normal;
+}
+.dd-wf-chart.dd-has-tips > .dd-tip-pop{
+  bottom: auto;
+  top: 0;
+}
+.dd-tip-date{
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #DAD5CA;
+  font-weight: 600;
+}
+.dd-tip-row{
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.dd-tip-row strong{
+  font-family: var(--dd-font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dd-tip-row em{
+  color: #DAD5CA;
+  font-style: normal;
+  font-weight: 400;
+}
+.dd-tip-note{
+  display: block;
+  margin-top: 0.3rem;
+  color: #DAD5CA;
+}
+
+/* Resultados: una fila por empresa. */
+.dd-earn-list{
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dd-earn-row{
+  display: grid;
+  grid-template-columns: 6.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.2rem 0.75rem;
+  padding: 0.55rem 0;
+}
+.dd-earn-row + .dd-earn-row{
+  border-top: 1px solid var(--dd-border);
+}
+.dd-earn-when{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+  font-size: 0.9rem;
+}
+.dd-earn-day{
+  font-weight: 600;
+}
+.dd-earn-hour{
+  color: #DAD5CA;
+}
+.dd-earn-eps{
+  grid-column: 2;
+  color: var(--dd-muted);
+  font-size: 0.8rem;
+}
+.dd-earn-row .dd-earn-hour,
+.dd-earn-row .dd-earn-day{
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #DAD5CA;
+  font-family: var(--dd-font);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dd-earn-row .dd-earn-day{
+  color: var(--dd-fg);
+  font-weight: 650;
+}

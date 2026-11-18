@@ -806,6 +806,23 @@
       '<polyline fill="none" stroke="#FC6911" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="' + poly("portfolio") + '"></polyline>' +
       dot + xLabels +
       "</svg>";
+    var isIndex = host.id === "indice-chart";
+    host._model = {
+      n: curve.length, left: padL, right: padR, top: padT, bottom: padB,
+      html: function (i) {
+        var p = curve[i];
+        function line(name, v) {
+          if (v == null || Number.isNaN(Number(v))) return "";
+          var n = Number(v);
+          return '<span class="dd-tip-row"><span>' + name + "</span><strong>" + escapeHtml(fmtEsNum(n, 1)) +
+            " <em>" + escapeHtml(fmtEsSignedPct(n - 100, 1)) + "</em></strong></span>";
+        }
+        return '<span class="dd-tip-date">' + escapeHtml(fmtIso(p.date)) + "</span>" +
+          line(isIndex ? "Índice" : "Cartera", p.portfolio) + line("SPY", p.spy) +
+          (hasUni ? line("Universo", p.universe) : "");
+      },
+    };
+    bindPointTips(host);
     var portLbl = fmtSignedPct2(block.total_return_pct);
     var spyLbl = fmtSignedPct2(block.spy_total_return_pct);
     host.setAttribute(
@@ -887,12 +904,27 @@
           '<span class="dd-alarma-val ' + distClass(a.value) + '">' + escapeHtml(fmtRelPts(a.value)) + "</span>" +
           '<span class="dd-alarma-win">en ' + a.lookback + " ruedas · se prende con " + escapeHtml(fmtRelPts(a.threshold)) + "</span>" +
         "</div>" +
-        alarmSparkSvg(a.series, a.threshold, a.on) +
+        '<div class="dd-spark-box" data-alarm="' + escapeHtml(a.key) + '">' + alarmSparkSvg(a.series, a.threshold, a.on) + "</div>" +
         '<p class="dd-alarma-text">' + escapeHtml(a.text) + "</p>" +
         '<p class="dd-alarma-when">' + escapeHtml(when) + "</p>" +
         '<details class="dd-alarma-more"><summary>Qué pasó otras veces</summary><p>' + escapeHtml(a.history) + "</p></details>" +
         "</li>";
     }).join("");
+    list.forEach(function (a) {
+      var el = ul.querySelector('.dd-spark-box[data-alarm="' + a.key + '"]');
+      var series = a.series || [];
+      if (!el || series.length < 2) return;
+      el._model = {
+        n: series.length,
+        html: function (i) {
+          var p = series[i];
+          return '<span class="dd-tip-date">' + escapeHtml(fmtDayMonth(p.date)) + "</span>" +
+            '<span class="dd-tip-row"><span>' + a.lookback + " ruedas</span><strong>" + escapeHtml(fmtRelPts(p.value)) + "</strong></span>" +
+            '<span class="dd-tip-note">La línea punteada es el umbral: ' + escapeHtml(fmtRelPts(a.threshold)) + ". Debajo, la alarma se prende.</span>";
+        },
+      };
+      bindPointTips(el);
+    });
   }
 
   // ── Hacia dónde va la plata: cada sector contra el S&P 500 (termómetro) ──
@@ -952,10 +984,25 @@
         return '<li class="dd-rot-row">' +
           '<span class="dd-rot-name">' + escapeHtml(s.name) + tag +
           '<span class="dd-rot-long">3 meses ' + escapeHtml(fmtRelPts(s.rel_13w)) + "</span></span>" +
-          rotSparkSvg(s.spark || [], lo, hi, t.dir) +
+          '<span class="dd-spark-box" data-sector="' + escapeHtml(s.symbol || s.name) + '">' + rotSparkSvg(s.spark || [], lo, hi, t.dir) + "</span>" +
           '<span class="dd-rot-val ' + distClass(v) + '">' + escapeHtml(fmtRelPts(v)) + "</span>" +
           "</li>";
       }).join("");
+      sectors.forEach(function (s) {
+        var el = list.querySelector('.dd-spark-box[data-sector="' + (s.symbol || s.name) + '"]');
+        var pts = s.spark || [];
+        if (!el || pts.length < 2) return;
+        el._model = {
+          n: pts.length,
+          html: function (i) {
+            var back = pts.length - 1 - i;
+            var when = back === 0 ? "Esta semana" : back === 1 ? "Hace 1 semana" : "Hace " + back + " semanas";
+            return '<span class="dd-tip-date">' + when + "</span>" +
+              '<span class="dd-tip-row"><span>4 semanas contra el S&amp;P 500</span><strong>' + escapeHtml(fmtRelPts(pts[i])) + "</strong></span>";
+          },
+        };
+        bindPointTips(el);
+      });
     }
     var readings = document.getElementById("rot-readings");
     if (readings) {
@@ -1008,7 +1055,7 @@
     }
     setText(
       "indice-hold-sub",
-      "Cuánto lleva cada una desde el " + fmtDayMonth(blk.period_start) + ", cuando se armó este mes. Tocá una para verla."
+      "Cuánto lleva cada una desde el " + fmtDayMonth(blk.period_start) + ", cuando se armó este mes."
     );
     var hold = document.getElementById("indice-hold");
     if (hold) {
@@ -1133,9 +1180,9 @@
   function hourLabel(hour) {
     var h = String(hour || "").toLowerCase();
     if (h === "amc") return "después del cierre";
-    if (h === "bmo") return "antes de abrir";
+    if (h === "bmo") return "antes de la apertura";
     if (h === "dmh") return "durante la rueda";
-    return hour || "";
+    return "";
   }
 
   function earnEpsLine(e) {
@@ -1157,31 +1204,29 @@
   function renderEarnings(list) {
     var strip = document.getElementById("earnings-strip");
     if (!strip) return;
-    strip.innerHTML = "";
     if (!list || !list.length) {
-      var p = document.createElement("p");
-      p.className = "dd-empty";
-      p.textContent = "Sin earnings esta semana en el universo (o Finnhub no disponible).";
-      strip.appendChild(p);
+      strip.innerHTML = '<p class="dd-empty">Esta semana no presenta resultados ninguna empresa del universo.</p>';
       return;
     }
-    list.forEach(function (e) {
-      var chip = document.createElement("div");
-      chip.className = "dd-earn-chip";
-      chip.setAttribute("data-symbol", e.symbol || "");
-      if (e.hour) chip.setAttribute("data-hour", e.hour);
-      var spoken = hourLabel(e.hour);
-      var dateLabel = e.date ? fmtDayMonth(e.date) : "";
-      var eps = earnEpsLine(e);
-      var tip = [e.symbol, e.date, e.hour].filter(Boolean).join(" · ");
-      chip.title = tip;
-      chip.innerHTML =
-        tickerWithLogo(e, "dd-earn-sym") +
-        (dateLabel ? '<span class="dd-earn-date">' + escapeHtml(dateLabel) + "</span>" : "") +
-        (spoken ? '<span class="dd-earn-hour">' + escapeHtml(spoken) + "</span>" : "") +
-        (eps ? '<span class="dd-earn-eps">' + escapeHtml(eps) + "</span>" : "");
-      strip.appendChild(chip);
+    var order = { bmo: 0, dmh: 1, amc: 2 };
+    var rows = list.slice().sort(function (a, b) {
+      var d = String(a.date || "").localeCompare(String(b.date || ""));
+      if (d) return d;
+      var ha = order[String(a.hour || "").toLowerCase()], hb = order[String(b.hour || "").toLowerCase()];
+      return (ha == null ? 3 : ha) - (hb == null ? 3 : hb) || String(a.symbol).localeCompare(String(b.symbol));
     });
+    strip.innerHTML = '<ul class="dd-earn-list">' + rows.map(function (e) {
+      var day = isoDate(e.date);
+      var dayLabel = day ? WEEKDAYS[day.getDay()] + " " + fmtDayMonth(e.date) : "—";
+      var hour = hourLabel(e.hour) || "sin horario confirmado";
+      var eps = earnEpsLine(e);
+      return '<li class="dd-earn-row" data-symbol="' + escapeHtml(e.symbol || "") + '">' +
+        tickerWithLogo(e, "dd-earn-sym") +
+        '<span class="dd-earn-when"><span class="dd-earn-day">' + escapeHtml(dayLabel) + "</span>" +
+        '<span class="dd-earn-hour">' + escapeHtml(hour) + "</span></span>" +
+        (eps ? '<span class="dd-earn-eps">' + escapeHtml(eps) + "</span>" : "") +
+        "</li>";
+    }).join("") + "</ul>";
   }
 
   function filteredRanking() {
@@ -2219,6 +2264,7 @@
     state.defaultVariant = data.top10_default_variant || "cedear";
     renderVariant();
     renderEarnings(data.earnings);
+    renderFoldHints(data);
     renderSectors(data.sectors);
     applyFilters();
     renderNotes(data.notes);
@@ -2863,9 +2909,10 @@
     if (!moved) return;
     var foldId = key.toLowerCase();
     if (foldId === "fórmulas") foldId = "formulas";
-    var fold = document.getElementById(foldId);
-    if (fold && fold.tagName === "DETAILS") fold.open = true;
     var target = document.getElementById(foldId);
+    for (var anc = target; anc; anc = anc.parentElement) {
+      if (anc.tagName === "DETAILS") anc.open = true;
+    }
     if (target && foldId && foldId !== page) {
       window.setTimeout(function () {
         target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3237,6 +3284,274 @@
     window.addEventListener("resize", syncScrollPad);
   }
 
+  // ── Valores al tocar o pasar el mouse por un gráfico ─────────────────────
+  // El host guarda en _model: n (puntos), márgenes en px (left, right, top, bottom) y html(i).
+  var tipHosts = [];
+  function bindPointTips(host) {
+    if (!host || host._tipsBound) return;
+    host._tipsBound = true;
+    host.classList.add("dd-has-tips");
+    tipHosts.push(host);
+    function parts() {
+      var tip = null, rule = null;
+      for (var c = host.firstElementChild; c; c = c.nextElementSibling) {
+        if (c.classList.contains("dd-tip-pop")) tip = c;
+        if (c.classList.contains("dd-tip-rule")) rule = c;
+      }
+      if (!tip || !rule) {
+        rule = document.createElement("span");
+        rule.className = "dd-tip-rule";
+        tip = document.createElement("span");
+        tip.className = "dd-tip-pop";
+        tip.setAttribute("role", "status");
+        host.appendChild(rule);
+        host.appendChild(tip);
+      }
+      return { tip: tip, rule: rule };
+    }
+    function show(ev) {
+      var m = host._model;
+      if (!m || m.n < 2) return;
+      var r = host.getBoundingClientRect();
+      var L = m.left || 0, R = m.right || 0;
+      var w = r.width - L - R;
+      if (w <= 0) return;
+      var i = Math.round(((ev.clientX - r.left - L) / w) * (m.n - 1));
+      i = Math.max(0, Math.min(m.n - 1, i));
+      var x = L + (i / (m.n - 1)) * w;
+      var p = parts();
+      p.rule.style.left = x + "px";
+      p.rule.style.top = (m.top || 0) + "px";
+      p.rule.style.bottom = (m.bottom || 0) + "px";
+      p.tip.innerHTML = m.html(i);
+      host.classList.add("is-tipping");
+      var tw = p.tip.offsetWidth;
+      p.tip.style.left = Math.max(0, Math.min(r.width - tw, x - tw / 2)) + "px";
+    }
+    function hide() {
+      host.classList.remove("is-tipping");
+    }
+    host.addEventListener("pointermove", show);
+    host.addEventListener("pointerdown", show);
+    host.addEventListener("pointerleave", function (ev) {
+      if (ev.pointerType !== "touch") hide();
+    });
+    host._hideTip = hide;
+  }
+  document.addEventListener("pointerdown", function (ev) {
+    tipHosts.forEach(function (h) {
+      if (h._hideTip && !h.contains(ev.target)) h._hideTip();
+    });
+  });
+
+  // ── Glosario: términos con subrayado punteado y una definición al tocarlos ─
+  var GLOSSARY = [
+    { key: "cedear", label: "CEDEAR", re: /\bCEDEARs?\b/, def: "Certificado que se compra en pesos en la bolsa argentina (BYMA) y representa acciones de una empresa de afuera." },
+    { key: "ratio", label: "Ratio del CEDEAR (por ejemplo 19:1)", re: /\b\d+:1\b/, def: "Cuántos CEDEAR equivalen a una acción: 19:1 quiere decir que 19 CEDEAR son una acción." },
+    { key: "rueda", label: "Rueda", re: /\bruedas?\b/i, def: "Un día en que la bolsa abre. 10 ruedas son unas dos semanas." },
+    { key: "desk", label: "Desk Score", re: /\bDesk Score\b|^Score$/, def: "El puntaje de Angus, de 0 a 100: cuánto subió cada acción en el último año (sin el último mes) comparada con el resto. Bajo la EMA200 vale la mitad." },
+    { key: "momentum", label: "Momentum", re: /\bmomentum\b/i, def: "La tendencia de lo que viene subiendo a seguir subiendo un tiempo. Acá se mide con la suba de 12 meses sin el último." },
+    { key: "ema200", label: "EMA200", re: /\bEMA ?200\b/, def: "Promedio del precio de los últimos 200 días hábiles (casi un año), con más peso en los recientes. Estar arriba suele ser tendencia de suba." },
+    { key: "atr", label: "ATR alto", re: /\bATR alto\b/, def: "La acción se está moviendo mucho día a día, más que lo normal para ella." },
+    { key: "extendido", label: "Extendido", re: /\bExtendido\b/, def: "El precio quedó muy arriba de su EMA200 después de una suba fuerte. Puede corregir." },
+    { key: "distribucion", label: "Distribución", re: /\bDistribución\b/, def: "Varios días de baja con más volumen que lo normal: puede que estén vendiendo los grandes." },
+    { key: "rsi", label: "RSI", re: /\bRSI\b/, def: "Indicador de 0 a 100 de cuánto subió o bajó en las últimas dos semanas. Más de 70 es una suba muy rápida; menos de 30, una baja muy rápida." },
+    { key: "rs", label: "RS (fuerza relativa)", re: /\bRS\b/, def: "Fuerza relativa: cuánto le gana o le pierde una acción al resto en las últimas semanas." },
+    { key: "luz", label: "Luz", re: /^Luz$/, def: "Alerta de riesgo de cada acción. Verde es sin alertas, no una señal de compra." },
+    { key: "spy", label: "SPY", re: /\bSPY\b/, def: "Fondo que copia al S&P 500, las 500 empresas grandes de EE. UU. Es la vara para comparar." },
+    { key: "base100", label: "Base 100", re: /\bbase 100\b/, def: "Todas las curvas arrancan en 100 para compararlas: 110 es +10% y 90 es −10%." },
+    { key: "caida", label: "Peor caída", re: /\bPeor caída\b|\bCaída máx\.?/, def: "La mayor baja desde un máximo hasta el mínimo que vino después." },
+    { key: "universo", label: "Universo", re: /\bUniverso\b/, def: "Todas las acciones que mira Angus, compradas en partes iguales." },
+    { key: "exceso", label: "Exceso vs SPY", re: /\bExceso\b/, def: "Diferencia entre lo que hizo la cartera y lo que hizo el SPY." },
+    { key: "volatilidad", label: "Volatilidad", re: /\bvolatilidad\b/i, def: "Cuánto se mueve el precio. Más volatilidad, más saltos para los dos lados." },
+  ];
+  var GLOSSARY_BY_KEY = {};
+  GLOSSARY.forEach(function (g) { GLOSSARY_BY_KEY[g.key] = g; });
+  var GLOSS_SCOPES = [
+    ".dd-tagline", ".dd-variant-note", ".dd-mes-rule", ".dd-help p", ".dd-top10-subtitle",
+    ".dd-indice-sub", ".dd-indice-since", ".dd-indice-stats dt", ".dd-kpi-label", ".dd-wf-key",
+    "#ranking-table thead th", "#top10-table thead th", ".dd-flag", ".dd-cedear-sub",
+    ".dd-alarma-pair", ".dd-alarma-win", ".dd-rot-sub", ".dd-attr-title", ".dd-regime-line",
+  ].join(", ");
+
+  function glossify(scope) {
+    if (scope._glText === scope.textContent) return;
+    var used = {};
+    var walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        var p = n.parentElement;
+        if (!p || p.closest(".dd-term, button, a, summary, svg, .dd-sr-only")) return NodeFilter.FILTER_REJECT;
+        return n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    var nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (node) {
+      GLOSSARY.forEach(function (g) {
+        if (used[g.key] || !node || !node.parentNode) return;
+        var value = node.nodeValue;
+        var anchored = g.re.source.charAt(0) === "^";
+        var m = g.re.exec(anchored ? value.trim() : value);
+        if (!m) return;
+        var start = anchored ? value.indexOf(m[0]) : m.index;
+        var hit = node.splitText(start);
+        var rest = hit.splitText(m[0].length);
+        var span = document.createElement("span");
+        span.className = "dd-term";
+        span.setAttribute("data-term", g.key);
+        span.setAttribute("tabindex", "0");
+        span.setAttribute("role", "button");
+        span.textContent = m[0];
+        hit.parentNode.replaceChild(span, hit);
+        used[g.key] = true;
+        node = rest;
+      });
+    });
+    scope._glText = scope.textContent;
+  }
+
+  var termPop = null;
+  function closeTerm() {
+    if (termPop) termPop.hidden = true;
+    var open = document.querySelector(".dd-term.is-open");
+    if (open) open.classList.remove("is-open");
+  }
+  function openTerm(el) {
+    var g = GLOSSARY_BY_KEY[el.getAttribute("data-term")];
+    if (!g) return;
+    if (el.classList.contains("is-open")) {
+      closeTerm();
+      return;
+    }
+    closeTerm();
+    if (!termPop) {
+      termPop = document.createElement("div");
+      termPop.className = "dd-term-pop";
+      termPop.setAttribute("role", "tooltip");
+      document.body.appendChild(termPop);
+    }
+    termPop.innerHTML = "<strong>" + escapeHtml(g.label) + ".</strong> " + escapeHtml(g.def);
+    termPop.hidden = false;
+    el.classList.add("is-open");
+    var r = el.getBoundingClientRect();
+    var pw = termPop.offsetWidth, ph = termPop.offsetHeight;
+    var vw = document.documentElement.clientWidth;
+    var left = Math.max(8, Math.min(vw - pw - 8, r.left + r.width / 2 - pw / 2));
+    var top = r.bottom + 8;
+    if (top + ph > window.innerHeight - 80) top = Math.max(8, r.top - ph - 8);
+    termPop.style.left = left + "px";
+    termPop.style.top = top + "px";
+  }
+
+  function bindGlossary() {
+    document.addEventListener("click", function (ev) {
+      var t = ev.target.closest && ev.target.closest(".dd-term");
+      if (t) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openTerm(t);
+        return;
+      }
+      if (termPop && !termPop.hidden && !termPop.contains(ev.target)) closeTerm();
+    }, true);
+    document.addEventListener("keydown", function (ev) {
+      var t = ev.target.closest && ev.target.closest(".dd-term");
+      if (t && (ev.key === "Enter" || ev.key === " ")) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openTerm(t);
+      } else if (ev.key === "Escape") {
+        closeTerm();
+      }
+    }, true);
+    window.addEventListener("scroll", closeTerm, { passive: true });
+    window.addEventListener("resize", closeTerm);
+    var list = document.getElementById("glosario-list");
+    if (list) {
+      list.innerHTML = GLOSSARY.map(function (g) {
+        return "<div><dt>" + escapeHtml(g.label) + "</dt><dd>" + escapeHtml(g.def) + "</dd></div>";
+      }).join("");
+    }
+    var pending = false;
+    function run() {
+      pending = false;
+      var scopes = document.querySelectorAll(GLOSS_SCOPES);
+      for (var i = 0; i < scopes.length; i++) glossify(scopes[i]);
+    }
+    function schedule() {
+      if (pending) return;
+      pending = true;
+      window.setTimeout(run, 30);
+    }
+    if (window.MutationObserver) {
+      new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+    schedule();
+  }
+
+  // ── Ayuda: un «?» chico junto al título abre la explicación de cada sección ─
+  function bindHelpIcons() {
+    var helps = document.querySelectorAll("details.dd-help");
+    for (var i = 0; i < helps.length; i++) {
+      var d = helps[i];
+      var holder = d.closest(".dd-attr") || d.closest("section");
+      var h = holder && holder.querySelector("h2:not(.dd-sr-only), .dd-attr-title, h3.dd-indice-h");
+      if (!h) continue;
+      var summary = d.querySelector("summary");
+      var label = summary ? summary.textContent.trim() : "Ayuda";
+      var anchor = h.parentElement !== holder ? h.parentElement : h;
+      anchor.insertAdjacentElement("afterend", d);
+      d.classList.add("is-iconized");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "dd-help-btn";
+      btn.setAttribute("aria-label", label);
+      btn.setAttribute("aria-expanded", "false");
+      btn.title = label;
+      var svg = summary && summary.querySelector("svg");
+      btn.innerHTML = svg ? svg.outerHTML : "?";
+      (function (det, b) {
+        b.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          det.open = !det.open;
+          b.setAttribute("aria-expanded", det.open ? "true" : "false");
+        });
+      })(d, btn);
+      h.appendChild(btn);
+    }
+  }
+
+  // ── Las secciones plegadas de Resumen dicen en una línea qué hay adentro ──
+  function renderFoldHints(data) {
+    var bits = [];
+    var al = data.alarmas;
+    if (al && al.alarms && al.alarms.length) {
+      var n = al.on_count || 0;
+      bits.push(n === 0 ? "ninguna alarma prendida" : n === 1 ? "1 alarma prendida" : n + " alarmas prendidas");
+    }
+    var band = data.market_regime && data.market_regime.band;
+    if (band && band.exposure_pct) bits.push("mercado " + String(band.exposure_pct).toLowerCase());
+    var rot = data.rotacion;
+    var top = rot && rot.sectors && rot.sectors[0];
+    if (top && Number(top.rel_4w) >= 2) bits.push("la plata va a " + String(top.name).toLowerCase());
+    if (bits.length) {
+      var line = bits.join(" · ");
+      setText("contexto-hint", line.charAt(0).toUpperCase() + line.slice(1));
+    }
+    var news = [];
+    var today = artTodayIso();
+    var all = data.earnings || [];
+    var upcoming = all.filter(function (e) { return String(e.date || "") >= today; }).length;
+    if (upcoming) news.push(upcoming + (upcoming === 1 ? " empresa presenta" : " empresas presentan") + " resultados de acá al viernes");
+    else if (all.length) news.push(all.length + " resultados esta semana");
+    else news.push("sin resultados esta semana");
+    var hasResumen = !!(data.resumen && (data.resumen.text || (data.resumen.sentences || []).length));
+    if (hasResumen) news.push("resumen del día");
+    var nl = news.join(" · ");
+    setText("noticias-hint", nl.charAt(0).toUpperCase() + nl.slice(1));
+  }
+
   // Tablas y filas de filtros que siguen hacia el costado: marca has-more para desvanecer el borde.
   function bindOverflowHints() {
     var pending = false;
@@ -3265,6 +3580,8 @@
   }
 
   registerServiceWorker();
+  bindHelpIcons();
+  bindGlossary();
   bindOverflowHints();
   bindFilters();
   bindRefresh();
