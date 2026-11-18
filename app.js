@@ -361,6 +361,14 @@
       '<div class="dd-mes-chips">' + planChips(list, kind) + "</div></div>";
   }
 
+  // La versión CEDEAR normal es el Índice Angus: la cartera real. Las otras son variantes para mirar.
+  var PLAN_NAMES = {
+    cedear: "Índice Angus",
+    cedear_cons: "Versión CEDEAR conservadora",
+    todas: "Versión con todas las acciones",
+    todas_cons: "Versión todas conservadora",
+  };
+
   function renderMonthlyPlan(top10Block) {
     var box = document.getElementById("este-mes");
     var body = document.getElementById("mes-body");
@@ -393,9 +401,10 @@
     }
     var perf = !plan.review_done && plan.performance && plan.performance[key];
     var perfHtml = perf
-      ? '<p class="dd-mes-perf"><span class="dd-mes-perf-since">Cartera desde el ' + escapeHtml(fmtDayMonth(plan.since)) +
+      ? '<p class="dd-mes-perf"><span class="dd-mes-perf-since">' + escapeHtml(PLAN_NAMES[key] || "Esta versión") + " desde el " + escapeHtml(fmtDayMonth(plan.since)) +
         (perf.asof ? " al cierre del " + escapeHtml(fmtDayMonth(perf.asof)) : "") + "</span>" +
-        '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.portfolio_pct, 1)) + "</strong> cartera</span>" +
+        '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.portfolio_pct, 1)) + "</strong> " +
+        (key === "cedear" ? "Índice" : "versión") + "</span>" +
         '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.spy_pct, 1)) + "</strong> SPY</span></p>"
       : "";
     var sell = from.filter(function (s) { return to.indexOf(s) === -1; });
@@ -1276,9 +1285,61 @@
     });
   }
 
+  function activeFilters() {
+    var out = [];
+    if (state.kind) {
+      var kb = document.querySelector('.dd-filter-group[data-filter="kind"] .dd-chip[data-kind="' + state.kind + '"]');
+      out.push({ id: "kind", label: kb ? kb.textContent.trim() : state.kind });
+    }
+    if (state.sector) out.push({ id: "sector", label: state.sectorLabel || state.sector });
+    Object.keys(state.flags).forEach(function (f) {
+      if (!state.flags[f]) return;
+      var fb = document.querySelector('.dd-chip-toggle[data-flag="' + f + '"]');
+      out.push({ id: "flag:" + f, label: fb ? fb.textContent.trim() : f });
+    });
+    if ((state.search || "").trim()) out.push({ id: "search", label: "«" + state.search.trim() + "»" });
+    return out;
+  }
+
   function updateFilterCount(shown, total) {
-    var extra = state.sector ? " · " + (state.sectorLabel || state.sector) : "";
-    setText("filter-count", "Mostrando " + shown + " de " + total + extra);
+    setText("filter-count", "Mostrando " + shown + " de " + total);
+    var box = document.getElementById("filter-active");
+    if (!box) return;
+    var list = activeFilters();
+    box.hidden = !list.length;
+    box.innerHTML = list.map(function (f) {
+      return '<button type="button" class="dd-active-chip" data-clear="' + escapeHtml(f.id) + '" aria-label="Quitar filtro ' +
+        escapeHtml(f.label) + '">' + escapeHtml(f.label) + ' <span aria-hidden="true">✕</span></button>';
+    }).join("");
+  }
+
+  function clearFilter(id) {
+    if (id === "kind" || id === "all") {
+      state.kind = "";
+      document.querySelectorAll('.dd-filter-group[data-filter="kind"] .dd-chip').forEach(function (b) {
+        b.classList.toggle("is-active", (b.getAttribute("data-kind") || "") === "");
+      });
+    }
+    if (id === "search" || id === "all") {
+      state.search = "";
+      var input = document.getElementById("filter-search");
+      if (input) input.value = "";
+    }
+    Object.keys(state.flags).forEach(function (f) {
+      if (id !== "flag:" + f && id !== "all") return;
+      state.flags[f] = false;
+      var fb = document.querySelector('.dd-chip-toggle[data-flag="' + f + '"]');
+      if (fb) {
+        fb.classList.remove("is-active");
+        fb.setAttribute("aria-pressed", "false");
+      }
+    });
+    state.rankPage = 0;
+    if ((id === "sector" || id === "all") && state.sector) {
+      setSectorFilter("", false);
+    } else {
+      applyFilters();
+    }
   }
 
 
@@ -1328,6 +1389,11 @@
     var tbody = document.getElementById("ranking-body");
     if (!tbody) return;
     tbody.innerHTML = "";
+    if (!(rows || []).length && state.ranking.length) {
+      tbody.innerHTML = '<tr class="dd-rank-empty"><td colspan="8"><p>No hay acciones con ese filtro o búsqueda.</p>' +
+        '<button type="button" class="dd-btn-clear" data-clear="all">Limpiar filtros</button></td></tr>';
+      return;
+    }
     (rows || []).forEach(function (r) {
       var p = r.pillars || {};
       var tr = document.createElement("tr");
@@ -1376,19 +1442,21 @@
   }
 
   function paintPager(id, windowed) {
-    var root = document.getElementById(id);
-    if (!root) return;
-    var label = document.getElementById("rank-page");
-    var show = windowed.total > PAGE_SIZE;
-    root.hidden = !show;
-    if (!show) return;
-    var from = windowed.total ? windowed.start + 1 : 0;
-    var to = Math.min(windowed.total, windowed.start + windowed.rows.length);
-    if (label) label.textContent = from + "–" + to + " · " + (windowed.page + 1) + "/" + windowed.pages;
-    var prev = root.querySelector("button:first-of-type");
-    var next = root.querySelector("button:last-of-type");
-    if (prev) prev.disabled = windowed.page <= 0;
-    if (next) next.disabled = windowed.page >= windowed.pages - 1;
+    [id, id + "-bottom"].forEach(function (pid) {
+      var root = document.getElementById(pid);
+      if (!root) return;
+      var label = root.querySelector("span");
+      var show = windowed.total > PAGE_SIZE;
+      root.hidden = !show;
+      if (!show) return;
+      var from = windowed.total ? windowed.start + 1 : 0;
+      var to = Math.min(windowed.total, windowed.start + windowed.rows.length);
+      if (label) label.textContent = from + "–" + to + " · " + (windowed.page + 1) + "/" + windowed.pages;
+      var prev = root.querySelector("button:first-of-type");
+      var next = root.querySelector("button:last-of-type");
+      if (prev) prev.disabled = windowed.page <= 0;
+      if (next) next.disabled = windowed.page >= windowed.pages - 1;
+    });
   }
 
   function applyFilters() {
@@ -1822,6 +1890,10 @@
       );
     }).join("");
     var disclaimer = entry.disclaimer || "Alerta de riesgo automática. El verde no es una señal de compra.";
+    var flagsNow = (row.flags || []).map(function (f) { return FLAG_LABELS[f] || ""; }).filter(Boolean);
+    if (entry.verdict === "verde" && flagsNow.length) {
+      disclaimer += " Las señales técnicas (" + flagsNow.join(", ") + ") se ven aparte: no cambian el semáforo.";
+    }
     return (
       '<section class="dd-ficha-card dd-entry-card" data-verdict="' + escapeHtml(entry.verdict) +
       '" aria-label="Semáforo de riesgo">' +
@@ -2390,6 +2462,12 @@
     opts = opts || {};
     if (state.loading) return Promise.resolve();
     setLoading(true);
+    var st0 = document.getElementById("refresh-status");
+    var changed = false;
+    if (opts.manual && st0) {
+      st0.hidden = false;
+      st0.textContent = "Actualizando…";
+    }
     // Primera carga: usa el pedido que arrancó en el <head>.
     var early = window.__datos;
     window.__datos = null;
@@ -2405,12 +2483,21 @@
         var data = JSON.parse(text);
         if (data && data.error && !data.ranking) throw new Error(data.error);
         state.lastPayload = text;
+        changed = true;
         applyData(data);
         saveCopy(text);
       })
       .then(function () {
         var st = document.getElementById("refresh-status");
-        if (st) {
+        if (!st) return;
+        if (opts.manual) {
+          var now = new Date();
+          var hhmm = ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+          st.hidden = false;
+          st.textContent = changed ? "Actualizado " + hhmm : "Ya estaba al día";
+          window.clearTimeout(st._t);
+          st._t = window.setTimeout(function () { st.hidden = true; st.textContent = ""; }, 6000);
+        } else {
           st.hidden = true;
           st.textContent = "";
         }
@@ -2553,7 +2640,7 @@
     var btn = document.getElementById("btn-refresh");
     if (btn) {
       btn.addEventListener("click", function () {
-        loadData({ silent: true });
+        loadData({ silent: true, manual: true });
       });
     }
     document.addEventListener("visibilitychange", function () {
@@ -2793,12 +2880,7 @@
       return;
     }
     var total = state.ranking.length;
-    var rank =
-      row.rank != null && total
-        ? "#" + row.rank + " de " + total
-        : row.rank != null
-          ? "#" + row.rank
-          : "";
+    var rank = rankLabel(row, total);
     var subBits = [];
     if (row.name) subBits.push(row.name);
     if (row.sector) subBits.push(row.sector);
@@ -2906,8 +2988,10 @@
       escapeHtml(dist == null ? "—" : fmtEsSignedPct(dist, 1)) + "</span></div>" +
       (slopeBits.length ? '<p class="dd-ficha-note">' + escapeHtml(slopeBits.join(" · ")) + "</p>" : "") +
       "</section>" +
-      '<section class="dd-ficha-card" aria-label="Alertas">' +
-      '<h2 class="dd-ficha-kicker">Alertas (no restan puntos)</h2>' + penaltyBlock + "</section>" +
+      '<section class="dd-ficha-card" aria-label="Señales técnicas">' +
+      '<h2 class="dd-ficha-kicker">Señales técnicas (no restan puntos)</h2>' + penaltyBlock +
+      '<p class="dd-ficha-note">No son el semáforo: el semáforo mira la tendencia y si hay resultados cerca. ' +
+      "Una acción puede estar en verde y tener señales técnicas.</p></section>" +
       analystBlock(row) +
       insiderFichaBlock(row) +
       healthBlock(row) +
@@ -2987,11 +3071,19 @@
   }
 
   var lastNavHash = null;
+  // Dónde estaba el usuario en cada página (scroll y página del Ranking) para volver ahí desde una ficha.
+  var scrollMemory = {};
+  function rememberScroll() {
+    if (parseTickerHash()) return;
+    scrollMemory[location.hash || ""] = { y: window.scrollY, rankPage: state.rankPage };
+  }
+  window.addEventListener("scroll", rememberScroll, { passive: true });
 
   function renderRoute() {
     var sym = parseTickerHash();
     var hash = location.hash || "";
     var moved = hash !== lastNavHash;
+    var fromTicker = /^#?\/t\//.test(decodeURIComponentSafe(lastNavHash || ""));
     lastNavHash = hash;
     var key = routeKey();
     var page = pageFromHash();
@@ -3016,6 +3108,18 @@
     if (state.baseTitle) document.title = state.baseTitle;
     if (page === "analisis") renderAnalisisEmpty();
     if (!moved) return;
+    var saved = fromTicker ? scrollMemory[hash] : null;
+    if (saved) {
+      if (saved.rankPage != null && saved.rankPage !== state.rankPage) {
+        state.rankPage = saved.rankPage;
+        applyFilters();
+      }
+      var y = saved.y;
+      window.scrollTo(0, y);
+      // Una segunda vez cuando ya se dibujó todo (gráficos, logos).
+      window.setTimeout(function () { window.scrollTo(0, y); }, 60);
+      return;
+    }
     var foldId = key.toLowerCase();
     if (foldId === "fórmulas") foldId = "formulas";
     var target = document.getElementById(foldId);
@@ -3047,8 +3151,17 @@
     }
   }
 
+  function decodeURIComponentSafe(v) {
+    try {
+      return decodeURIComponent(v);
+    } catch (e) {
+      return v;
+    }
+  }
+
   function openTicker(sym) {
     if (!sym) return;
+    rememberScroll();
     location.hash = "#/t/" + encodeURIComponent(sym);
   }
 
@@ -3173,6 +3286,24 @@
     });
   }
 
+  function cedearPosition(sym) {
+    if (!sym) return null;
+    var list = state.ranking.filter(function (r) { return r.cedear && r.rank != null; })
+      .sort(function (a, b) { return a.rank - b.rank; });
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].symbol === sym) return i + 1;
+    }
+    return null;
+  }
+
+  function rankLabel(row, total) {
+    if (!row || row.rank == null) return "";
+    var out = "#" + row.rank + (total ? " de " + total : "");
+    var pos = row.cedear ? cedearPosition(row.symbol) : null;
+    if (pos != null) out += " · #" + pos + " entre CEDEAR";
+    return out;
+  }
+
   function quickView(sym) {
     var row = mergedRow(sym);
     if (!row) return openTicker(sym);
@@ -3182,7 +3313,7 @@
       cells.push('<div class="dd-qv-cell"><dt>' + escapeHtml(label) + '</dt><dd class="' + (cls || "") + '">' + value + "</dd></div>");
     }
     cell("Desk Score", escapeHtml(row.desk_score == null ? "—" : fmtEsSmart(row.desk_score, 1)) +
-      (row.rank != null ? ' <span class="dd-qv-sub">#' + row.rank + (total ? " de " + total : "") + "</span>" : ""));
+      (row.rank != null ? ' <span class="dd-qv-sub">' + escapeHtml(rankLabel(row, total)) + "</span>" : ""));
     cell("Semáforo", row.entry && row.entry.verdict
       ? luzHtml(row) + " " + escapeHtml(row.entry.label || row.entry.verdict)
       : "—");
@@ -3274,6 +3405,7 @@
     if (!bar) return;
     var h = bar.offsetHeight + 8;
     document.documentElement.style.setProperty("--dd-topbar-h", h + "px");
+    document.documentElement.style.setProperty("--dd-topbar-edge", bar.offsetHeight + "px");
   }
 
   function bindTextMore() {
@@ -3377,7 +3509,7 @@
         suggest.hidden = true;
       });
     }
-    function bindPager(id, key) {
+    function bindPager(id, key, toTop) {
       var root = document.getElementById(id);
       if (!root) return;
       root.addEventListener("click", function (ev) {
@@ -3386,11 +3518,23 @@
         var dir = btn.id.indexOf("prev") !== -1 ? -1 : 1;
         state[key] = (state[key] || 0) + dir;
         if (key === "rankPage") applyFilters();
+        if (toTop) {
+          var top = document.getElementById("rank-pager");
+          if (top && top.scrollIntoView) top.scrollIntoView({ block: "start" });
+        }
       });
     }
     bindPager("rank-pager", "rankPage");
+    bindPager("rank-pager-bottom", "rankPage", true);
+    document.addEventListener("click", function (ev) {
+      var c = ev.target.closest && ev.target.closest("[data-clear]");
+      if (c) clearFilter(c.getAttribute("data-clear"));
+    });
     syncScrollPad();
     window.addEventListener("resize", syncScrollPad);
+    // El encabezado cambia de alto cuando aparece el cartel «En vivo»: las pestañas lo siguen.
+    var topbar = document.querySelector(".dd-topbar");
+    if (topbar && window.ResizeObserver) new ResizeObserver(syncScrollPad).observe(topbar);
   }
 
   // ── Valores al tocar o pasar el mouse por un gráfico ─────────────────────
@@ -3473,7 +3617,8 @@
     { key: "distribucion", label: "Distribución", re: /\bDistribución\b/, def: "Varios días de baja con más volumen que lo normal: puede que estén vendiendo los grandes." },
     { key: "rsi", label: "RSI", re: /\bRSI\b/, def: "Indicador de 0 a 100 de cuánto subió o bajó en las últimas dos semanas. Más de 70 es una suba muy rápida; menos de 30, una baja muy rápida." },
     { key: "rs", label: "RS (fuerza relativa)", re: /\bRS\b/, def: "Fuerza relativa: cuánto le gana o le pierde una acción al resto en las últimas semanas." },
-    { key: "luz", label: "Luz", re: /^Luz$/, def: "Alerta de riesgo de cada acción. Verde es sin alertas, no una señal de compra." },
+    { key: "luz", label: "Luz (semáforo de riesgo)", re: /^Luz$/, def: "Mira la tendencia y si hay resultados cerca. Verde no es una señal de compra, y una acción en verde puede tener señales técnicas." },
+    { key: "senales", label: "Señales técnicas", re: /^Señales$|Señales técnicas/, def: "Avisos informativos como ATR alto o Extendido. No restan puntos y no cambian el semáforo." },
     { key: "spy", label: "SPY", re: /\bSPY\b/, def: "Fondo que copia al S&P 500, las 500 empresas grandes de EE. UU. Es la vara para comparar." },
     { key: "base100", label: "Base 100", re: /\bbase 100\b/, def: "Todas las curvas arrancan en 100 para compararlas: 110 es +10% y 90 es −10%." },
     { key: "caida", label: "Peor caída", re: /\bPeor caída\b|\bCaída máx\.?/, def: "La mayor baja desde un máximo hasta el mínimo que vino después." },

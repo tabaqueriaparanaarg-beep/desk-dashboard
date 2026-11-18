@@ -23,7 +23,7 @@
     // Los datos se piden ya, en paralelo con el CSS y el JS.
     try { window.__datos = fetch("datos.json?ts=" + Date.now(), { cache: "no-store" }); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=58" />
+  <link rel="stylesheet" href="styles.css?v=59" />
 </head>
 <body data-app="desk-dashboard">
   <div class="dd-topbar">
@@ -65,7 +65,7 @@
 
     <div id="hoy" class="dd-hoy dd-pane is-on" data-page="resumen">
       <h2 class="dd-sr-only">Qué pasa hoy</h2>
-      <p class="dd-tagline">Angus ordena acciones de EE.&nbsp;UU. por momentum y arma una cartera de 10 que se revisa una vez por mes.</p>
+      <p class="dd-tagline">Angus ordena acciones de EE.&nbsp;UU. por momentum y arma el Índice Angus: 10 acciones que se revisan una vez por mes.</p>
 
 
       <section class="dd-mes" id="este-mes" data-section="monthly-plan" aria-labelledby="mes-title" hidden>
@@ -245,7 +245,7 @@
       </div>
       <div class="dd-attr" id="top10-attr" data-section="top10-attribution" hidden>
         <div class="dd-attr-head">
-          <h3 class="dd-attr-title">Exceso vs SPY</h3>
+          <h3 class="dd-attr-title">Exceso vs SPY (10 ruedas)</h3>
           <p class="dd-attr-value" id="attr-excess">—</p>
         </div>
         <p class="dd-attr-line" id="attr-line"></p>
@@ -270,25 +270,31 @@
         <p>Cuánto subió cada acción en los últimos 12 meses (sin el último), comparada con el resto. Bajo la EMA200 vale la mitad. ● = tiene CEDEAR.</p>
       </details>
       <div class="dd-filters" id="ranking-filters" role="toolbar" aria-label="Filtros de ranking">
+        <p class="dd-filter-label" aria-hidden="true">Tipo</p>
         <div class="dd-filter-group" data-filter="kind" role="group" aria-label="Tipo">
           <button type="button" class="dd-chip is-active" data-kind="">Todos</button>
           <button type="button" class="dd-chip" data-kind="us">US</button>
           <button type="button" class="dd-chip" data-kind="cedear_proxy">CEDEAR proxy</button>
           <button type="button" class="dd-chip" data-kind="etf">ETF</button>
         </div>
+        <p class="dd-filter-label" aria-hidden="true">Sector</p>
         <div class="dd-filter-group" data-filter="sector" role="group" aria-label="Sector">
           <button type="button" class="dd-chip is-active" data-sector="">Todos</button>
         </div>
-        <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Flags">
+        <p class="dd-filter-label" aria-hidden="true">Condición</p>
+        <div class="dd-filter-group dd-filter-flags" data-filter="flags" role="group" aria-label="Condición">
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="cedear" aria-pressed="false" title="Tiene CEDEAR en BYMA, según el listado público de BYMA (se actualiza una vez por mes). No es el filtro de tipo «CEDEAR proxy».">Con CEDEAR</button>
           <button type="button" class="dd-chip dd-chip-toggle" data-flag="above_ema200" aria-pressed="false">Sobre EMA200</button>
-          <button type="button" class="dd-chip dd-chip-toggle" data-flag="solo_verdes" aria-pressed="false" title="Solo nombres sin alertas de riesgo. No es un filtro de compra.">Sin alertas</button>
+          <button type="button" class="dd-chip dd-chip-toggle" data-flag="solo_verdes" aria-pressed="false" title="Solo las que tienen el semáforo en verde. No es un filtro de compra.">Semáforo verde</button>
         </div>
         <div class="dd-filter-search">
           <label class="dd-sr-only" for="filter-search">Buscar ticker</label>
           <input type="search" id="filter-search" class="dd-search" placeholder="Buscar ticker…" autocomplete="off" />
         </div>
-        <p class="dd-filter-count" id="filter-count" aria-live="polite">Mostrando —</p>
+        <div class="dd-filter-status">
+          <p class="dd-filter-count" id="filter-count" aria-live="polite">Mostrando —</p>
+          <div class="dd-filter-active" id="filter-active" hidden></div>
+        </div>
       </div>
       <div class="dd-pager" id="rank-pager" hidden>
         <button type="button" id="rank-prev">Anterior</button>
@@ -306,12 +312,17 @@
               <th scope="col" class="dd-col-luz" title="Alerta de riesgo. El verde es sin alertas, no una compra. No entra en el Desk Score.">Luz</th>
               <th scope="col" title="Fecha en que entró al Top 10 con CEDEAR en la racha actual">Entró</th>
               <th scope="col" title="Distancia del cierre a la EMA200">Dist EMA200</th>
-              <th scope="col" title="Alertas informativas. No restan puntos.">Alertas</th>
+              <th scope="col" title="Señales técnicas informativas (ATR alto, Extendido…). No son el semáforo y no restan puntos.">Señales</th>
             </tr>
           </thead>
           <tbody id="ranking-body">
           </tbody>
         </table>
+      </div>
+      <div class="dd-pager dd-pager-bottom" id="rank-pager-bottom" hidden>
+        <button type="button" id="rank-prev-bottom">Anterior</button>
+        <span>1</span>
+        <button type="button" id="rank-next-bottom">Siguiente</button>
       </div>
     </section>
 
@@ -329,7 +340,7 @@
             <h2 class="dd-sr-only">Simulación Top 10 vs SPY</h2>
             <p class="dd-top10-subtitle" id="wf-subtitle">Walk-forward mensual · base 100</p>
           </div>
-          <p class="dd-sim-badge">Simulado sobre datos pasados, no es la cartera real. La cartera real es el Índice Angus, en Resumen.</p>
+          <p class="dd-sim-badge">Simulado sobre datos pasados, no es la cartera real. Lo real es el Índice Angus, en Resumen.</p>
           <details class="dd-help">
             <summary><svg class="dd-help-i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.8" r="1.2" fill="currentColor" stroke="none"/></svg> Cómo se calcula</summary>
             <p class="dd-wf-caption" id="wf-caption">
@@ -343,7 +354,7 @@
           </details>
           <div class="dd-wf-kpis" id="wf-kpis" aria-label="Resultados de la simulación">
             <article class="dd-top10-card" data-kpi="wf_port">
-              <h3 class="dd-kpi-label">Cartera</h3>
+              <h3 class="dd-kpi-label">Simulada</h3>
               <p class="dd-kpi-value" id="wf-port">—</p>
             </article>
             <article class="dd-top10-card" data-kpi="wf_spy">
@@ -355,7 +366,7 @@
               <p class="dd-kpi-value" id="wf-uni">—</p>
             </article>
             <article class="dd-top10-card" data-kpi="wf_excess">
-              <h3 class="dd-kpi-label">Exceso vs SPY</h3>
+              <h3 class="dd-kpi-label">Exceso simulado (52 sem.)</h3>
               <p class="dd-kpi-value" id="wf-excess">—</p>
             </article>
             <article class="dd-top10-card" data-kpi="wf_beat">
@@ -505,6 +516,6 @@
     <div id="sheet-foot" class="dd-sheet-foot" hidden></div>
   </dialog>
 
-  <script src="app.js?v=58" defer></script>
+  <script src="app.js?v=59" defer></script>
 </body>
 </html>
