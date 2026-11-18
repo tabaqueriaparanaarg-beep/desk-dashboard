@@ -831,6 +831,67 @@
     el.className = el.className.replace(/\s*dd-num-(pos|neg)/g, "") + (n == null ? "" : " " + distClass(n));
   }
 
+  // ── Alarmas: cuando los fondos empiezan a desarmar posiciones ─────────────
+
+  // Diferencia de la ventana contra el umbral, rueda a rueda (60 ruedas).
+  function alarmSparkSvg(series, threshold, on) {
+    var pts = (series || []).map(function (p) { return Number(p.value); });
+    if (pts.length < 2) return "";
+    var lo = Math.min(threshold, 0), hi = Math.max(threshold, 0);
+    pts.forEach(function (v) { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+    if (hi - lo < 1) { hi += 0.5; lo -= 0.5; }
+    var W = 100, H = 36, pad = 3;
+    function x(i) { return (i / (pts.length - 1)) * W; }
+    function y(v) { return pad + (1 - (v - lo) / (hi - lo)) * (H - 2 * pad); }
+    var line = pts.map(function (v, i) { return x(i).toFixed(1) + "," + y(v).toFixed(1); }).join(" ");
+    return '<svg class="dd-alarma-spark' + (on ? " is-on" : "") + '" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<line class="dd-alarma-zero" x1="0" x2="' + W + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '" vector-effect="non-scaling-stroke"></line>' +
+      '<line class="dd-alarma-thr" x1="0" x2="' + W + '" y1="' + y(threshold).toFixed(1) + '" y2="' + y(threshold).toFixed(1) + '" vector-effect="non-scaling-stroke"></line>' +
+      '<polyline points="' + line + '" vector-effect="non-scaling-stroke"></polyline>' +
+      "</svg>";
+  }
+
+  function renderAlarmas(blk) {
+    var box = document.getElementById("alarmas");
+    var note = document.getElementById("indice-alert");
+    var list = (blk && blk.alarms) || [];
+    if (note) {
+      var mom = list.filter(function (a) { return a.key === "momentum" && a.on && a.index_note; })[0];
+      note.hidden = !mom;
+      note.textContent = mom ? "Alarma prendida: el momentum se desarma. " + mom.index_note : "";
+    }
+    if (!box) return;
+    if (!list.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    setText("alarmas-summary", blk.summary || "");
+    setText("alarmas-caption", blk.caption || "");
+    var ul = document.getElementById("alarmas-list");
+    if (!ul) return;
+    ul.innerHTML = list.map(function (a) {
+      var when = a.on
+        ? "Prendida desde el " + fmtDayMonth(a.since)
+        : (a.last_on ? "Última vez prendida: " + fmtDayMonth(a.last_on) : "Apagada");
+      return '<li class="dd-alarma' + (a.on ? " is-on" : "") + '">' +
+        '<div class="dd-alarma-head">' +
+          '<h3 class="dd-alarma-title">' + escapeHtml(a.title) + "</h3>" +
+          '<span class="dd-alarma-state">' + (a.on ? "Prendida" : "Apagada") + "</span>" +
+        "</div>" +
+        '<p class="dd-alarma-pair">' + escapeHtml(a.pair_label) + "</p>" +
+        '<div class="dd-alarma-fig">' +
+          '<span class="dd-alarma-val ' + distClass(a.value) + '">' + escapeHtml(fmtRelPts(a.value)) + "</span>" +
+          '<span class="dd-alarma-win">en ' + a.lookback + " ruedas · se prende con " + escapeHtml(fmtRelPts(a.threshold)) + "</span>" +
+        "</div>" +
+        alarmSparkSvg(a.series, a.threshold, a.on) +
+        '<p class="dd-alarma-text">' + escapeHtml(a.text) + "</p>" +
+        '<p class="dd-alarma-when">' + escapeHtml(when) + "</p>" +
+        '<details class="dd-alarma-more"><summary>Qué pasó otras veces</summary><p>' + escapeHtml(a.history) + "</p></details>" +
+        "</li>";
+    }).join("");
+  }
+
   // ── Hacia dónde va la plata: cada sector contra el S&P 500 (termómetro) ──
 
   function fmtRelPts(n) {
@@ -2143,6 +2204,7 @@
     state.plan = data.monthly_plan || null;
     renderIndice(data.indice_angus);
     renderRotacion(data.rotacion);
+    renderAlarmas(data.alarmas);
     var stampEl = document.getElementById("generated-at");
     if (stampEl) {
       stampEl.textContent = fmtStamp(data.generated_at) || "—";
