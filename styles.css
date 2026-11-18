@@ -5133,3 +5133,45 @@ body{
     padding-right: 0.4rem;
   }
 }
+
+/* Textos de ayuda (pistas de los desplegables, «Cómo se lee», explicaciones): más claros y
+   más grandes que el gris secundario, para que se lean de un vistazo. */
+.dd-fold-hint,
+.dd-help summary,
+.dd-help p,
+.dd-wf-caption,
+.dd-top10-subtitle,
+.dd-variant-note,
+.dd-indice-sub,
+.dd-indice-since{
+  color: #DAD5CA;
+}
+.dd-help summary,
+.dd-help p,
+.dd-wf-caption{
+  font-size: 0.875rem;
+}
+#simulacion .dd-fold-hint{
+  color: var(--dd-brand);
+}
+
+/* Filtros en el celular: todos los chips a la vista, en varias filas. */
+@media (max-width: 560px){
+  .dd-filter-group,
+  .dd-filter-group.dd-filter-flags{
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .dd-filter-group.has-more{
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .dd-filter-group{
+    gap: 0.35rem;
+  }
+  .dd-filter-group .dd-chip{
+    min-height: 0;
+    padding: 0.32rem 0.7rem;
+    font-size: 0.8rem;
+  }
+}

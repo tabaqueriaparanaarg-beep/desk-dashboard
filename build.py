@@ -2051,12 +2051,18 @@ def compute_monthly_plan(
         return {v: portfolio_pick(ranked, None, v) for v in TOP10_VARIANTS}
 
     def ret_since(symbol: str, session: str) -> float | None:
-        """Retorno del cierre de `session` al último cierre disponible."""
-        bars = all_bars.get(symbol) or []
+        """Retorno del cierre de `session` al último cierre completo.
+
+        Sin la rueda en curso: el Índice Angus se registra al cierre, y «Este mes» tiene que
+        decir el mismo número que el índice para la misma cartera.
+        """
+        bars = [x for x in (all_bars.get(symbol) or []) if str(x["t"])[:10] != live_session]
         base = next((x["c"] for x in bars if str(x["t"])[:10] == session), None)
         if not bars or not base or str(bars[-1]["t"])[:10] <= session:
             return None
         return bars[-1]["c"] / base - 1.0
+
+    perf_asof = completed[-1] if completed else None
 
     def performance(holdings: dict[str, list[str]]) -> dict[str, Any]:
         """Cómo le va a cada cartera desde que se armó, en partes iguales, contra el SPY."""
@@ -2071,6 +2077,7 @@ def compute_monthly_plan(
                     "portfolio_pct": round(sum(rets) / len(rets) * 100, 2),
                     "spy_pct": round(spy * 100, 2),
                     "n": len(rets),
+                    "asof": perf_asof,
                 }
         return out
 

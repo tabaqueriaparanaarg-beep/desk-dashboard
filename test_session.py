@@ -316,11 +316,11 @@ class WorkflowTests(unittest.TestCase):
         sw = (ROOT / "sw.js").read_text(encoding="utf-8")
         self.assertIn(ms.LIVE_BANNER, js)
         self.assertIn('id="session-banner"', html)
-        self.assertIn('VERSION = "dd-v55"', sw)
-        self.assertIn("app.js?v=55", html)
-        self.assertIn("styles.css?v=55", html)
-        self.assertIn("app.js?v=55", sw)
-        self.assertIn("styles.css?v=55", sw)
+        self.assertIn('VERSION = "dd-v56"', sw)
+        self.assertIn("app.js?v=56", html)
+        self.assertIn("styles.css?v=56", html)
+        self.assertIn("app.js?v=56", sw)
+        self.assertIn("styles.css?v=56", sw)
 
 
 if __name__ == "__main__":
