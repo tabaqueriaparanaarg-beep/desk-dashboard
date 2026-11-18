@@ -5644,3 +5644,39 @@ th .dd-term{
     scroll-margin-top: calc(var(--dd-topbar-h, 8.6rem) + 3.6rem);
   }
 }
+
+/* ══ Claridad 3 (nov-2026) ══════════════════════════════════════════════════ */
+
+/* «Este mes»: qué versión se está viendo. */
+.dd-mes-viewing{
+  margin: 0.2rem 0 0.6rem;
+  color: var(--dd-brand-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Top 10: el encabezado «# CEDEAR» entra en dos líneas cortas. */
+#top10-table thead .dd-col-rank{
+  white-space: normal;
+  line-height: 1.15;
+}
+
+/* Áreas táctiles de al menos 40 px en el celular. */
+@media (max-width: 899px){
+  .dd-help-btn{
+    width: 40px;
+    height: 40px;
+  }
+  .dd-pager button{
+    min-height: 40px;
+    padding: 0.4rem 1rem;
+  }
+  .dd-link-btn{
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 0.35rem;
+    margin: -0.35rem 0;
+  }
+}

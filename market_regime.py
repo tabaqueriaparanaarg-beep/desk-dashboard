@@ -348,7 +348,7 @@ def exposure_band(score: int) -> dict[str, Any]:
 
 
 def format_clock(iso: str | None) -> str | None:
-    """Hora ya en la zona del iso (el build guarda ART, UTC−3). 21:45 → 09:45 p. m."""
+    """Hora ya en la zona del iso (el build guarda ART, UTC−3), en formato 24 h. 21:45 → 21:45."""
     if not iso:
         return None
     text = str(iso).replace("Z", "+00:00")
@@ -356,9 +356,7 @@ def format_clock(iso: str | None) -> str | None:
         dt = datetime.fromisoformat(text)
     except ValueError:
         return None
-    suffix = "a. m." if dt.hour < 12 else "p. m."
-    hour = dt.hour % 12 or 12
-    return f"{hour:02d}:{dt.minute:02d} {suffix}"
+    return f"{dt.hour:02d}:{dt.minute:02d}"
 
 
 def footer_text(clock: str | None, available: float, maximum: float = POINTS_MAX) -> str:
