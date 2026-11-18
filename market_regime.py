@@ -40,13 +40,13 @@ DISCLAIMER = (
 
 # [lo, hi) salvo el último tramo, que incluye 100. El borde cae en el tramo de arriba
 # (25 es «25–50», no «0–25») para que el número del medidor y el color coincidan.
-# Volatilidad del SPY en las 20 ruedas siguientes, 2021–2026: 12 % anual con 75–100,
-# 16 % con 50–75 y 23 % con menos de 50.
+# Volatilidad del SPY en las 20 ruedas siguientes, 2021–2026: 12% anual con 75–100,
+# 16% con 50–75 y 23% con menos de 50.
 EXPOSURE_BANDS: tuple[tuple[int, int, str, str, str], ...] = (
     (0, 25, "red", "Turbulento", "volatilidad muy alta, caídas más profundas"),
-    (25, 50, "orange", "Movido", "volatilidad alta (≈23 % anual)"),
-    (50, 75, "yellow", "Normal", "volatilidad media (≈16 % anual)"),
-    (75, 101, "green", "Tranquilo", "volatilidad baja (≈12 % anual)"),
+    (25, 50, "orange", "Movido", "volatilidad alta (≈23% anual)"),
+    (50, 75, "yellow", "Normal", "volatilidad media (≈16% anual)"),
+    (75, 101, "green", "Tranquilo", "volatilidad baja (≈12% anual)"),
 )
 
 FORMULA = (
@@ -75,8 +75,8 @@ FORMULA = (
     "«calculado sobre X pts disponibles de 125». "
     "Lectura de riesgo: [0, 25) rojo, turbulento; [25, 50) naranja, movido; "
     "[50, 75) amarillo, normal; [75, 100] verde, tranquilo. Mide volatilidad, no dirección: "
-    "en 2021–2026 la volatilidad del SPY en las 20 ruedas siguientes fue ≈12 % anual con "
-    "75–100, ≈16 % con 50–75 y ≈23 % por debajo de 50, pero el retorno a 4 semanas fue "
+    "en 2021–2026 la volatilidad del SPY en las 20 ruedas siguientes fue ≈12% anual con "
+    "75–100, ≈16% con 50–75 y ≈23% por debajo de 50, pero el retorno a 4 semanas fue "
     "mayor después de lecturas bajas. "
     f"Serie: % de activos scored con cierre > EMA200 en cada una de las últimas {BREADTH_SESSIONS} "
     "sesiones del calendario de SPY (o del universo si no hay SPY), con las barras ya descargadas. "
@@ -119,8 +119,8 @@ def round_half_up(value: float, digits: int = 0) -> float:
 def format_points(value: float) -> str:
     rounded = round_half_up(float(value), 1)
     if abs(rounded - round(rounded)) < 1e-9:
-        return str(int(round(rounded)))
-    return f"{rounded:.1f}"
+        return str(int(round(rounded))).replace("-", "−")
+    return f"{rounded:.1f}".replace(".", ",").replace("-", "−")
 
 
 def bar_day(bar: dict) -> str:
@@ -313,13 +313,13 @@ def score_vix(closes: list[float] | None, source: str | None) -> dict[str, Any]:
 
 def _vix_detail(source: str, close: float, sma20: float | None, sma50: float | None) -> str:
     if source == "cboe":
-        head = f"CBOE {close:.1f}"
+        head = "CBOE " + f"{close:.1f}".replace(".", ",")
         if close <= VIX_CALM_MAX:
             head += " · en 20 o menos"
         else:
             head += " · por encima de 20"
     else:
-        head = f"VIXY {close:.2f} · no entra al ranking"
+        head = "VIXY " + f"{close:.2f}".replace(".", ",") + " · no entra al ranking"
     bits: list[str] = []
     if sma20 is not None:
         bits.append("bajo media de 20" if close < sma20 else "sobre media de 20")

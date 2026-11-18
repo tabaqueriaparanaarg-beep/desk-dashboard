@@ -12,7 +12,7 @@ Es un termómetro, no un pronóstico. Medido con backtest_rotacion.py (SIP,
 2016–nov-2026, 564 semanas): ninguna lectura anticipa caídas de forma
 confiable (el crédito sube la chance de movimientos fuertes, en cualquier
 sentido), y el sector que más subió en 4 semanas después le pierde al SPY en
-promedio (−0,5 % a 4 semanas, −1,0 % a 13; le gana el 40 % de las veces).
+promedio (−0,5% a 4 semanas, −1,0% a 13; le gana el 40% de las veces).
 
 Los ETF que no están en el universo (RSP, HYG, IEF, XLB, XLU, XLRE, XLC) se
 bajan aparte y no entran al ranking.
@@ -62,7 +62,7 @@ READINGS_CAPTION = (
     "Amplitud: el S&P 500 con todas las empresas al mismo peso (RSP) contra el normal (SPY); si pierde, "
     "la suba la empujan pocas acciones. Crédito: bonos de empresas riesgosas (HYG) contra bonos del Tesoro "
     "(IEF); si pierden, el crédito se tensa. Medido de 2016 a 2026: con el crédito tenso fue más común "
-    "una caída del 5 % en los 3 meses siguientes (39 % de las veces contra 26 %), pero el S&P 500 subió más "
+    "una caída del 5% en los 3 meses siguientes (39% de las veces contra 26%), pero el S&P 500 subió más "
     "en promedio: anticipa movimientos fuertes, no la dirección."
 )
 

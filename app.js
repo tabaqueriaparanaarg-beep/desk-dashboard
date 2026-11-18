@@ -387,7 +387,9 @@
         ((top10Block && top10Block.rows) || []).map(function (r) { return r.symbol; });
       lead = plan.review_today
         ? "Con el cierre de hoy se arma la cartera nueva. Así queda con los precios de ahora:"
-        : "Si revisaras hoy:";
+        : (plan.next_review
+          ? "Vista previa: se aplica el " + fmtDayMonth(plan.next_review) + ". Todavía no cambia nada."
+          : "Vista previa: todavía no cambia nada.");
     }
     var perf = !plan.review_done && plan.performance && plan.performance[key];
     var perfHtml = perf
@@ -580,7 +582,7 @@
     return (
       '<div class="dd-attr-row">' +
       '<div class="dd-attr-row-h"><span>' + escapeHtml(label) + "</span>" +
-      '<span class="dd-num-' + dir + '">' + escapeHtml(fmtEsSignedPct(n, 2)) + "</span></div>" +
+      '<span class="dd-num-' + dir + '">' + escapeHtml(fmtEsSignedPct(n, 1)) + "</span></div>" +
       '<span class="dd-attr-track" aria-hidden="true">' +
       '<span class="dd-attr-bar dd-attr-bar-' + dir + '" style="width:' + width.toFixed(1) + '%"></span>' +
       "</span></div>"
@@ -590,7 +592,7 @@
   function attrListItem(title, meta, value, extraClass) {
     var n = value == null ? null : Number(value);
     var dir = n == null || Number.isNaN(n) ? "" : n >= 0 ? "dd-num-pos" : "dd-num-neg";
-    var shown = n == null || Number.isNaN(n) ? "—" : fmtEsSignedPct(n, 2);
+    var shown = n == null || Number.isNaN(n) ? "—" : fmtEsSignedPct(n, 1);
     return (
       '<li class="' + (extraClass || "") + '">' +
       '<span class="dd-attr-sym">' + escapeHtml(title) + "</span>" +
@@ -616,7 +618,7 @@
     }
     root.hidden = false;
     if (excessEl) {
-      excessEl.textContent = fmtEsSignedPct(block.excess_pct, 2);
+      excessEl.textContent = fmtEsSignedPct(block.excess_pct, 1);
       excessEl.className = "dd-attr-value " + distClass(block.excess_pct);
     }
     if (lineEl) lineEl.textContent = block.headline || "";
@@ -643,14 +645,14 @@
       );
       splitEl.setAttribute(
         "aria-label",
-        "Efecto sector " + fmtEsSignedPct(alloc, 2) +
-        ", efecto selección " + fmtEsSignedPct(sel, 2) +
-        ". Juntos suman el exceso " + fmtEsSignedPct(block.excess_pct, 2) + "."
+        "Efecto sector " + fmtEsSignedPct(alloc, 1) +
+        ", efecto selección " + fmtEsSignedPct(sel, 1) +
+        ". Juntos suman el exceso " + fmtEsSignedPct(block.excess_pct, 1) + "."
       );
     }
     if (!moreEl) return;
     var tickerItems = (block.tickers || []).map(function (t) {
-      var meta = (t.sector_label || "Sin sector") + " · retorno " + fmtEsSignedPct(t.return_pct, 2);
+      var meta = (t.sector_label || "Sin sector") + " · retorno " + fmtEsSignedPct(t.return_pct, 1);
       return attrListItem(t.symbol || "—", meta, t.contribution_pct, "");
     }).join("");
     var sectors = block.sectors || [];
@@ -666,9 +668,9 @@
         "universo " + fmtWeightPct(s.weight_benchmark_pct)
       ];
       if (s.proxy_kind === "etf" && s.proxy) {
-        bits.push(s.proxy + " " + fmtEsSignedPct(s.sector_return_pct, 2));
+        bits.push(s.proxy + " " + fmtEsSignedPct(s.sector_return_pct, 1));
       } else if (s.proxy_kind === "universo") {
-        bits.push("media de " + (s.proxy_n || 0) + " acciones " + fmtEsSignedPct(s.sector_return_pct, 2));
+        bits.push("media de " + (s.proxy_n || 0) + " acciones " + fmtEsSignedPct(s.sector_return_pct, 1));
       } else if (s.proxy_kind === "indice") {
         bits.push("no es una apuesta de sector");
       } else if (s.sector_return_pct == null) {
@@ -696,11 +698,11 @@
 
   function fmtSignedPct2(n) {
     if (n == null || Number.isNaN(Number(n))) return "—";
-    var v = Math.round(Number(n) * 100) / 100;
-    var body = fmtEsNum(Math.abs(v), 2);
+    var v = Math.round(Number(n) * 10) / 10;
+    var body = fmtEsNum(Math.abs(v), 1);
     if (v > 0) return "+" + body + "%";
     if (v < 0) return "−" + body + "%";
-    return "0,00%";
+    return "0,0%";
   }
 
   function fmtIso(iso) {
@@ -1103,7 +1105,7 @@
       setText("wf-turn", "—");
       setText("wf-turn-sub", "");
     } else {
-      setText("wf-turn", fmtNum(block.avg_names_changed, 2));
+      setText("wf-turn", fmtNum(block.avg_names_changed, 1));
       setText("wf-turn-sub", String(block.rebalance || "").indexOf("ultimo_cierre_del_mes") === 0 ? "nombres que salen / mes" : "nombres que salen / semana");
     }
     drawWalkforwardChart(block);
@@ -1269,7 +1271,7 @@
         ["momentum", fmtNum(p.momentum, 1)],
         ["luz", luzHtml(r), "dd-col-luz"],
         ["entro", entroInline(r.entro)],
-        ["dist_ema200", '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 2) + "%") + "</span>"],
+        ["dist_ema200", '<span class="' + distClass(dist) + '">' + (dist == null ? "—" : fmtNum(dist, 1) + "%") + "</span>"],
         ["flags", formatFlags(r.flags)],
       ];
 
@@ -1459,7 +1461,7 @@
     var num = "";
     if (delta != null && !Number.isNaN(Number(delta))) {
       var v = Math.round(Number(delta) * 10) / 10;
-      num = " " + (v > 0 ? "+" : "") + v;
+      num = " " + (v > 0 ? "+" : "") + fmtEsNum(v, 1);
     }
     var title =
       word +
@@ -1910,9 +1912,7 @@
 
   function fmtPts(n) {
     if (n == null || Number.isNaN(Number(n))) return "—";
-    var x = Math.round(Number(n) * 10) / 10;
-    if (Math.abs(x - Math.round(x)) < 0.05) return String(Math.round(x));
-    return x.toFixed(1);
+    return fmtEsSmart(Math.round(Number(n) * 10) / 10, 1);
   }
 
   function regimePtsClass(points, max) {
@@ -2438,7 +2438,7 @@
   function fmtEsSignedPct(n, digits) {
     if (n == null || Number.isNaN(Number(n))) return "—";
     var v = Number(n);
-    var d = digits == null ? 2 : digits;
+    var d = digits == null ? 1 : digits;
     var body = fmtEsNum(Math.abs(v), d);
     if (v > 0) return "+" + body + "%";
     if (v < 0) return "−" + body + "%";
@@ -2659,7 +2659,7 @@
     var slopeBits = [];
     if (row.ema200 != null) slopeBits.push("EMA200 " + fmtPrice(row.ema200));
     if (row.ema200_slope_pct != null) {
-      slopeBits.push("pendiente " + fmtEsSignedPct(row.ema200_slope_pct, 2) + " en ~5 sesiones");
+      slopeBits.push("pendiente " + fmtEsSignedPct(row.ema200_slope_pct, 1) + " en ~5 sesiones");
     }
     var range = row.range_52w;
     var rangeBlock;
@@ -2727,7 +2727,7 @@
       "</div>" +
       '<div class="dd-ficha-quote">' +
       '<p class="dd-ficha-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
-      '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 2)) + "</p>" +
+      '<p class="dd-ficha-change ' + changeCls + '">' + escapeHtml(fmtEsSignedPct(row.change_pct, 1)) + "</p>" +
       "</div></header>" +
       // Orden: lo que decide (score, riesgo, resultados) primero; el contexto (analistas,
       // insiders, fundamentos) al final. Patrones, confluencia y RS semanal salieron.
@@ -2747,7 +2747,7 @@
       '<span class="dd-ficha-mark ' + mark.cls + '" aria-hidden="true">' + mark.ch + "</span>" +
       '<span class="dd-ficha-row-text">' + escapeHtml(gateText(row)) + "</span>" +
       '<span class="dd-ficha-row-val ' + distClass(dist) + '">' +
-      escapeHtml(dist == null ? "—" : fmtEsSignedPct(dist, 2)) + "</span></div>" +
+      escapeHtml(dist == null ? "—" : fmtEsSignedPct(dist, 1)) + "</span></div>" +
       (slopeBits.length ? '<p class="dd-ficha-note">' + escapeHtml(slopeBits.join(" · ")) + "</p>" : "") +
       "</section>" +
       '<section class="dd-ficha-card" aria-label="Alertas">' +
@@ -3042,7 +3042,7 @@
       (row.sector ? '<p class="dd-qv-sector">' + escapeHtml(row.sector) + "</p>" : "") + "</div>" +
       '<div class="dd-qv-px"><p class="dd-qv-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
       '<p class="dd-qv-chg ' + distClass(row.change_pct) + '">' +
-      escapeHtml(row.change_pct == null ? "" : fmtEsSignedPct(row.change_pct, 2)) + "</p></div></div>" +
+      escapeHtml(row.change_pct == null ? "" : fmtEsSignedPct(row.change_pct, 1)) + "</p></div></div>" +
       '<dl class="dd-qv-grid">' + cells.join("") + "</dl>" +
       (flags.length ? '<div class="dd-qv-flags">' + formatFlags(flags) + "</div>" : "");
     var foot = '<button type="button" class="dd-sheet-cta" data-sheet-ficha="' + escapeHtml(row.symbol) +
@@ -3236,7 +3236,35 @@
     window.addEventListener("resize", syncScrollPad);
   }
 
+  // Tablas y filas de filtros que siguen hacia el costado: marca has-more para desvanecer el borde.
+  function bindOverflowHints() {
+    var pending = false;
+    function check() {
+      pending = false;
+      var els = document.querySelectorAll(".dd-table-wrap, .dd-filter-group");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var more = el.scrollWidth - el.clientWidth - el.scrollLeft > 4;
+        el.classList.toggle("has-more", more);
+      }
+    }
+    function schedule() {
+      if (pending) return;
+      pending = true;
+      window.requestAnimationFrame(check);
+    }
+    document.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("hashchange", schedule);
+    if (window.MutationObserver) {
+      new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    }
+    document.addEventListener("toggle", schedule, true);
+    schedule();
+  }
+
   registerServiceWorker();
+  bindOverflowHints();
   bindFilters();
   bindRefresh();
   bindFichaNav();
