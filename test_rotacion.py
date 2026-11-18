@@ -102,5 +102,45 @@ class ReadingTests(unittest.TestCase):
         self.assertAlmostEqual(r["consumo"]["value"], ret4w(1.003) - ret4w(1.001), places=1)
 
 
+
+class TrendTests(unittest.TestCase):
+    def test_three_weeks_improving_is_gaining_ground(self):
+        t = rot.trend([-5.0, -4.0, -2.0, 0.5, 1.0])
+        self.assertEqual(t["dir"], "up")
+        self.assertEqual(t["weeks"], 4)
+        self.assertEqual(t["change"], 6.0)
+
+    def test_streak_counts_only_the_last_run(self):
+        t = rot.trend([3.0, 5.0, 2.0, 1.0, 0.0])
+        self.assertEqual(t["dir"], "down")
+        self.assertEqual(t["weeks"], 3)
+        self.assertEqual(t["change"], -5.0)
+
+    def test_two_weeks_is_not_a_trend_yet(self):
+        t = rot.trend([0.0, 4.0, 1.0, 2.0, 3.0])
+        self.assertIsNone(t["dir"])
+        self.assertEqual(t["weeks"], 2)
+
+    def test_flat_week_breaks_the_streak(self):
+        self.assertIsNone(rot.trend([1.0, 2.0, 3.0, 3.0])["dir"])
+
+    def test_short_series(self):
+        self.assertEqual(rot.trend([1.0]), {"dir": None, "weeks": 0, "change": None})
+
+    def test_block_carries_trend_and_sentence(self):
+        # Un sector que acelera contra el SPY: su ventaja de 4 semanas sube cada semana.
+        accel = make_bars([100 * (1.0005 + i * 0.00002) ** i for i in range(N)], DATES)
+        u = universe()
+        u["XLI"] = accel
+        blk = rot.compute_rotation(u)
+        xli = next(s for s in blk["sectors"] if s["symbol"] == "XLI")
+        self.assertEqual(xli["trend"]["dir"], "up")
+        self.assertIn("industria", blk["trend_line"])
+        self.assertEqual(blk["trend_min_weeks"], rot.TREND_MIN_WEEKS)
+
+    def test_trend_line_when_nothing_moves(self):
+        self.assertIn("Ningún sector", rot.trend_line([{"name": "Salud", "trend": {"dir": None}}]))
+
+
 if __name__ == "__main__":
     unittest.main()
