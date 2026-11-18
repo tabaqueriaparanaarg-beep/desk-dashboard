@@ -24,6 +24,7 @@ from typing import Any
 LOOKBACK = 20         # ruedas (~4 semanas)
 LONG_LOOKBACK = 63    # ruedas (~3 meses), de contexto
 SPARK_WEEKS = 13
+TREND_MIN_WEEKS = 3   # semanas seguidas mejorando (o empeorando) para marcar «gana/pierde terreno»
 
 SECTOR_ETFS: list[tuple[str, str]] = [
     ("XLK", "Tecnología"),
@@ -49,7 +50,11 @@ CAPTION = (
     "Cada barra es cuánto le ganó (o perdió) ese sector al S&P 500 en las últimas 4 semanas, "
     "medido con los ETF de cada sector. Sirve para ver hacia dónde se mueve la plata mientras pasa. "
     "No la anticipa: medido de 2016 a 2026, el sector que más subió en 4 semanas después le perdió "
-    "al S&P 500 en promedio y le ganó solo 4 de cada 10 veces. Datos de Alpaca al último cierre. "
+    "al S&P 500 en promedio y le ganó solo 4 de cada 10 veces. "
+    "La línea de cada sector es esa misma ventaja, semana a semana, en los últimos 3 meses: si sube, "
+    "el sector gana terreno de a poco. «Gana terreno» marca 3 semanas seguidas o más mejorando. Muestra "
+    "el movimiento antes de que el número sea grande, pero no asegura que siga: la vieja vista de rotación "
+    "(RRG), que medía algo parecido, no anticipó retornos. Datos de Alpaca al último cierre. "
     "Esto no es una recomendación de inversión."
 )
 READINGS_CAPTION = (
@@ -86,6 +91,40 @@ def _join_es(items: list[str]) -> str:
     if len(items) <= 1:
         return "".join(items)
     return ", ".join(items[:-1]) + " y " + items[-1]
+
+
+def trend(spark: list[float]) -> dict[str, Any]:
+    """Racha al final de la curva: semanas seguidas en que la ventaja de 4 semanas contra el SPY
+    mejoró (`up`) o empeoró (`down`). Marca la tendencia desde TREND_MIN_WEEKS semanas.
+
+    `change` es cuántos puntos se movió la ventaja en esa racha.
+    """
+    if len(spark) < 2:
+        return {"dir": None, "weeks": 0, "change": None}
+    last_dir = None
+    weeks = 0
+    for i in range(len(spark) - 1, 0, -1):
+        step = spark[i] - spark[i - 1]
+        d = "up" if step > 0 else "down" if step < 0 else None
+        if d is None or (last_dir is not None and d != last_dir):
+            break
+        last_dir = d
+        weeks += 1
+    if weeks < TREND_MIN_WEEKS:
+        return {"dir": None, "weeks": weeks, "change": None}
+    return {"dir": last_dir, "weeks": weeks, "change": round(spark[-1] - spark[-1 - weeks], 2)}
+
+
+def trend_line(sectors: list[dict]) -> str:
+    """Una frase con los que ganan y pierden terreno de a poco, aunque el número de hoy sea chico."""
+    gain = [s["name"].lower() for s in sectors if (s.get("trend") or {}).get("dir") == "up"]
+    lose = [s["name"].lower() for s in sectors if (s.get("trend") or {}).get("dir") == "down"]
+    parts = []
+    if gain:
+        parts.append(f"Ganan terreno hace {TREND_MIN_WEEKS} semanas o más: {_join_es(gain)}.")
+    if lose:
+        parts.append(f"Pierden terreno: {_join_es(lose)}.")
+    return " ".join(parts) if parts else "Ningún sector viene ganando o perdiendo terreno de forma sostenida."
 
 
 def headline(sectors: list[dict], spy_ret: float | None) -> str:
@@ -157,6 +196,7 @@ def compute_rotation(bars_by_symbol: dict[str, list[dict]]) -> dict[str, Any]:
             "ret_13w": _r(r13),
             "rel_13w": _r(r13 - spy_13w) if r13 is not None and spy_13w is not None else None,
             "spark": spark,
+            "trend": trend(spark),
         })
     sectors.sort(key=lambda x: (-(x["rel_4w"] if x["rel_4w"] is not None else -1e9), x["symbol"]))
 
@@ -206,6 +246,8 @@ def compute_rotation(bars_by_symbol: dict[str, list[dict]]) -> dict[str, Any]:
         "spy_ret_4w": _r(spy_4w),
         "spy_ret_13w": _r(spy_13w),
         "headline": headline(sectors, spy_4w),
+        "trend_line": trend_line(sectors),
+        "trend_min_weeks": TREND_MIN_WEEKS,
         "sectors": sectors,
         "readings": readings,
         "caption": CAPTION,

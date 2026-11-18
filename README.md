@@ -162,6 +162,7 @@ Termómetro de rotación en Resumen, debajo de «Mercado» (`rotacion.py`, `dato
 - **Sectores:** cuánto le ganó o perdió cada uno de los 11 ETF «Select Sector» (XLK, XLV, XLF, XLE, XLY, XLP, XLI, XLB, XLU, XLRE, XLC) al SPY en las últimas 20 ruedas, con el dato de 3 meses al lado y una frase de dónde salió y a dónde fue la plata.
 - **Cuatro lecturas** (últimas 20 ruedas): salud (XLV) y consumo básico (XLP) contra tecnología (XLK); amplitud, RSP (todas las empresas al mismo peso) contra SPY; crédito, HYG (bonos high yield) contra IEF (Tesoro 7–10 años), como proxy del spread high yield.
 - Los ETF que no están en el universo (RSP, HYG, IEF, XLB, XLU, XLRE, XLC) se bajan aparte y **no entran al ranking**.
+- **Tendencia (para ver la rotación mientras se forma):** cada sector tiene una línea con su ventaja de 4 semanas contra el SPY, semana a semana, en las últimas 13 semanas (misma escala para todos). «▲ Gana terreno» / «▼ Pierde terreno» marca 3 semanas seguidas o más mejorando o empeorando (`rotacion.trend`), y una frase arriba los nombra. Aparece antes de que el número de 4 semanas sea grande, pero no asegura que el movimiento siga.
 
 Medido con `python3 backtest_rotacion.py` (SIP, 2016 a nov-2026, 564 semanas; son ETF, sin sesgo de supervivencia):
 

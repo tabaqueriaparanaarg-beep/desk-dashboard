@@ -839,6 +839,20 @@
     return (v > 0 ? "+" : "") + fmtEsNum(v, 1) + " pts";
   }
 
+  // Ventaja de 4 semanas contra el S&P 500, semana a semana (13 semanas). La línea del 0 es el S&P 500.
+  function rotSparkSvg(points, lo, hi, dir) {
+    if (!points || points.length < 2) return '<span class="dd-rot-spark"></span>';
+    var W = 100, H = 30, pad = 3;
+    function x(i) { return (i / (points.length - 1)) * W; }
+    function y(v) { return pad + (1 - (v - lo) / (hi - lo)) * (H - 2 * pad); }
+    var line = points.map(function (v, i) { return x(i).toFixed(1) + "," + y(v).toFixed(1); }).join(" ");
+    var cls = dir === "up" ? "is-up" : dir === "down" ? "is-down" : "";
+    return '<svg class="dd-rot-spark ' + cls + '" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<line class="dd-rot-zero" x1="0" x2="' + W + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '" vector-effect="non-scaling-stroke"></line>' +
+      '<polyline points="' + line + '" vector-effect="non-scaling-stroke"></polyline>' +
+      "</svg>";
+  }
+
   function renderRotacion(blk) {
     var box = document.getElementById("rotacion");
     if (!box) return;
@@ -854,17 +868,27 @@
       " · S&P 500 " + fmtEsSignedPct(blk.spy_ret_4w, 1)
     );
     setText("rot-headline", blk.headline || "");
-    var maxAbs = sectors.reduce(function (m, s) { return Math.max(m, Math.abs(Number(s.rel_4w) || 0)); }, 1);
+    setText("rot-trend", blk.trend_line || "");
+    // Misma escala para todas las líneas, así las pendientes se comparan entre sectores.
+    var lo = 0, hi = 0;
+    sectors.forEach(function (s) {
+      (s.spark || []).forEach(function (v) { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+    });
+    if (hi - lo < 1) { hi += 0.5; lo -= 0.5; }
     var list = document.getElementById("rot-list");
     if (list) {
       list.innerHTML = sectors.map(function (s) {
         var v = Number(s.rel_4w) || 0;
-        var w = Math.max(2, Math.round(Math.abs(v) / maxAbs * 100));
-        var dir = v >= 0 ? "pos" : "neg";
+        var t = s.trend || {};
+        var tag = t.dir === "up"
+          ? '<span class="dd-rot-tag dd-num-pos"><span>▲ Gana terreno</span> <span>' + t.weeks + " semanas</span></span>"
+          : t.dir === "down"
+            ? '<span class="dd-rot-tag dd-num-neg"><span>▼ Pierde terreno</span> <span>' + t.weeks + " semanas</span></span>"
+            : "";
         return '<li class="dd-rot-row">' +
-          '<span class="dd-rot-name">' + escapeHtml(s.name) +
+          '<span class="dd-rot-name">' + escapeHtml(s.name) + tag +
           '<span class="dd-rot-long">3 meses ' + escapeHtml(fmtRelPts(s.rel_13w)) + "</span></span>" +
-          '<span class="dd-rot-track" aria-hidden="true"><span class="dd-rot-bar dd-rot-bar-' + dir + '" style="width:' + (w / 2) + '%"></span></span>' +
+          rotSparkSvg(s.spark || [], lo, hi, t.dir) +
           '<span class="dd-rot-val ' + distClass(v) + '">' + escapeHtml(fmtRelPts(v)) + "</span>" +
           "</li>";
       }).join("");
