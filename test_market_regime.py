@@ -239,12 +239,12 @@ class BandTests(unittest.TestCase):
 
 class ClockTests(unittest.TestCase):
     def test_art_clock(self):
-        self.assertEqual(mr.format_clock("2026-09-25T21:45:00-03:00"), "09:45 p. m.")
-        self.assertEqual(mr.format_clock("2026-09-25T00:05:00-03:00"), "12:05 a. m.")
-        self.assertEqual(mr.format_clock("2026-09-25T12:00:00-03:00"), "12:00 p. m.")
+        self.assertEqual(mr.format_clock("2026-09-25T21:45:00-03:00"), "21:45")
+        self.assertEqual(mr.format_clock("2026-09-25T00:05:00-03:00"), "00:05")
+        self.assertEqual(mr.format_clock("2026-09-25T12:00:00-03:00"), "12:00")
         self.assertEqual(
-            mr.footer_text("09:45 p. m.", 110, 125),
-            "09:45 p. m. · calculado sobre 110 pts disponibles de 125",
+            mr.footer_text("21:45", 110, 125),
+            "21:45 · calculado sobre 110 pts disponibles de 125",
         )
         self.assertEqual(
             mr.footer_text(None, 125, 125),
@@ -285,7 +285,7 @@ class AssembleTests(unittest.TestCase):
         self.assertEqual(got["score"], 100)
         self.assertEqual(got["band"]["color"], "green")
         self.assertIn("110 pts disponibles de 125", got["footer"])
-        self.assertTrue(got["footer"].startswith("09:45 p. m."))
+        self.assertTrue(got["footer"].startswith("21:45"))
         self.assertEqual(row["desk_score"], 83.5)
         self.assertEqual(row["rank"], 1)
         self.assertTrue(all(point["eligible"] == 1 for point in got["breadth_series"]))

@@ -399,14 +399,19 @@
           ? "Vista previa: se aplica el " + fmtDayMonth(plan.next_review) + ". Todavía no cambia nada."
           : "Vista previa: todavía no cambia nada.");
     }
+    var viewing = '<p class="dd-mes-viewing">Estás viendo: versión ' +
+      (state.variantCedear ? "CEDEAR" : "todas las acciones") + ", " +
+      (state.variantCons ? "conservadora" : "normal") + "." +
+      (key === "cedear" ? " Es la del Índice Angus de abajo." :
+        " El Índice Angus de abajo es siempre la versión CEDEAR normal.") + "</p>";
     var perf = !plan.review_done && plan.performance && plan.performance[key];
-    var perfHtml = perf
+    var perfHtml = viewing + (perf
       ? '<p class="dd-mes-perf"><span class="dd-mes-perf-since">' + escapeHtml(PLAN_NAMES[key] || "Esta versión") + " desde el " + escapeHtml(fmtDayMonth(plan.since)) +
         (perf.asof ? " al cierre del " + escapeHtml(fmtDayMonth(perf.asof)) : "") + "</span>" +
         '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.portfolio_pct, 1)) + "</strong> " +
         (key === "cedear" ? "Índice" : "versión") + "</span>" +
         '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.spy_pct, 1)) + "</strong> SPY</span></p>"
-      : "";
+      : "");
     var sell = from.filter(function (s) { return to.indexOf(s) === -1; });
     var buy = to.filter(function (s) { return from.indexOf(s) === -1; });
     var keep = from.filter(function (s) { return to.indexOf(s) !== -1; });
@@ -550,6 +555,11 @@
       spyEl.className = "dd-kpi-value " + distClass(block.spy_return_pct);
     }
 
+    var rankHead = document.querySelector("#top10-table thead .dd-col-rank");
+    if (rankHead) {
+      rankHead.textContent = state.variantCedear ? "# CEDEAR" : "#";
+      rankHead.title = state.variantCedear ? "Puesto entre las acciones con CEDEAR" : "Puesto en el ranking";
+    }
     body.innerHTML = "";
     block.rows.forEach(function (r) {
       var tr = document.createElement("tr");
@@ -881,6 +891,14 @@
       '<span class="dd-alarma-thr-label" style="top:' + ((y(threshold) / H) * 100).toFixed(1) + '%">se prende acá</span>';
   }
 
+  function offLabel(a) {
+    var series = a.series || [];
+    for (var i = 0; i < series.length - 1; i++) {
+      if (series[i].date === a.last_on) return "Se apagó el " + fmtDayMonth(series[i + 1].date);
+    }
+    return "Última vez prendida: " + fmtDayMonth(a.last_on);
+  }
+
   function renderAlarmas(blk) {
     var box = document.getElementById("alarmas");
     var note = document.getElementById("indice-alert");
@@ -903,7 +921,7 @@
     ul.innerHTML = list.map(function (a) {
       var when = a.on
         ? "Prendida desde el " + fmtDayMonth(a.since)
-        : (a.last_on ? "Última vez prendida: " + fmtDayMonth(a.last_on) : "Apagada");
+        : (a.last_on ? offLabel(a) : "Apagada");
       return '<li class="dd-alarma' + (a.on ? " is-on" : "") + '">' +
         '<div class="dd-alarma-head">' +
           '<h3 class="dd-alarma-title">' + escapeHtml(a.title) + "</h3>" +
@@ -1301,7 +1319,13 @@
     return out;
   }
 
+  function renderRankingNote() {
+    var n = state.ranking.length;
+    setText("ranking-note", n ? "Ranking de las " + n + " acciones y ETF. El Top 10 de arriba usa solo las que tienen CEDEAR." : "");
+  }
+
   function updateFilterCount(shown, total) {
+    renderRankingNote();
     setText("filter-count", "Mostrando " + shown + " de " + total);
     var box = document.getElementById("filter-active");
     if (!box) return;
@@ -1665,7 +1689,7 @@
         (low ? '<div class="dd-sector-badges">' + low + "</div>" : "") +
         '<div class="dd-sector-bar ' + tier + '" aria-hidden="true"><span style="width:' + barW + '%"></span></div>' +
         '<dl class="dd-sector-metrics">' +
-        '<div><dt>Desk</dt><dd class="' + tier + '">' + fmtNum(item.avg_desk_score, 1) + "</dd></div>" +
+        '<div><dt>Score Angus</dt><dd class="' + tier + '">' + fmtNum(item.avg_desk_score, 1) + "</dd></div>" +
         '<div><dt>RS</dt><dd>' + fmtNum(item.avg_rs_score, 1) + "</dd></div>" +
         '<div><dt>Sobre EMA200</dt><dd>' + fmtPct(item.pct_above_ema200) + "</dd></div>" +
         '<div><dt>Top 10</dt><dd>' + escapeHtml(String(item.top10_count != null ? item.top10_count : "—")) + "</dd></div>" +
@@ -1743,7 +1767,7 @@
       '<a class="dd-link-row" href="#/t/' + encodeURIComponent(sym) + '">' +
       logoHtml(sym, logoFor(item), 22) +
       '<span class="dd-link-sym">' + escapeHtml(sym) + "</span>" +
-      '<span class="dd-link-score">Desk ' + escapeHtml(score) + "</span>" +
+      '<span class="dd-link-score">Score ' + escapeHtml(score) + "</span>" +
       '<span class="dd-link-extra">' + escapeHtml(extraText || "") + "</span></a>"
     );
   }
@@ -1765,7 +1789,7 @@
       when.textContent = stamp || block.headline || "";
       if (block.generated_at) when.setAttribute("datetime", block.generated_at);
     }
-    text.textContent = block.text;
+    text.textContent = plainText(block.text);
     text.classList.remove("is-open");
     text.classList.add("is-clamped");
     syncClamp("resumen-text", "resumen-more");
@@ -1812,7 +1836,7 @@
       : '<p class="dd-ficha-empty">Sin datos</p>';
     return (
       head + body +
-      '<p class="dd-ficha-note">Informativo. No entra en el Desk Score.</p></section>'
+      '<p class="dd-ficha-note">Informativo. No entra en el Score Angus.</p></section>'
     );
   }
 
@@ -1984,18 +2008,19 @@
     if (!pack || !pack.count) {
       return '<p class="dd-hist-ficha">' + sample + "Sin alertas de riesgo anteriores en el historial.</p>";
     }
+    // Cada «señal» es una vez que el semáforo pasó a verde; se mide lo que hizo en las ruedas siguientes.
     var bits = (pack.signals || []).map(function (item) {
-      var ret = item.return_pct == null ? "s/d" : fmtEsSignedPct(item.return_pct, 1);
-      var vs = item.excess_pct == null ? "" : " (vs SPY " + fmtEsSignedPct(item.excess_pct, 1);
-      if (item.excess_universe_pct != null) {
-        vs += (vs ? ", " : " (") + "vs universo " + fmtEsSignedPct(item.excess_universe_pct, 1);
-      }
-      if (vs) vs += ")";
-      var status = item.status === "cerrada" ? "cerrada" : "en curso";
-      return fmtDayMonth(item.date) + " " + ret + vs + ", " + status;
+      var days = item.sessions || 20;
+      var ret = item.return_pct == null ? "sin dato" : fmtEsSignedPct(item.return_pct, 1);
+      var spy = item.spy_return_pct == null ? "" : " (el SPY, " + fmtEsSignedPct(item.spy_return_pct, 1) + ")";
+      var status = item.status === "cerrada"
+        ? "en las " + days + " ruedas siguientes hizo " + ret + spy
+        : "todavía en curso: lleva " + ret + spy;
+      return "el " + fmtDayMonth(item.date) + ", " + status;
     });
-    var extra = pack.count > (pack.signals || []).length ? " Hay " + pack.count + " en total." : "";
-    return '<p class="dd-hist-ficha">' + sample + "Sin alertas: " + escapeHtml(bits.join(" · ")) + "." + escapeHtml(extra) + "</p>";
+    var last = bits.length === 1 ? "La última vez que se puso en verde fue " : "Las últimas veces que se puso en verde: ";
+    var extra = pack.count > (pack.signals || []).length ? " En total, " + pack.count + " veces." : "";
+    return '<p class="dd-hist-ficha">' + sample + escapeHtml(last + bits.join("; ")) + "." + escapeHtml(extra) + "</p>";
   }
 
   var LIVE_BANNER = "En vivo · provisorio hasta el cierre · precios con ~15 min de demora";
@@ -2286,7 +2311,7 @@
   }
 
   var FORMULA_LABELS = {
-    desk_score: "Desk Score",
+    desk_score: "Score Angus",
     momentum: "Momentum 12-1",
     rs_score: "RS Score",
     tendencia: "Tendencia",
@@ -2367,6 +2392,8 @@
     [/\bdry-up volumen\b/g, "volumen que se seca"],
     [/\bvol realizada\b/g, "volatilidad"],
     [/\bintradia\b/g, "intradía"],
+    [/\bDesk Score\b/g, "Score Angus"],
+    [/\(Desk (\d)/g, "(Score Angus $1"],
     [/\bw_p,s\b/g, "peso del sector en el Top 10"],
     [/\bw_b,s\b/g, "peso del sector en el universo"],
     [/\bw_b = /g, "Peso en el universo = "],
@@ -2675,7 +2702,7 @@
     if (n == null || Number.isNaN(Number(n))) return "—";
     var v = Number(n);
     var digits = Math.abs(v - Math.round(v)) < 0.001 ? 0 : 2;
-    return "$" + fmtEsNum(v, digits);
+    return "US$ " + fmtEsNum(v, digits);
   }
 
   function fmtEsSignedPct(n, digits) {
@@ -2841,7 +2868,7 @@
     var flags = (row && row.flags) || [];
     var bits = [];
     if (row && row.above_ema200 === false && row.pillars && row.pillars.momentum != null) {
-      bits.push("El cierre está bajo la EMA200: el Desk Score es la mitad del momentum.");
+      bits.push("El cierre está bajo la EMA200: el Score Angus es la mitad del momentum.");
     }
     if (flags.indexOf("momentum_6m") >= 0) {
       bits.push("Tiene menos de 12 meses de historia: el momentum se mide en 6 meses.");
@@ -2883,7 +2910,7 @@
     var rank = rankLabel(row, total);
     var subBits = [];
     if (row.name) subBits.push(row.name);
-    if (row.sector) subBits.push(row.sector);
+    if (row.sector) subBits.push(sectorLabelFor(row.sector));
     var cedearLine = row.cedear
       ? '<p class="dd-ficha-cedear"><span class="dd-cedear-dot" aria-hidden="true">●</span>CEDEAR ' +
         escapeHtml(row.cedear_code || row.symbol) +
@@ -2969,8 +2996,8 @@
       "</div></header>" +
       // Orden: lo que decide (score, riesgo, resultados) primero; el contexto (analistas,
       // insiders, fundamentos) al final. Patrones, confluencia y RS semanal salieron.
-      '<section class="dd-ficha-card" aria-label="Desk Score">' +
-      '<h2 class="dd-ficha-kicker">Desk Score</h2>' +
+      '<section class="dd-ficha-card" aria-label="Score Angus">' +
+      '<h2 class="dd-ficha-kicker">Score Angus</h2>' +
       '<div class="dd-ficha-score">' + gaugeHtml(row.desk_score) +
       '<div class="dd-pillars">' + pillarsHtml(row) + "</div></div>" +
       scoreFootnote(row) +
@@ -3080,6 +3107,11 @@
   window.addEventListener("scroll", rememberScroll, { passive: true });
 
   function renderRoute() {
+    var legacy = /^#t\/([A-Za-z0-9._-]+)$/.exec(location.hash || "");
+    if (legacy) {
+      location.replace("#/t/" + legacy[1].toUpperCase());
+      return;
+    }
     var sym = parseTickerHash();
     var hash = location.hash || "";
     var moved = hash !== lastNavHash;
@@ -3091,6 +3123,8 @@
     showPage(page);
     if (sym) {
       state.fichaSym = sym;
+      var fichaEl = document.getElementById("ficha");
+      if (fichaEl) fichaEl.hidden = false;
       var search = document.getElementById("analisis-search");
       if (search && document.activeElement !== search) search.value = sym;
       renderFicha(sym);
@@ -3312,7 +3346,7 @@
     function cell(label, value, cls) {
       cells.push('<div class="dd-qv-cell"><dt>' + escapeHtml(label) + '</dt><dd class="' + (cls || "") + '">' + value + "</dd></div>");
     }
-    cell("Desk Score", escapeHtml(row.desk_score == null ? "—" : fmtEsSmart(row.desk_score, 1)) +
+    cell("Score Angus", escapeHtml(row.desk_score == null ? "—" : fmtEsSmart(row.desk_score, 1)) +
       (row.rank != null ? ' <span class="dd-qv-sub">' + escapeHtml(rankLabel(row, total)) + "</span>" : ""));
     cell("Semáforo", row.entry && row.entry.verdict
       ? luzHtml(row) + " " + escapeHtml(row.entry.label || row.entry.verdict)
@@ -3327,7 +3361,7 @@
     var body =
       '<div class="dd-qv-top">' + logoHtml(row.symbol, logoFor(row), 36) +
       '<div class="dd-qv-id"><p class="dd-qv-name">' + escapeHtml(row.name || row.symbol) + "</p>" +
-      (row.sector ? '<p class="dd-qv-sector">' + escapeHtml(row.sector) + "</p>" : "") + "</div>" +
+      (row.sector ? '<p class="dd-qv-sector">' + escapeHtml(sectorLabelFor(row.sector)) + "</p>" : "") + "</div>" +
       '<div class="dd-qv-px"><p class="dd-qv-price">' + escapeHtml(fmtPrice(row.close)) + "</p>" +
       '<p class="dd-qv-chg ' + distClass(row.change_pct) + '">' +
       escapeHtml(row.change_pct == null ? "" : fmtEsSignedPct(row.change_pct, 1)) + "</p></div></div>" +
@@ -3471,12 +3505,16 @@
       if (!q) {
         suggest.hidden = true;
         suggest.innerHTML = "";
+        var fb = document.getElementById("ficha");
+        if (fb) fb.hidden = false;
         return;
       }
       var hits = (state.ranking || []).filter(function (r) {
         return String(r.symbol || "").toUpperCase().indexOf(q) !== -1 ||
           String(r.name || "").toUpperCase().indexOf(q) !== -1;
       }).slice(0, 8);
+      var fichaBox = document.getElementById("ficha");
+      if (fichaBox) fichaBox.hidden = !hits.length;
       if (!hits.length) {
         suggest.hidden = false;
         suggest.innerHTML = '<p class="dd-empty">Ningún ticker con ese texto.</p>';
@@ -3609,7 +3647,7 @@
     { key: "cedear", label: "CEDEAR", re: /\bCEDEARs?\b/, def: "Certificado que se compra en pesos en la bolsa argentina (BYMA) y representa acciones de una empresa de afuera." },
     { key: "ratio", label: "Ratio del CEDEAR (por ejemplo 19:1)", re: /\b\d+:1\b/, def: "Cuántos CEDEAR equivalen a una acción: 19:1 quiere decir que 19 CEDEAR son una acción." },
     { key: "rueda", label: "Rueda", re: /\bruedas?\b/i, def: "Un día en que la bolsa abre. 10 ruedas son unas dos semanas." },
-    { key: "desk", label: "Desk Score", re: /\bDesk Score\b|^Score$/, def: "El puntaje de Angus, de 0 a 100: cuánto subió cada acción en el último año (sin el último mes) comparada con el resto. Bajo la EMA200 vale la mitad." },
+    { key: "desk", label: "Score Angus", re: /\bScore Angus\b|\bDesk Score\b|^Score$/, def: "El puntaje de Angus, de 0 a 100: cuánto subió cada acción en el último año (sin el último mes) comparada con el resto. Bajo la EMA200 vale la mitad." },
     { key: "momentum", label: "Momentum", re: /\bmomentum\b/i, def: "La tendencia de lo que viene subiendo a seguir subiendo un tiempo. Acá se mide con la suba de 12 meses sin el último." },
     { key: "ema200", label: "EMA200", re: /\bEMA ?200\b/, def: "Promedio del precio de los últimos 200 días hábiles (casi un año), con más peso en los recientes. Estar arriba suele ser tendencia de suba." },
     { key: "atr", label: "ATR alto", re: /\bATR alto\b/, def: "La acción se está moviendo mucho día a día, más que lo normal para ella." },
