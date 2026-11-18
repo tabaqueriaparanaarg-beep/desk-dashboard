@@ -5405,3 +5405,111 @@ th .dd-term{
   color: var(--dd-fg);
   font-weight: 650;
 }
+
+/* ══ Pulido (nov-2026) ══════════════════════════════════════════════════════ */
+
+/* Resultados: «Vienen» y «Ya presentaron», filas de alto parejo y a todo el ancho. */
+.dd-earnings-strip{
+  display: block;
+  width: 100%;
+}
+.dd-earn-h{
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.4rem 0 0.2rem;
+  font-family: var(--dd-font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.dd-earn-h + .dd-empty{
+  margin: 0.2rem 0 0.6rem;
+}
+.dd-earn-list + .dd-earn-h{
+  margin-top: 1rem;
+}
+.dd-earn-h span{
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--dd-bg);
+  color: #DAD5CA;
+  font-family: var(--dd-font-mono);
+  font-size: 0.8rem;
+}
+.dd-earn-list{
+  width: 100%;
+}
+.dd-earn-row{
+  grid-template-columns: 6.2rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  min-height: 3.6rem;
+  align-content: center;
+}
+.dd-earn-row .dd-earn-eps{
+  min-height: 1.1em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dd-earn-list.is-done .dd-earn-sym,
+.dd-earn-list.is-done .dd-earn-day{
+  opacity: 0.8;
+}
+@media (min-width: 700px){
+  .dd-earn-row{
+    grid-template-columns: 7rem 15rem minmax(0, 1fr);
+    grid-template-rows: auto;
+    min-height: 2.9rem;
+  }
+  .dd-earn-row .dd-earn-eps{
+    grid-column: 3;
+    text-align: right;
+  }
+  .dd-earn-when{
+    flex-wrap: nowrap;
+  }
+}
+
+/* Alarmas: la línea punteada lleva su nombre. */
+.dd-spark-box{
+  position: relative;
+}
+.dd-alarma-thr-label{
+  position: absolute;
+  right: 0;
+  transform: translateY(-115%);
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: var(--dd-card);
+  color: var(--dd-brand);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.dd-alarma.is-on .dd-alarma-thr-label{
+  background: var(--dd-card);
+}
+@media (max-width: 699px){
+  .dd-earn-when{
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.3;
+  }
+  .dd-earn-row{
+    min-height: 4.4rem;
+  }
+}
+.dd-earn-row .dd-earn-hour{
+  margin: 0;
+}
+@media (max-width: 699px){
+  .dd-earn-row .dd-earn-eps{
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    min-height: 2.3em;
+  }
+}

@@ -868,7 +868,8 @@
       '<line class="dd-alarma-zero" x1="0" x2="' + W + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '" vector-effect="non-scaling-stroke"></line>' +
       '<line class="dd-alarma-thr" x1="0" x2="' + W + '" y1="' + y(threshold).toFixed(1) + '" y2="' + y(threshold).toFixed(1) + '" vector-effect="non-scaling-stroke"></line>' +
       '<polyline points="' + line + '" vector-effect="non-scaling-stroke"></polyline>' +
-      "</svg>";
+      "</svg>" +
+      '<span class="dd-alarma-thr-label" style="top:' + ((y(threshold) / H) * 100).toFixed(1) + '%">se prende acá</span>';
   }
 
   function renderAlarmas(blk) {
@@ -1201,6 +1202,19 @@
     return bits.join(" · ");
   }
 
+  // Ya presentó: la fecha pasó, o es hoy y ya hay resultado publicado.
+  function earningsSplit(list) {
+    var today = artTodayIso();
+    var done = [], next = [];
+    (list || []).forEach(function (e) {
+      var d = String(e.date || "");
+      var reported = e.epsActual != null && e.epsActual !== "";
+      if (d < today || (d === today && reported)) done.push(e);
+      else next.push(e);
+    });
+    return { done: done, next: next };
+  }
+
   function renderEarnings(list) {
     var strip = document.getElementById("earnings-strip");
     if (!strip) return;
@@ -1209,13 +1223,15 @@
       return;
     }
     var order = { bmo: 0, dmh: 1, amc: 2 };
-    var rows = list.slice().sort(function (a, b) {
-      var d = String(a.date || "").localeCompare(String(b.date || ""));
-      if (d) return d;
-      var ha = order[String(a.hour || "").toLowerCase()], hb = order[String(b.hour || "").toLowerCase()];
-      return (ha == null ? 3 : ha) - (hb == null ? 3 : hb) || String(a.symbol).localeCompare(String(b.symbol));
-    });
-    strip.innerHTML = '<ul class="dd-earn-list">' + rows.map(function (e) {
+    function sorted(rows, desc) {
+      return rows.slice().sort(function (a, b) {
+        var d = String(a.date || "").localeCompare(String(b.date || ""));
+        if (d) return desc ? -d : d;
+        var ha = order[String(a.hour || "").toLowerCase()], hb = order[String(b.hour || "").toLowerCase()];
+        return (ha == null ? 3 : ha) - (hb == null ? 3 : hb) || String(a.symbol).localeCompare(String(b.symbol));
+      });
+    }
+    function rowHtml(e) {
       var day = isoDate(e.date);
       var dayLabel = day ? WEEKDAYS[day.getDay()] + " " + fmtDayMonth(e.date) : "—";
       var hour = hourLabel(e.hour) || "sin horario confirmado";
@@ -1224,9 +1240,22 @@
         tickerWithLogo(e, "dd-earn-sym") +
         '<span class="dd-earn-when"><span class="dd-earn-day">' + escapeHtml(dayLabel) + "</span>" +
         '<span class="dd-earn-hour">' + escapeHtml(hour) + "</span></span>" +
-        (eps ? '<span class="dd-earn-eps">' + escapeHtml(eps) + "</span>" : "") +
+        '<span class="dd-earn-eps">' + escapeHtml(eps || "") + "</span>" +
         "</li>";
-    }).join("") + "</ul>";
+    }
+    var parts = earningsSplit(list);
+    var html = "";
+    if (parts.next.length) {
+      html += '<h3 class="dd-earn-h">Vienen <span>' + parts.next.length + "</span></h3>" +
+        '<ul class="dd-earn-list">' + sorted(parts.next).map(rowHtml).join("") + "</ul>";
+    } else {
+      html += '<h3 class="dd-earn-h">Vienen <span>0</span></h3><p class="dd-empty">No queda ninguna esta semana.</p>';
+    }
+    if (parts.done.length) {
+      html += '<h3 class="dd-earn-h">Ya presentaron <span>' + parts.done.length + "</span></h3>" +
+        '<ul class="dd-earn-list is-done">' + sorted(parts.done, true).map(rowHtml).join("") + "</ul>";
+    }
+    strip.innerHTML = html;
   }
 
   function filteredRanking() {
@@ -1377,7 +1406,7 @@
     ul.innerHTML = "";
     (notes || []).forEach(function (n) {
       var li = document.createElement("li");
-      li.textContent = n;
+      li.textContent = plainText(n);
       ul.appendChild(li);
     });
   }
@@ -1674,6 +1703,13 @@
     syncClamp("resumen-text", "resumen-more");
   }
 
+  // Insiders, analistas y fundamentos se bajan de a poco (límite de Finnhub): no es una carga en curso.
+  function noDataYet(row) {
+    var sym = (row && row.symbol) || "esta acción";
+    return '<p class="dd-ficha-empty">Todavía no tenemos estos datos para ' + escapeHtml(sym) +
+      ". Se van completando de a poco y pueden tardar unas semanas.</p>";
+  }
+
   function healthBlock(row) {
     var head = '<section class="dd-ficha-card" aria-label="Salud de la empresa"><h2 class="dd-ficha-kicker">Salud de la empresa</h2>';
     if (String((row && row.kind) || "").toLowerCase() === "etf") {
@@ -1681,7 +1717,7 @@
     }
     var fund = row && row.fundamentals;
     if (!fund) {
-      return head + '<p class="dd-ficha-empty">Cargando datos. Se completa de a poco, sin pasarnos del límite de Finnhub.</p></section>';
+      return head + noDataYet(row) + "</section>";
     }
     var metrics = (fund && fund.metrics) || {};
     var vs = (fund && fund.vs_sector) || {};
@@ -1719,7 +1755,7 @@
     }
     var ins = row && row.insiders;
     if (!ins || (ins.net_shares == null && ins.open_market_count == null)) {
-      return head + '<p class="dd-ficha-empty">Cargando datos. Se completa de a poco, sin pasarnos del límite de Finnhub.</p></section>';
+      return head + noDataYet(row) + "</section>";
     }
     var money = ins.net_value_usd == null ? "" : " · " + fmtUsdShort(ins.net_value_usd) + (ins.value_approx ? " aprox." : "");
     var latest = ins.latest_date ? " · última " + fmtDayMonth(ins.latest_date) : "";
@@ -1814,7 +1850,7 @@
     }
     var a = row && row.analysts;
     if (!a) {
-      return head + '<p class="dd-ficha-empty">Cargando datos. Se completa de a poco, sin pasarnos del límite de Finnhub.</p></section>';
+      return head + noDataYet(row) + "</section>";
     }
     var latest = a.latest;
     if (!latest || !latest.total) {
@@ -2195,7 +2231,8 @@
     pillar_points: "Puntos de cada pilar",
     range_52w: "Rango de 52 semanas",
     change_pct: "Cambio del día",
-    trend_gate: "Gate de tendencia",
+    trend_gate: "Filtro de tendencia",
+    sesion: "En vivo y al cierre",
     rs_weekly: "RS semanal",
     sectors: "Sectores",
     patterns: "Patrones",
@@ -2208,6 +2245,78 @@
     entry: "Semáforo",
     analysts: "Analistas",
   };
+
+  // Solo presentación: los textos vienen de build.py con nombres de código. Acá se leen en castellano.
+  var PLAIN_TERMS = [
+    [/\/stock\/insider-transactions/g, "las operaciones de directivos que publica Finnhub"],
+    [/\/stock\/metric\?metric=all/g, "los indicadores de cada empresa que publica Finnhub"],
+    [/\/stock\/metric/g, "los indicadores de cada empresa que publica Finnhub"],
+    [/\/stock\/recommendation/g, "las recomendaciones de analistas que publica Finnhub"],
+    [/\/stock\/price-target/g, "el precio objetivo que publica Finnhub"],
+    [/\(https?:\/\/[^)\s]+\)/g, ""],
+    [/https?:\/\/\S+/g, ""],
+    [/\(flag momentum_6m\)/g, "(se marca «momentum de 6 meses»)"],
+    [/\bmomentum_6m\b/g, "momentum de 6 meses"],
+    [/\(rs_weekly;/g, "(serie semanal del RS;"],
+    [/\brs_weekly\b/g, "serie semanal del RS"],
+    [/\(after_close en falso\)/g, "(tomada antes del cierre)"],
+    [/\bafter_close\b/g, "cierre confirmado"],
+    [/\bpct_above_ema200\s*>=\s*60/g, "60% o más de las acciones están sobre su EMA200"],
+    [/\bpct_above_ema200\b/g, "porcentaje de acciones sobre la EMA200"],
+    [/\btop10_count\b/g, "cantidad en el Top 10"],
+    [/\btop10_return\b/g, "el retorno del Top 10"],
+    [/\brs_delta\b/g, "cambio del RS"],
+    [/\brs_trend: up\/down si/g, "el RS sube o baja si"],
+    [/, si no flat\b/g, "; si no, se mantiene"],
+    [/\brs_trend\b/g, "tendencia del RS"],
+    [/\blow_sample si/g, "muestra chica si"],
+    [/\bposition_pct\b/g, "posición en el rango"],
+    [/\bretorno_stock\b/g, "retorno de la acción"],
+    [/\bretorno_SPY\b/g, "retorno del SPY"],
+    [/\bRS_score\b/g, "RS"],
+    [/\bavg_return_pct\b/g, "retorno medio"],
+    [/\bspy_return_pct\b/g, "retorno del SPY"],
+    [/\breturn_i\b/g, "retorno de cada acción"],
+    [/\baporte_i\b/g, "aporte de cada acción"],
+    [/\bclose\[-1\]\/close\[-11\]/g, "cierre de hoy / cierre de hace 10 ruedas"],
+    [/\(close\s*\/\s*close anterior/g, "(cierre / cierre anterior"],
+    [/\bclose\b/g, "cierre"],
+    [/\bavg = /g, "promedio = "],
+    [/\bhigh\/low\b/g, "máximos y mínimos"],
+    [/\bcount\b/g, "cantidad"],
+    [/\bbest = /g, "la mejor = "],
+    [/^alcista if /g, "Alcista si "],
+    [/; mixto if /g, "; mixto si "],
+    [/; bajista if /g, "; bajista si "],
+    [/; soft override: SPY under EMA200 \+ alcista → mixto/g, ". Si el SPY está bajo su EMA200, alcista pasa a mixto"],
+    [/\bfallback\b/g, "si no,"],
+    [/\bFallback\b/g, "Si no,"],
+    [/Proxy VCP:/g, "Aproximación a una contracción de volatilidad:"],
+    [/\bdry-up volumen\b/g, "volumen que se seca"],
+    [/\bvol realizada\b/g, "volatilidad"],
+    [/\bintradia\b/g, "intradía"],
+    [/\bw_p,s\b/g, "peso del sector en el Top 10"],
+    [/\bw_b,s\b/g, "peso del sector en el universo"],
+    [/\bw_b = /g, "Peso en el universo = "],
+    [/\bw_p = /g, "Peso en el Top 10 = "],
+    [/\bR_b,s\b/g, "retorno del sector"],
+    [/\ballocation_s\b/g, "efecto de cada sector"],
+    [/\befecto_sector\b/g, "efecto sector"],
+    [/\befecto_selección\b/g, "efecto selección"],
+    [/El archivo historial_semaforo\.json/g, "El archivo del historial"],
+    [/\bhistorial_semaforo\.json\b/g, "el archivo del historial"],
+    [/\bGate de tendencia\b/g, "Filtro de tendencia"],
+  ];
+
+  function plainText(text) {
+    var out = String(text == null ? "" : text);
+    PLAIN_TERMS.forEach(function (pair) { out = out.replace(pair[0], pair[1]); });
+    // Fechas ISO a dd/mm/aaaa, decimales con coma y «−» en los negativos.
+    out = out.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, "$3/$2/$1");
+    out = out.replace(/(\d)\.(\d)/g, "$1,$2");
+    out = out.replace(/(^|[\s(])-(\d)/g, "$1−$2");
+    return out.replace(/\s{2,}/g, " ").replace(/\s+([.,;)])/g, "$1");
+  }
 
   function renderFormulas(formulas) {
     var root = document.getElementById("formula-list");
@@ -2222,8 +2331,8 @@
         var val = formulas[key];
         var text = val == null ? "—" : typeof val === "string" ? val : JSON.stringify(val);
         return (
-          "<div><dt>" + escapeHtml(FORMULA_LABELS[key] || key) + "</dt><dd>" +
-          escapeHtml(text) + "</dd></div>"
+          "<div><dt>" + escapeHtml(FORMULA_LABELS[key] || plainText(key.replace(/_/g, " "))) + "</dt><dd>" +
+          escapeHtml(plainText(text)) + "</dd></div>"
         );
       })
       .join("");
@@ -2788,8 +2897,8 @@
       earnBlock +
       entroBlock +
       '<section class="dd-ficha-card" aria-label="Rango de 52 semanas">' + rangeBlock + "</section>" +
-      '<section class="dd-ficha-card" aria-label="Gate de tendencia">' +
-      '<h2 class="dd-ficha-kicker">Gate de tendencia</h2>' +
+      '<section class="dd-ficha-card" aria-label="Filtro de tendencia">' +
+      '<h2 class="dd-ficha-kicker">Filtro de tendencia</h2>' +
       '<div class="dd-ficha-row">' +
       '<span class="dd-ficha-mark ' + mark.cls + '" aria-hidden="true">' + mark.ch + "</span>" +
       '<span class="dd-ficha-row-text">' + escapeHtml(gateText(row)) + "</span>" +
@@ -3333,6 +3442,13 @@
     }
     host.addEventListener("pointermove", show);
     host.addEventListener("pointerdown", show);
+    // En el celular el arrastre horizontal recorre los días; el vertical sigue scrolleando la página.
+    function fromTouch(ev) {
+      var t = ev.touches && ev.touches[0];
+      if (t) show({ clientX: t.clientX });
+    }
+    host.addEventListener("touchstart", fromTouch, { passive: true });
+    host.addEventListener("touchmove", fromTouch, { passive: true });
     host.addEventListener("pointerleave", function (ev) {
       if (ev.pointerType !== "touch") hide();
     });
@@ -3520,6 +3636,17 @@
       })(d, btn);
       h.appendChild(btn);
     }
+    document.addEventListener("click", function (ev) {
+      var open = document.querySelectorAll("details.dd-help.is-iconized[open]");
+      for (var j = 0; j < open.length; j++) {
+        var det = open[j];
+        var head = det.previousElementSibling;
+        var own = head && head.querySelector(".dd-help-btn");
+        if (det.contains(ev.target) || (own && own.contains(ev.target))) continue;
+        det.open = false;
+        if (own) own.setAttribute("aria-expanded", "false");
+      }
+    });
   }
 
   // ── Las secciones plegadas de Resumen dicen en una línea qué hay adentro ──
@@ -3540,12 +3667,10 @@
       setText("contexto-hint", line.charAt(0).toUpperCase() + line.slice(1));
     }
     var news = [];
-    var today = artTodayIso();
-    var all = data.earnings || [];
-    var upcoming = all.filter(function (e) { return String(e.date || "") >= today; }).length;
-    if (upcoming) news.push(upcoming + (upcoming === 1 ? " empresa presenta" : " empresas presentan") + " resultados de acá al viernes");
-    else if (all.length) news.push(all.length + " resultados esta semana");
-    else news.push("sin resultados esta semana");
+    var split = earningsSplit(data.earnings || []);
+    if (split.next.length) news.push(split.next.length + (split.next.length === 1 ? " resultado viene" : " resultados vienen") + " esta semana");
+    if (split.done.length) news.push(split.done.length + " ya " + (split.done.length === 1 ? "presentó" : "presentaron"));
+    if (!split.next.length && !split.done.length) news.push("sin resultados esta semana");
     var hasResumen = !!(data.resumen && (data.resumen.text || (data.resumen.sentences || []).length));
     if (hasResumen) news.push("resumen del día");
     var nl = news.join(" · ");
