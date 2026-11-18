@@ -109,6 +109,22 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(plan["data_date"], last)
         self.assertGreaterEqual(plan["next_review"], last)
 
+    def test_performance_stops_at_the_last_close_like_the_index(self):
+        # La rueda en curso no cuenta: «Este mes» dice lo mismo que el Índice Angus.
+        sessions = [d.isoformat() for d in self.dates]
+        last, prev = sessions[-1], sessions[-2]
+        bars = {s: [dict(x) for x in xs] for s, xs in self.bars.items()}
+        for xs in bars.values():
+            xs[-1]["c"] *= 0.5  # derrumbe intradiario que todavía no es cierre
+        live = b.compute_monthly_plan(self.meta, bars, live_session=last)
+        closed = b.compute_monthly_plan(self.meta, {s: xs[:-1] for s, xs in self.bars.items()})
+        if not live.get("performance"):
+            self.skipTest("la cartera se armó en la última rueda cerrada")
+        for key, perf in live["performance"].items():
+            self.assertEqual(perf["asof"], prev)
+            self.assertAlmostEqual(perf["portfolio_pct"], closed["performance"][key]["portfolio_pct"])
+            self.assertAlmostEqual(perf["spy_pct"], closed["performance"][key]["spy_pct"])
+
 
 if __name__ == "__main__":
     unittest.main()

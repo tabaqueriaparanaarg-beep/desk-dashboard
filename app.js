@@ -393,7 +393,8 @@
     }
     var perf = !plan.review_done && plan.performance && plan.performance[key];
     var perfHtml = perf
-      ? '<p class="dd-mes-perf"><span class="dd-mes-perf-since">Cartera desde el ' + escapeHtml(fmtDayMonth(plan.since)) + "</span>" +
+      ? '<p class="dd-mes-perf"><span class="dd-mes-perf-since">Cartera desde el ' + escapeHtml(fmtDayMonth(plan.since)) +
+        (perf.asof ? " al cierre del " + escapeHtml(fmtDayMonth(perf.asof)) : "") + "</span>" +
         '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.portfolio_pct, 1)) + "</strong> cartera</span>" +
         '<span class="dd-mes-perf-n"><strong>' + escapeHtml(fmtEsSignedPct(perf.spy_pct, 1)) + "</strong> SPY</span></p>"
       : "";
